@@ -414,7 +414,9 @@ function AppointmentRow({
       <td className="px-4 py-4">
         {item.prescription_url ? (
           <a
-            href={item.prescription_url}
+            href={item.prescription_url.startsWith('http') 
+  ? item.prescription_url 
+  : `https://rfygfubelasitcuoshrk.supabase.co/storage/v1/object/public/prescriptions/${item.prescription_url}`}
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium border border-gray-200 transition"
