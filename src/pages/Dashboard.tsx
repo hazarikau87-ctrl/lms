@@ -24,6 +24,10 @@ export default function Dashboard() {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
+  // New states for date-based actions
+  const [exportDate, setExportDate] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
   const fetchAll = useCallback(async () => {
     if (!user?.id) return;
     setLoading(true);
@@ -126,6 +130,23 @@ export default function Dashboard() {
     fetchAll();
   };
 
+  // Logic for deleting by selected date
+  const deleteByDate = async () => {
+    const toDelete = appointments.filter(a => a.appointment_date === exportDate);
+    if (toDelete.length === 0) return alert("No records found for this date.");
+    
+    if (!confirm(`Move all ${toDelete.length} records for ${exportDate} to trash?`)) return;
+
+    const idsToDelete = toDelete.map(a => a.id);
+    await supabase.from('appointments')
+      .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+      .in('id', idsToDelete);
+      
+    setExportDate('');
+    setShowDatePicker(false);
+    fetchAll();
+  };
+
   const sendWhatsApp = (phone: string, type: string, item: Appointment) => {
     if (!type) return;
     const clean = phone.replace(/\D/g, '');
@@ -140,13 +161,10 @@ export default function Dashboard() {
     window.open(`https://wa.me/${clean}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
-  const exportToPDF = async () => {
+  // Reusable PDF generation logic
+  const generatePDF = async (dataToExport: Appointment[]) => {
     const { jsPDF } = await import('jspdf');
     const autoTable = (await import('jspdf-autotable')).default;
-
-    const dataToExport = selectedIds.size > 0
-      ? appointments.filter(a => selectedIds.has(a.id))
-      : appointments;
 
     if (dataToExport.length === 0) { alert('No data to export.'); return; }
 
@@ -190,6 +208,19 @@ export default function Dashboard() {
     });
 
     doc.save(`${labName}_Report.pdf`);
+  };
+
+  const exportToPDF = () => {
+    const dataToExport = selectedIds.size > 0
+      ? appointments.filter(a => selectedIds.has(a.id))
+      : appointments;
+    generatePDF(dataToExport);
+  };
+
+  const exportByDate = () => {
+    const toExport = appointments.filter(a => a.appointment_date === exportDate);
+    if (toExport.length === 0) return alert(`No appointments found for ${exportDate}`);
+    generatePDF(toExport);
   };
 
   return (
@@ -276,10 +307,51 @@ export default function Dashboard() {
           <div className="flex items-center gap-2 px-6 py-3 border-b border-gray-100 bg-gray-50/50">
             <input type="checkbox" checked={isAllPageSelected} onChange={e => toggleSelectAll(e.target.checked)} className="w-4 h-4 accent-blue-600 cursor-pointer rounded" />
             <label className="text-xs font-medium text-gray-500 cursor-pointer select-none">Select all on this page</label>
+            
             <div className="ml-auto flex items-center gap-2">
               <button onClick={fetchAll} title="Refresh data" className={`flex items-center justify-center p-1.5 text-gray-500 border border-gray-200 rounded-lg hover:bg-white hover:text-blue-600 hover:border-blue-200 transition-all ${loading ? 'opacity-50' : ''}`} disabled={loading}>
                 <RotateCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
               </button>
+
+              {/* DATE PICKER & EXPORT/DELETE BY DATE SECTION */}
+              <div className="relative flex items-center gap-2">
+                {!showDatePicker ? (
+                  <button 
+                    onClick={() => setShowDatePicker(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg hover:bg-white hover:text-blue-600 hover:border-blue-200 transition"
+                  >
+                    <CalendarCheck className="w-3.5 h-3.5" /> Action by Date
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2 bg-white border border-blue-200 p-1 rounded-lg shadow-sm animate-in fade-in zoom-in duration-200">
+                    <input 
+                      type="date" 
+                      value={exportDate}
+                      onChange={(e) => setExportDate(e.target.value)}
+                      className="text-xs border-none bg-transparent focus:ring-0 text-gray-700 p-0 px-1"
+                    />
+                    
+                    {exportDate && (
+                      <>
+                        <button onClick={exportByDate} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md" title="Export PDF for this date">
+                          <FileDown className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={deleteByDate} className="p-1.5 text-red-500 hover:bg-red-50 rounded-md" title="Delete all for this date">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
+                    
+                    <button 
+                      onClick={() => { setShowDatePicker(false); setExportDate(''); }}
+                      className="p-1.5 text-gray-400 hover:text-gray-600"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <button onClick={exportToPDF} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg hover:bg-white hover:text-blue-600 hover:border-blue-200 transition">
                 <FileDown className="w-3.5 h-3.5" /> Export All PDF
               </button>
