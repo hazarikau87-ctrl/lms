@@ -1,22 +1,35 @@
 import { useState, FormEvent } from 'react';
 import { supabase } from '../lib/supabase';
 import { FlaskConical, Stethoscope } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const navigate = useNavigate();
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    try {
+      const { error, data } = await supabase.auth.signInWithPassword({ 
+        email, 
+        password 
+      });
 
-    if (error) {
-      setError(error.message);
+      if (error) {
+        setError(error.message);
+        setLoading(false);
+      } else if (data.user) {
+        // Navigate to dashboard on success
+        navigate('/'); 
+      }
+    } catch (err) {
+      setError('An unexpected error occurred. Please try again.');
       setLoading(false);
     }
   };

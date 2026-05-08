@@ -24,22 +24,39 @@ export default function Dashboard() {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
-  const labId = user?.app_metadata?.lab_id as string | undefined;
-
   const fetchAll = useCallback(async () => {
-    if (!labId) return;
+    if (!user?.id) return;
     setLoading(true);
     try {
+      // 1. Get the lab_id assigned to this user from the admin table
+      const { data: adminLink, error: adminError } = await supabase
+        .from('lab_admins')
+        .select('lab_id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (adminError || !adminLink) {
+        console.error("No lab assigned to this user");
+        setLoading(false);
+        return;
+      }
+
+      const activeLabId = adminLink.lab_id;
+
+      // 2. Fetch data using the verified activeLabId
       const [labRes, apptRes] = await Promise.all([
-        supabase.from('labs').select('id, lab_name, logo_url').eq('id', labId).maybeSingle(),
-        supabase.from('appointments').select('*').eq('lab_id', labId).eq('is_deleted', false).order('created_at', { ascending: false }),
+        supabase.from('labs').select('id, lab_name, logo_url').eq('id', activeLabId).maybeSingle(),
+        supabase.from('appointments').select('*').eq('lab_id', activeLabId).eq('is_deleted', false).order('created_at', { ascending: false }),
       ]);
+
       if (labRes.data) setLab(labRes.data as Lab);
       if (apptRes.data) setAppointments(apptRes.data as Appointment[]);
+    } catch (err) {
+      console.error("Dashboard error:", err);
     } finally {
       setLoading(false);
     }
-  }, [labId]);
+  }, [user?.id]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -273,7 +290,6 @@ export default function Dashboard() {
 
         {/* Table Card */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          {/* Select All row */}
           <div className="flex items-center gap-2 px-6 py-3 border-b border-gray-100 bg-gray-50/50">
             <input
               type="checkbox"
@@ -337,7 +353,6 @@ export default function Dashboard() {
             </table>
           </div>
 
-          {/* Pagination */}
           <div className="flex items-center justify-center gap-4 px-6 py-4 border-t border-gray-100">
             <button
               disabled={currentPage === 1}
@@ -415,8 +430,8 @@ function AppointmentRow({
         {item.prescription_url ? (
           <a
             href={item.prescription_url.startsWith('http') 
-  ? item.prescription_url 
-  : `https://rfygfubelasitcuoshrk.supabase.co/storage/v1/object/public/prescriptions/${item.prescription_url}`}
+              ? item.prescription_url 
+              : supabase.storage.from('prescriptions').getPublicUrl(item.prescription_url).data.publicUrl}
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium border border-gray-200 transition"
