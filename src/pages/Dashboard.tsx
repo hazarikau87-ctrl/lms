@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   FlaskConical, LogOut, Search, CalendarCheck, Clock, CheckCheck,
   Phone, FileText, Check, Trash2, ChevronLeft, ChevronRight,
-  MessageCircle, Building2, FileDown, CheckCircle2
+  MessageCircle, Building2, FileDown, CheckCircle2, RotateCw, Edit3
 } from 'lucide-react';
 import { supabase, Appointment, Lab } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -28,7 +28,6 @@ export default function Dashboard() {
     if (!user?.id) return;
     setLoading(true);
     try {
-      // 1. Get the lab_id assigned to this user from the admin table
       const { data: adminLink, error: adminError } = await supabase
         .from('lab_admins')
         .select('lab_id')
@@ -43,7 +42,6 @@ export default function Dashboard() {
 
       const activeLabId = adminLink.lab_id;
 
-      // 2. Fetch data using the verified activeLabId
       const [labRes, apptRes] = await Promise.all([
         supabase.from('labs').select('id, lab_name, logo_url').eq('id', activeLabId).maybeSingle(),
         supabase.from('appointments').select('*').eq('lab_id', activeLabId).eq('is_deleted', false).order('created_at', { ascending: false }),
@@ -97,6 +95,15 @@ export default function Dashboard() {
   const updateStatus = async (id: number, status: string) => {
     await supabase.from('appointments').update({ status }).eq('id', id);
     fetchAll();
+  };
+
+  const updateRemarks = async (id: number, remarks: string) => {
+    try {
+      await supabase.from('appointments').update({ remarks }).eq('id', id);
+      setAppointments(prev => prev.map(a => a.id === id ? { ...a, remarks } : a));
+    } catch (err) {
+      console.error("Error updating remarks:", err);
+    }
   };
 
   const deleteBooking = async (id: number) => {
@@ -163,6 +170,7 @@ export default function Dashboard() {
       { content: `${item.name}\n${item.age ?? 'N/A'}Y / ${item.gender || ''}\n${item.mobile || 'N/A'}`, styles: { fontStyle: 'bold' as const } },
       item.test,
       `${item.appointment_date}\n${item.time || 'N/A'}`,
+      item.remarks || '-',
       {
         content: (item.status || 'Pending').toUpperCase(),
         styles: {
@@ -174,7 +182,7 @@ export default function Dashboard() {
 
     autoTable(doc, {
       startY: 50,
-      head: [['ID', 'Patient Details', 'Test', 'Schedule', 'Status']],
+      head: [['ID', 'Patient Details', 'Test', 'Schedule', 'Remarks', 'Status']],
       body: rows,
       theme: 'striped',
       headStyles: { fillColor: [26, 115, 232] as [number, number, number] },
@@ -203,7 +211,6 @@ export default function Dashboard() {
 
             <div className="w-px h-9 bg-gray-200 hidden sm:block" />
 
-            {/* Lab Branding Pill */}
             <div className="flex items-center gap-2.5 bg-slate-50 border border-gray-200 rounded-full px-3 py-1.5">
               <div className="w-7 h-7 rounded-full border border-gray-200 bg-white overflow-hidden flex items-center justify-center flex-shrink-0">
                 {lab?.logo_url ? (
@@ -241,47 +248,23 @@ export default function Dashboard() {
 
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          <StatCard
-            icon={<CalendarCheck className="w-5 h-5 text-sky-600" />}
-            iconBg="bg-sky-50"
-            value={stats.total}
-            label="Total Appointments"
-          />
-          <StatCard
-            icon={<Clock className="w-5 h-5 text-amber-600" />}
-            iconBg="bg-amber-50"
-            value={stats.pending}
-            label="Pending Tests"
-          />
-          <StatCard
-            icon={<CheckCheck className="w-5 h-5 text-emerald-600" />}
-            iconBg="bg-emerald-50"
-            value={stats.completed}
-            label="Completed"
-          />
+          <StatCard icon={<CalendarCheck className="w-5 h-5 text-sky-600" />} iconBg="bg-sky-50" value={stats.total} label="Total Appointments" />
+          <StatCard icon={<Clock className="w-5 h-5 text-amber-600" />} iconBg="bg-amber-50" value={stats.pending} label="Pending Tests" />
+          <StatCard icon={<CheckCheck className="w-5 h-5 text-emerald-600" />} iconBg="bg-emerald-50" value={stats.completed} label="Completed" />
         </div>
 
-        {/* Bulk Actions Bar */}
+        {/* Bulk Actions */}
         {selectedIds.size > 0 && (
           <div className="bg-blue-50 border border-blue-200 rounded-xl px-5 py-3 mb-5 flex flex-wrap items-center justify-between gap-3 animate-[slideDown_0.25s_ease]">
             <span className="text-sm font-semibold text-blue-700">{selectedIds.size} Selected</span>
             <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => bulkUpdateStatus('Completed')}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-semibold hover:bg-emerald-100 transition"
-              >
+              <button onClick={() => bulkUpdateStatus('Completed')} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-semibold hover:bg-emerald-100 transition">
                 <CheckCircle2 className="w-3.5 h-3.5" /> Mark Done
               </button>
-              <button
-                onClick={bulkDelete}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded-lg text-xs font-semibold hover:bg-red-100 transition"
-              >
+              <button onClick={bulkDelete} className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded-lg text-xs font-semibold hover:bg-red-100 transition">
                 <Trash2 className="w-3.5 h-3.5" /> Delete
               </button>
-              <button
-                onClick={exportToPDF}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold hover:bg-blue-200 transition"
-              >
+              <button onClick={exportToPDF} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold hover:bg-blue-200 transition">
                 <FileDown className="w-3.5 h-3.5" /> Export PDF
               </button>
             </div>
@@ -291,27 +274,20 @@ export default function Dashboard() {
         {/* Table Card */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="flex items-center gap-2 px-6 py-3 border-b border-gray-100 bg-gray-50/50">
-            <input
-              type="checkbox"
-              checked={isAllPageSelected}
-              onChange={e => toggleSelectAll(e.target.checked)}
-              className="w-4 h-4 accent-blue-600 cursor-pointer rounded"
-            />
-            <label className="text-xs font-medium text-gray-500 cursor-pointer select-none">
-              Select all on this page
-            </label>
-            <div className="ml-auto">
-              <button
-                onClick={exportToPDF}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
-              >
+            <input type="checkbox" checked={isAllPageSelected} onChange={e => toggleSelectAll(e.target.checked)} className="w-4 h-4 accent-blue-600 cursor-pointer rounded" />
+            <label className="text-xs font-medium text-gray-500 cursor-pointer select-none">Select all on this page</label>
+            <div className="ml-auto flex items-center gap-2">
+              <button onClick={fetchAll} title="Refresh data" className={`flex items-center justify-center p-1.5 text-gray-500 border border-gray-200 rounded-lg hover:bg-white hover:text-blue-600 hover:border-blue-200 transition-all ${loading ? 'opacity-50' : ''}`} disabled={loading}>
+                <RotateCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              </button>
+              <button onClick={exportToPDF} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg hover:bg-white hover:text-blue-600 hover:border-blue-200 transition">
                 <FileDown className="w-3.5 h-3.5" /> Export All PDF
               </button>
             </div>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1000px]">
+            <table className="w-full min-w-[1100px]">
               <thead>
                 <tr className="border-b-2 border-slate-100">
                   <th className="w-10 px-4 py-3"></th>
@@ -320,24 +296,16 @@ export default function Dashboard() {
                   <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Prescription</th>
                   <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Contact & WhatsApp</th>
                   <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Test / Schedule</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Remarks by lab</th>
                   <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Status</th>
                   <th className="px-4 py-3 text-right text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr>
-                    <td colSpan={8} className="py-16 text-center text-gray-400 text-sm">
-                      <div className="flex flex-col items-center gap-2">
-                        <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                        Loading appointments...
-                      </div>
-                    </td>
-                  </tr>
+                  <tr><td colSpan={9} className="py-16 text-center text-gray-400 text-sm"><div className="flex flex-col items-center gap-2"><div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />Loading appointments...</div></td></tr>
                 ) : paginated.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="py-16 text-center text-gray-400 text-sm">No records found.</td>
-                  </tr>
+                  <tr><td colSpan={9} className="py-16 text-center text-gray-400 text-sm">No records found.</td></tr>
                 ) : paginated.map(item => (
                   <AppointmentRow
                     key={item.id}
@@ -345,6 +313,7 @@ export default function Dashboard() {
                     selected={selectedIds.has(item.id)}
                     onToggle={() => toggleRow(item.id)}
                     onUpdateStatus={updateStatus}
+                    onUpdateRemarks={updateRemarks}
                     onDelete={deleteBooking}
                     onWhatsApp={sendWhatsApp}
                   />
@@ -354,19 +323,11 @@ export default function Dashboard() {
           </div>
 
           <div className="flex items-center justify-center gap-4 px-6 py-4 border-t border-gray-100">
-            <button
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage(p => p - 1)}
-              className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
-            >
+            <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition">
               <ChevronLeft className="w-4 h-4" /> Prev
             </button>
             <span className="text-sm font-medium text-gray-600">Page {currentPage} of {totalPages}</span>
-            <button
-              disabled={currentPage === totalPages}
-              onClick={() => setCurrentPage(p => p + 1)}
-              className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
-            >
+            <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition">
               Next <ChevronRight className="w-4 h-4" />
             </button>
           </div>
@@ -379,9 +340,7 @@ export default function Dashboard() {
 function StatCard({ icon, iconBg, value, label }: { icon: React.ReactNode; iconBg: string; value: number; label: string }) {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-4 flex items-center gap-4 hover:-translate-y-0.5 transition-transform duration-200">
-      <div className={`w-12 h-12 rounded-xl ${iconBg} flex items-center justify-center flex-shrink-0`}>
-        {icon}
-      </div>
+      <div className={`w-12 h-12 rounded-xl ${iconBg} flex items-center justify-center flex-shrink-0`}>{icon}</div>
       <div>
         <p className="text-2xl font-bold text-gray-900">{value}</p>
         <p className="text-xs text-gray-500 mt-0.5">{label}</p>
@@ -395,6 +354,7 @@ function AppointmentRow({
   selected,
   onToggle,
   onUpdateStatus,
+  onUpdateRemarks,
   onDelete,
   onWhatsApp,
 }: {
@@ -402,25 +362,30 @@ function AppointmentRow({
   selected: boolean;
   onToggle: () => void;
   onUpdateStatus: (id: number, status: string) => void;
+  onUpdateRemarks: (id: number, remarks: string) => void;
   onDelete: (id: number) => void;
   onWhatsApp: (phone: string, type: string, item: Appointment) => void;
 }) {
   const isCompleted = item.status === 'Completed';
+  const [localRemarks, setLocalRemarks] = useState(item.remarks || '');
+
+  useEffect(() => {
+    setLocalRemarks(item.remarks || '');
+  }, [item.remarks]);
+
+  const handleRemarksBlur = () => {
+    if (localRemarks !== (item.remarks || '')) {
+      onUpdateRemarks(item.id, localRemarks);
+    }
+  };
 
   return (
     <tr className={`border-b border-gray-50 hover:bg-slate-50/50 transition-colors ${selected ? 'bg-blue-50/40' : ''}`}>
       <td className="px-4 py-4 text-center">
-        <input
-          type="checkbox"
-          checked={selected}
-          onChange={onToggle}
-          className="w-4 h-4 accent-blue-600 cursor-pointer rounded"
-        />
+        <input type="checkbox" checked={selected} onChange={onToggle} className="w-4 h-4 accent-blue-600 cursor-pointer rounded" />
       </td>
       <td className="px-4 py-4">
-        <span className="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-lg font-mono font-bold text-xs">
-          {item.booking_id}
-        </span>
+        <span className="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-lg font-mono font-bold text-xs">{item.booking_id}</span>
       </td>
       <td className="px-4 py-4">
         <p className="font-semibold text-gray-900 text-sm">{item.name}</p>
@@ -429,41 +394,26 @@ function AppointmentRow({
       <td className="px-4 py-4">
         {item.prescription_url ? (
           <a
-            href={item.prescription_url.startsWith('http') 
-              ? item.prescription_url 
-              : supabase.storage.from('prescriptions').getPublicUrl(item.prescription_url).data.publicUrl}
-            target="_blank"
-            rel="noreferrer"
+            href={item.prescription_url.startsWith('http') ? item.prescription_url : supabase.storage.from('prescriptions').getPublicUrl(item.prescription_url).data.publicUrl}
+            target="_blank" rel="noreferrer"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium border border-gray-200 transition"
           >
             <FileText className="w-3.5 h-3.5" /> View
           </a>
-        ) : (
-          <span className="text-xs text-gray-400 italic">No Upload</span>
-        )}
+        ) : <span className="text-xs text-gray-400 italic">No Upload</span>}
       </td>
       <td className="px-4 py-4">
-        <a
-          href={`tel:${item.mobile}`}
-          className="flex items-center gap-1.5 text-gray-700 text-xs hover:text-blue-600 transition"
-        >
+        <a href={`tel:${item.mobile}`} className="flex items-center gap-1.5 text-gray-700 text-xs hover:text-blue-600 transition">
           <Phone className="w-3 h-3" /> {item.mobile}
         </a>
         <div className="flex items-center gap-2 mt-1.5">
-          <select
-            defaultValue=""
-            onChange={e => { onWhatsApp(item.mobile, e.target.value, item); e.target.value = ''; }}
-            className="text-[11px] px-1.5 py-1 rounded-md border border-gray-200 outline-none bg-white text-gray-600 max-w-[90px] cursor-pointer"
-          >
+          <select defaultValue="" onChange={e => { onWhatsApp(item.mobile, e.target.value, item); e.target.value = ''; }} className="text-[11px] px-1.5 py-1 rounded-md border border-gray-200 outline-none bg-white text-gray-600 max-w-[90px] cursor-pointer">
             <option value="">Templates</option>
             <option value="welcome">Welcome</option>
             <option value="report">Reports</option>
             <option value="reminder">Reminder</option>
           </select>
-          <button
-            onClick={() => onWhatsApp(item.mobile, 'default', item)}
-            className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 transition"
-          >
+          <button onClick={() => onWhatsApp(item.mobile, 'default', item)} className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 transition">
             <MessageCircle className="w-3.5 h-3.5" /> Chat
           </button>
         </div>
@@ -472,31 +422,28 @@ function AppointmentRow({
         <p className="font-semibold text-gray-900 text-sm">{item.test}</p>
         <p className="text-xs text-gray-400 mt-0.5">{item.appointment_date} @ {item.time || 'N/A'}</p>
       </td>
+      <td className="px-4 py-4 min-w-[180px]">
+        <div className="relative group">
+          <textarea
+            value={localRemarks}
+            onChange={(e) => setLocalRemarks(e.target.value)}
+            onBlur={handleRemarksBlur}
+            placeholder="Add remarks..."
+            rows={1}
+            className="w-full text-[11px] p-2 bg-gray-50/50 border border-transparent rounded-lg focus:bg-white focus:border-blue-200 focus:ring-0 outline-none resize-none transition-all"
+          />
+          <Edit3 className="absolute right-2 top-2 w-3 h-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+        </div>
+      </td>
       <td className="px-4 py-4">
-        <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${
-          isCompleted
-            ? 'bg-emerald-50 text-emerald-700'
-            : 'bg-orange-50 text-orange-700'
-        }`}>
+        <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${isCompleted ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-700'}`}>
           {item.status || 'Pending'}
         </span>
       </td>
       <td className="px-4 py-4">
         <div className="flex items-center justify-end gap-1.5">
-          <button
-            onClick={() => onUpdateStatus(item.id, 'Completed')}
-            title="Mark Completed"
-            className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 flex items-center justify-center transition"
-          >
-            <Check className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => onDelete(item.id)}
-            title="Delete"
-            className="w-8 h-8 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 flex items-center justify-center transition"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          <button onClick={() => onUpdateStatus(item.id, 'Completed')} title="Mark Completed" className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 flex items-center justify-center transition"><Check className="w-3.5 h-3.5" /></button>
+          <button onClick={() => onDelete(item.id)} title="Delete" className="w-8 h-8 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 flex items-center justify-center transition"><Trash2 className="w-3.5 h-3.5" /></button>
         </div>
       </td>
     </tr>

@@ -25,7 +25,6 @@ export default function Login() {
         setError(error.message);
         setLoading(false);
       } else if (data.user) {
-        // Navigate to dashboard on success
         navigate('/'); 
       }
     } catch (err) {
@@ -35,55 +34,56 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+    /* Darkened background to slate-200/50 to prevent "snow blindness" */
+    <div className="min-h-screen bg-slate-200/50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4 shadow-lg shadow-blue-600/30">
-            <FlaskConical className="w-8 h-8 text-white" />
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4 shadow-xl shadow-blue-600/40 border-2 border-blue-400">
+            <FlaskConical className="w-9 h-9 text-white" strokeWidth={2.5} />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 font-[Poppins]">Lab Management System</h1>
-          <p className="text-sm text-gray-500 mt-1">By Next Appointment</p>
+          <h1 className="text-2xl font-black text-gray-900 font-[Poppins] tracking-tight">Lab Management System</h1>
+          <p className="text-xs font-bold text-gray-600 uppercase tracking-widest mt-1">By Next Appointment</p>
         </div>
 
-        {/* Card */}
-        <div className="bg-white rounded-2xl shadow-xl shadow-gray-200/60 border border-gray-100 p-8">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-              <Stethoscope className="w-5 h-5 text-blue-600" />
+        {/* Card - Added border-2 for clear physical boundaries */}
+        <div className="bg-white rounded-3xl shadow-2xl shadow-gray-300 border-2 border-gray-200 p-8">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="w-12 h-12 bg-blue-100 border-2 border-blue-200 rounded-2xl flex items-center justify-center">
+              <Stethoscope className="w-6 h-6 text-blue-700" strokeWidth={2.5} />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Admin Access</h2>
-              <p className="text-xs text-gray-500">Enter laboratory credentials</p>
+              <h2 className="text-xl font-black text-gray-900">Admin Access</h2>
+              <p className="text-xs font-bold text-gray-500 uppercase">Secure Credentials Required</p>
             </div>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleLogin} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Email Address</label>
+              <label className="block text-sm font-bold text-gray-700 mb-2">Email Address</label>
               <input
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="admin@yourlab.com"
                 required
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-sm"
+                className="w-full px-4 py-3.5 rounded-xl border-2 border-gray-200 bg-gray-50 text-gray-900 font-medium placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
+              <label className="block text-sm font-bold text-gray-700 mb-2">Password</label>
               <input
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-sm"
+                className="w-full px-4 py-3.5 rounded-xl border-2 border-gray-200 bg-gray-50 text-gray-900 font-medium placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition"
               />
             </div>
 
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">
+              <div className="bg-red-100 border-2 border-red-300 text-red-800 text-sm font-bold rounded-xl px-4 py-3 animate-pulse">
                 {error}
               </div>
             )}
@@ -91,15 +91,15 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-xl font-semibold text-sm transition duration-200 shadow-lg shadow-blue-600/25 mt-2"
+              className="w-full py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-xl font-bold text-base transition-all duration-200 shadow-lg shadow-blue-600/30 mt-4 active:scale-95"
             >
               {loading ? 'Authenticating...' : 'Login to Dashboard'}
             </button>
           </form>
         </div>
 
-        <p className="text-center text-xs text-gray-400 mt-6">
-          Secure admin portal — authorized personnel only
+        <p className="text-center text-[10px] font-black text-gray-500 uppercase tracking-tighter mt-8">
+          Authorized Personnel Only • Secure 256-bit Encryption
         </p>
       </div>
     </div>
