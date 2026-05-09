@@ -190,7 +190,8 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    /* Changed bg-slate-50 to a radial gradient for a shaded background effect */
+    <div className="min-h-screen bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-slate-50 via-slate-100 to-gray-200">
       <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6">
 
         {/* Header - Shaded Border Applied */}
