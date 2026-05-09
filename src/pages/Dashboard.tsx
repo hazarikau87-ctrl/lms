@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   FlaskConical, LogOut, Search, CalendarCheck, Clock, CheckCheck,
   Phone, FileText, Check, Trash2, ChevronLeft, ChevronRight,
-  MessageCircle, Building2, FileDown, CheckCircle2, RotateCw, Edit3, X
+  MessageCircle, Building2, FileDown, CheckCircle2, RotateCw, Edit3, X,
+  Filter
 } from 'lucide-react';
 import { supabase, Appointment, Lab } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -24,10 +25,7 @@ export default function Dashboard() {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
-  // Date filter state
   const [selectedDate, setSelectedDate] = useState('');
-
-  // Range-based date states
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -43,7 +41,6 @@ export default function Dashboard() {
         .single();
 
       if (adminError || !adminLink) {
-        console.error("No lab assigned to this user");
         setLoading(false);
         return;
       }
@@ -115,7 +112,7 @@ export default function Dashboard() {
       await supabase.from('appointments').update({ remarks }).eq('id', id);
       setAppointments(prev => prev.map(a => a.id === id ? { ...a, remarks } : a));
     } catch (err) {
-      console.error("Error updating remarks:", err);
+      console.error(err);
     }
   };
 
@@ -141,13 +138,10 @@ export default function Dashboard() {
 
   const deleteByRange = async () => {
     if (!startDate || !endDate) return alert("Please select both dates.");
-    const toDelete = appointments.filter(a => 
-      a.appointment_date >= startDate && a.appointment_date <= endDate
-    );
-    if (toDelete.length === 0) return alert("No records found in this range.");
-    if (!confirm(`Move all ${toDelete.length} records from ${startDate} to ${endDate} to trash?`)) return;
-    const idsToDelete = toDelete.map(a => a.id);
-    await supabase.from('appointments').update({ is_deleted: true, deleted_at: new Date().toISOString() }).in('id', idsToDelete);
+    const toDelete = appointments.filter(a => a.appointment_date >= startDate && a.appointment_date <= endDate);
+    if (toDelete.length === 0) return alert("No records found.");
+    if (!confirm(`Move all ${toDelete.length} records to trash?`)) return;
+    await supabase.from('appointments').update({ is_deleted: true, deleted_at: new Date().toISOString() }).in('id', toDelete.map(a => a.id));
     setStartDate(''); setEndDate(''); setShowDatePicker(false);
     fetchAll();
   };
@@ -165,184 +159,173 @@ export default function Dashboard() {
   const generatePDF = async (dataToExport: Appointment[]) => {
     const { jsPDF } = await import('jspdf');
     const autoTable = (await import('jspdf-autotable')).default;
-    if (dataToExport.length === 0) { alert('No data to export.'); return; }
+    if (dataToExport.length === 0) return alert('No data to export.');
     const doc = new jsPDF('p', 'mm', 'a4');
     const labName = lab?.lab_name || 'Partner Lab';
     doc.setFillColor(26, 115, 232); doc.rect(0, 0, 210, 42, 'F');
     doc.setTextColor(255, 255, 255); doc.setFontSize(20); doc.setFont('helvetica', 'bold'); doc.text(labName.toUpperCase(), 14, 22);
-    doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.text('Generated via Lab Management System by Next Appointment', 14, 31);
-    doc.setFontSize(9); doc.text(`Exported on: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`, 14, 38);
-    const rows = dataToExport.map(item => [item.booking_id, { content: `${item.name}\n${item.age ?? 'N/A'}Y / ${item.gender || ''}\n${item.mobile || 'N/A'}`, styles: { fontStyle: 'bold' as const } }, item.test, `${item.appointment_date}\n${item.time || 'N/A'}`, item.remarks || '-', { content: (item.status || 'Pending').toUpperCase(), styles: { textColor: item.status === 'Completed' ? [46, 125, 50] as [number, number, number] : [194, 65, 12] as [number, number, number], fontStyle: 'bold' as const } } ]);
-    autoTable(doc, { startY: 50, head: [['ID', 'Patient Details', 'Test', 'Schedule', 'Remarks', 'Status']], body: rows, theme: 'striped', headStyles: { fillColor: [26, 115, 232] as [number, number, number] }, styles: { fontSize: 9, valign: 'middle' } });
+    doc.setFontSize(10); doc.text('Lab Management System', 14, 31);
+    const rows = dataToExport.map(item => [item.booking_id, item.name, item.test, `${item.appointment_date}\n${item.time || 'N/A'}`, item.remarks || '-', (item.status || 'Pending').toUpperCase()]);
+    autoTable(doc, { startY: 50, head: [['ID', 'Patient', 'Test', 'Schedule', 'Remarks', 'Status']], body: rows, theme: 'striped' });
     doc.save(`${labName}_Report.pdf`);
   };
 
-  const exportToPDF = () => {
-    const dataToExport = selectedIds.size > 0 ? appointments.filter(a => selectedIds.has(a.id)) : appointments;
-    generatePDF(dataToExport);
-  };
+  const exportToPDF = () => generatePDF(selectedIds.size > 0 ? appointments.filter(a => selectedIds.has(a.id)) : appointments);
 
   const exportByRange = () => {
-    if (!startDate || !endDate) return alert("Please select both dates.");
     const toExport = appointments.filter(a => a.appointment_date >= startDate && a.appointment_date <= endDate);
-    if (toExport.length === 0) return alert(`No appointments found for this range.`);
+    if (toExport.length === 0) return alert(`No appointments found.`);
     generatePDF(toExport);
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc]">
-      <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6">
+    <div className="min-h-screen bg-[#F8FAFC]">
+      <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-8">
 
-        {/* Header - Enhanced Shadows */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-[0_8px_30px_rgb(0,0,0,0.04)] px-6 py-4 mb-6 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-[0_4px_12px_rgba(37,99,235,0.25)] flex-shrink-0">
-                <FlaskConical className="w-5 h-5 text-white" />
+        {/* --- NAVBAR / HEADER --- */}
+        <header className="bg-white/80 backdrop-blur-md sticky top-4 z-30 rounded-2xl border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] px-6 py-4 mb-8 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-5">
+            <div className="relative group">
+              <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
+              <div className="relative w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-200">
+                <FlaskConical className="w-6 h-6 text-white" />
               </div>
-              <div>
-                <h1 className="text-lg font-bold text-gray-900" style={{ fontFamily: 'Poppins, sans-serif' }}>Lab Management System</h1>
-                <p className="text-[10px] font-medium text-gray-400 uppercase tracking-widest">By Next Appointment</p>
+            </div>
+            
+            <div>
+              <h1 className="text-xl font-bold text-slate-900 tracking-tight">Lab Management</h1>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Next Appointment • Live</p>
               </div>
             </div>
 
-            <div className="w-px h-9 bg-gray-200 hidden sm:block" />
+            <div className="hidden lg:block w-px h-10 bg-slate-100 mx-2" />
 
-            {/* Pill with inner shadow and border */}
-            <div className="flex items-center gap-2.5 bg-slate-50 border border-slate-200 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)] rounded-full px-3 py-1.5">
-              <div className="w-7 h-7 rounded-full border border-gray-200 bg-white shadow-sm overflow-hidden flex items-center justify-center flex-shrink-0">
-                {lab?.logo_url ? (
-                  <img src={lab.logo_url} alt="lab logo" className="w-full h-full object-cover" />
-                ) : (
-                  <Building2 className="w-3.5 h-3.5 text-gray-400" />
-                )}
-              </div>
-              <span className="text-sm font-semibold text-gray-800">
-                {loading ? 'Loading...' : (lab?.lab_name || 'Partner Lab')}
-              </span>
+            <div className="hidden md:flex items-center gap-3 bg-slate-50 border border-slate-200/60 rounded-xl px-3 py-2 shadow-inner">
+               <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center overflow-hidden shadow-sm">
+                 {lab?.logo_url ? <img src={lab.logo_url} className="w-full h-full object-cover" /> : <Building2 className="w-4 h-4 text-slate-400" />}
+               </div>
+               <span className="text-sm font-bold text-slate-700">{loading ? '...' : (lab?.lab_name || 'Partner Lab')}</span>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Input Pills with deeper focus state */}
-            <div className="relative flex items-center gap-2 bg-gray-50 border border-gray-200 shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)] rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:bg-white focus-within:border-blue-400 transition-all">
-              <CalendarCheck className="w-4 h-4 text-gray-400" />
-              <input 
-                type="date"
-                value={selectedDate}
-                onChange={(e) => { setSelectedDate(e.target.value); setCurrentPage(1); }}
-                className="bg-transparent border-none text-xs text-gray-900 focus:ring-0 p-0 outline-none cursor-pointer"
-              />
-              {selectedDate && (
-                <button onClick={() => setSelectedDate('')} className="p-0.5 hover:bg-gray-200 rounded-full">
-                  <X className="w-3 h-3 text-gray-400" />
-                </button>
-              )}
+            <div className="hidden sm:flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-50 transition-all duration-300">
+              <CalendarCheck className="w-4 h-4 text-slate-400" />
+              <input type="date" value={selectedDate} onChange={(e) => { setSelectedDate(e.target.value); setCurrentPage(1); }} className="bg-transparent border-none text-xs font-bold text-slate-700 focus:ring-0 p-0 outline-none" />
+              {selectedDate && <button onClick={() => setSelectedDate('')}><X className="w-3 h-3 text-slate-400 hover:text-red-500" /></button>}
             </div>
 
             <div className="relative group">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
               <input
                 type="text"
                 value={search}
                 onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
-                placeholder="Search ID or Name..."
-                className="pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)] bg-gray-50 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:bg-white focus:border-blue-400 w-56 transition-all"
+                placeholder="Search patient or ID..."
+                className="pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-400 w-48 lg:w-64 transition-all duration-300 outline-none"
               />
             </div>
-            <button onClick={signOut} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 shadow-sm bg-white text-sm font-semibold text-red-500 hover:bg-red-50 hover:border-red-200 hover:shadow-md transition-all active:scale-95">
-              <LogOut className="w-4 h-4" />
+
+            <button onClick={signOut} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 active:scale-95">
+              <LogOut className="w-3.5 h-3.5" />
               Logout
             </button>
           </div>
+        </header>
+
+        {/* --- STATS SECTION --- */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+          <StatCard icon={<Filter className="w-5 h-5 text-blue-600" />} color="blue" value={stats.total} label="Total Records" />
+          <StatCard icon={<Clock className="w-5 h-5 text-amber-600" />} color="amber" value={stats.pending} label="Awaiting Completion" />
+          <StatCard icon={<CheckCheck className="w-5 h-5 text-emerald-600" />} color="emerald" value={stats.completed} label="Successful Tests" />
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          <StatCard icon={<CalendarCheck className="w-5 h-5 text-sky-600" />} iconBg="bg-sky-50" value={stats.total} label={selectedDate ? `Appointments on ${selectedDate}` : "Total Appointments"} />
-          <StatCard icon={<Clock className="w-5 h-5 text-amber-600" />} iconBg="bg-amber-50" value={stats.pending} label="Pending Tests" />
-          <StatCard icon={<CheckCheck className="w-5 h-5 text-emerald-600" />} iconBg="bg-emerald-50" value={stats.completed} label="Completed" />
-        </div>
-
-        {/* Bulk Actions Bar */}
+        {/* --- BULK ACTIONS FLOATING BAR --- */}
         {selectedIds.size > 0 && (
-          <div className="bg-white border border-blue-100 shadow-[0_10px_20px_-5px_rgba(37,99,235,0.15)] rounded-2xl px-5 py-3 mb-5 flex flex-wrap items-center justify-between gap-3 animate-[slideDown_0.2s_ease-out]">
-            <div className="flex items-center gap-2">
-               <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-               <span className="text-sm font-bold text-blue-700">{selectedIds.size} Selected</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button onClick={() => bulkUpdateStatus('Completed')} className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-emerald-700 border border-emerald-100 shadow-sm rounded-lg text-xs font-bold hover:bg-emerald-50 hover:border-emerald-200 transition-all"><CheckCircle2 className="w-3.5 h-3.5" /> Mark Done</button>
-              <button onClick={bulkDelete} className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-red-700 border border-red-100 shadow-sm rounded-lg text-xs font-bold hover:bg-red-50 hover:border-red-200 transition-all"><Trash2 className="w-3.5 h-3.5" /> Delete</button>
-              <button onClick={exportToPDF} className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 text-white border border-blue-700 shadow-[0_4px_10px_rgba(37,99,235,0.3)] rounded-lg text-xs font-bold hover:bg-blue-700 hover:shadow-blue-500/40 transition-all active:scale-95"><FileDown className="w-3.5 h-3.5" /> Export PDF</button>
+          <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white rounded-2xl px-6 py-4 shadow-[0_20px_50px_rgba(0,0,0,0.3)] flex items-center gap-6 animate-in fade-in zoom-in slide-in-from-bottom-4 duration-300">
+            <span className="text-sm font-bold border-r border-slate-700 pr-6">{selectedIds.size} Selected</span>
+            <div className="flex gap-2">
+              <button onClick={() => bulkUpdateStatus('Completed')} className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 rounded-xl text-xs font-bold transition-colors">
+                <CheckCircle2 className="w-4 h-4" /> Complete
+              </button>
+              <button onClick={exportToPDF} className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-xl text-xs font-bold transition-colors">
+                <FileDown className="w-4 h-4" /> PDF
+              </button>
+              <button onClick={bulkDelete} className="flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-xl text-xs font-bold transition-all">
+                <Trash2 className="w-4 h-4" /> Delete
+              </button>
+              <button onClick={clearSelection} className="p-2 hover:bg-slate-800 rounded-xl transition-colors">
+                <X className="w-4 h-4 text-slate-400" />
+              </button>
             </div>
           </div>
         )}
 
-        {/* Main Table Container */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.08)] overflow-hidden">
-          <div className="flex items-center gap-2 px-6 py-4 border-b border-gray-100 bg-gray-50/40">
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg shadow-sm">
-              <input type="checkbox" checked={isAllPageSelected} onChange={e => toggleSelectAll(e.target.checked)} className="w-4 h-4 accent-blue-600 cursor-pointer rounded border-gray-300 transition-all" />
-              <label className="text-[11px] font-bold text-gray-500 cursor-pointer select-none uppercase tracking-tight">Select Page</label>
+        {/* --- MAIN TABLE CARD --- */}
+        <div className="bg-white rounded-[24px] border border-slate-200 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b border-slate-100 bg-slate-50/30">
+            <div className="flex items-center gap-3">
+               <input type="checkbox" checked={isAllPageSelected} onChange={e => toggleSelectAll(e.target.checked)} className="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 transition-all cursor-pointer" />
+               <span className="text-sm font-bold text-slate-500">Select Page</span>
             </div>
-            
-            <div className="ml-auto flex items-center gap-2">
-              <button onClick={fetchAll} title="Refresh data" className={`flex items-center justify-center w-9 h-9 text-gray-500 border border-gray-200 bg-white shadow-sm rounded-xl hover:text-blue-600 hover:border-blue-200 hover:shadow-md transition-all ${loading ? 'opacity-50' : ''}`} disabled={loading}>
+
+            <div className="flex items-center gap-2">
+              <button onClick={fetchAll} className={`p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-blue-600 hover:border-blue-200 hover:shadow-sm transition-all ${loading ? 'opacity-50' : ''}`}>
                 <RotateCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </button>
+              
+              <div className="h-8 w-px bg-slate-200 mx-1" />
 
-              <div className="relative flex items-center gap-2">
-                {!showDatePicker ? (
-                  <button onClick={() => setShowDatePicker(true)} className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-600 border border-gray-200 bg-white shadow-sm rounded-xl hover:text-blue-600 hover:border-blue-200 hover:shadow-md transition-all">
-                    <CalendarCheck className="w-3.5 h-3.5" /> Bulk Range
-                  </button>
-                ) : (
-                  <div className="flex items-center gap-2 bg-white border border-blue-200 p-1.5 rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.1)] animate-[fadeIn_0.2s_ease]">
-                    <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="text-xs border-none bg-slate-50 rounded-lg focus:ring-0 text-gray-700 p-1.5 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]" />
-                    <span className="text-[10px] text-gray-400 font-black">TO</span>
-                    <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="text-xs border-none bg-slate-50 rounded-lg focus:ring-0 text-gray-700 p-1.5 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]" />
-                    {startDate && endDate && (
-                      <div className="flex items-center border-l border-gray-100 ml-1 pl-1 gap-1">
-                        <button onClick={exportByRange} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"><FileDown className="w-3.5 h-3.5" /></button>
-                        <button onClick={deleteByRange} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-3.5 h-3.5" /></button>
-                      </div>
-                    )}
-                    <button onClick={() => { setShowDatePicker(false); setStartDate(''); setEndDate(''); }} className="p-1.5 text-gray-400 hover:text-gray-600 border-l border-gray-100 ml-1"><X className="w-3.5 h-3.5" /></button>
-                  </div>
-                )}
-              </div>
-              <button onClick={exportToPDF} className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-600 border border-gray-200 bg-white shadow-sm rounded-xl hover:text-blue-600 hover:border-blue-200 hover:shadow-md transition-all">
-                <FileDown className="w-3.5 h-3.5" /> PDF
+              {!showDatePicker ? (
+                <button onClick={() => setShowDatePicker(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:border-blue-300 hover:text-blue-600 transition-all">
+                  <CalendarCheck className="w-4 h-4" /> Range Tools
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 bg-blue-50/50 border border-blue-100 p-1 rounded-xl">
+                  <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="bg-white border-slate-200 rounded-lg text-xs font-bold p-1.5 focus:ring-2 focus:ring-blue-500" />
+                  <span className="text-[10px] font-black text-blue-300">TO</span>
+                  <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="bg-white border-slate-200 rounded-lg text-xs font-bold p-1.5 focus:ring-2 focus:ring-blue-500" />
+                  <button onClick={exportByRange} className="p-2 text-blue-600 hover:bg-white rounded-lg transition-colors"><FileDown className="w-4 h-4" /></button>
+                  <button onClick={deleteByRange} className="p-2 text-red-500 hover:bg-white rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
+                  <button onClick={() => setShowDatePicker(false)} className="p-2 text-slate-400"><Check className="w-4 h-4" /></button>
+                </div>
+              )}
+
+              <button onClick={exportToPDF} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-50 text-blue-700 text-xs font-bold hover:bg-blue-100 transition-all">
+                <FileDown className="w-4 h-4" /> Export All
               </button>
             </div>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1100px]">
+            <table className="w-full min-w-[1000px] border-collapse">
               <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/30">
-                  <th className="w-10 px-4 py-4"></th>
-                  <th className="px-4 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest">Booking ID</th>
-                  <th className="px-4 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest">Patient Details</th>
-                  <th className="px-4 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest">Prescription</th>
-                  <th className="px-4 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest">Communication</th>
-                  <th className="px-4 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest">Test / Schedule</th>
-                  <th className="px-4 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest">Lab Remarks</th>
-                  <th className="px-4 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest">Status</th>
-                  <th className="px-4 py-4 text-right text-[11px] font-black text-slate-500 uppercase tracking-widest">Actions</th>
+                <tr className="bg-slate-50/50">
+                  <th className="w-14 px-6 py-5"></th>
+                  <th className="px-4 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Identification</th>
+                  <th className="px-4 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Patient Details</th>
+                  <th className="px-4 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Documents</th>
+                  <th className="px-4 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Communication</th>
+                  <th className="px-4 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Schedule</th>
+                  <th className="px-4 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Lab Remarks</th>
+                  <th className="px-4 py-5 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                  <th className="px-6 py-5 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50">
+              <tbody className="divide-y divide-slate-100">
                 {loading ? (
-                  <tr><td colSpan={9} className="py-24 text-center"><RotateCw className="w-8 h-8 animate-spin mx-auto text-blue-500 opacity-20" /></td></tr>
+                  <tr><td colSpan={9} className="py-24 text-center"><RotateCw className="w-8 h-8 animate-spin mx-auto text-blue-500/20" /></td></tr>
                 ) : paginated.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="py-20 text-center text-gray-400">
-                      <div className="flex flex-col items-center gap-2">
-                        <Search className="w-10 h-10 opacity-10 mb-2" />
-                        <p className="text-sm font-semibold text-slate-500">No appointments found</p>
-                        <p className="text-xs text-slate-400">Try adjusting your filters or search terms.</p>
+                    <td colSpan={9} className="py-24 text-center">
+                      <div className="max-w-xs mx-auto">
+                        <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-slate-100">
+                          <Search className="w-8 h-8 text-slate-200" />
+                        </div>
+                        <h3 className="text-slate-900 font-bold">No results found</h3>
+                        <p className="text-slate-500 text-xs mt-1">We couldn't find any appointments matching your current filters.</p>
                       </div>
                     </td>
                   </tr>
@@ -353,12 +336,19 @@ export default function Dashboard() {
             </table>
           </div>
 
-          <div className="flex items-center justify-center gap-6 px-6 py-5 border-t border-gray-100 bg-gray-50/30">
-            <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 bg-white shadow-sm rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50 hover:shadow-md disabled:opacity-40 disabled:cursor-not-allowed transition-all"><ChevronLeft className="w-4 h-4" /> Previous</button>
-            <div className="px-3 py-1 bg-slate-100 rounded-lg shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)] border border-slate-200">
-                <span className="text-xs font-bold text-slate-600">Page {currentPage} <span className="text-slate-400 font-medium">of</span> {totalPages}</span>
+          <div className="flex items-center justify-between px-8 py-5 border-t border-slate-100 bg-slate-50/20">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+              Showing <span className="text-slate-900">{paginated.length}</span> of {filtered.length}
+            </p>
+            <div className="flex items-center gap-2">
+              <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="p-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-30 transition-all"><ChevronLeft className="w-4 h-4" /></button>
+              <div className="flex items-center gap-1 mx-2">
+                <span className="text-sm font-bold text-slate-900">{currentPage}</span>
+                <span className="text-sm font-bold text-slate-400">/</span>
+                <span className="text-sm font-bold text-slate-400">{totalPages}</span>
+              </div>
+              <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="p-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-30 transition-all"><ChevronRight className="w-4 h-4" /></button>
             </div>
-            <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 bg-white shadow-sm rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50 hover:shadow-md disabled:opacity-40 disabled:cursor-not-allowed transition-all">Next <ChevronRight className="w-4 h-4" /></button>
           </div>
         </div>
       </div>
@@ -366,14 +356,20 @@ export default function Dashboard() {
   );
 }
 
-// Sub-components with Shading
-function StatCard({ icon, iconBg, value, label }: { icon: React.ReactNode; iconBg: string; value: number; label: string }) {
+function StatCard({ icon, color, value, label }: { icon: React.ReactNode; color: string; value: number; label: string }) {
+  const themes: any = {
+    blue: "from-blue-500/10 to-transparent border-blue-100 text-blue-700",
+    amber: "from-amber-500/10 to-transparent border-amber-100 text-amber-700",
+    emerald: "from-emerald-500/10 to-transparent border-emerald-100 text-emerald-700",
+  };
+
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 shadow-[0_2px_10px_-2px_rgba(0,0,0,0.05)] px-5 py-5 flex items-center gap-4 hover:-translate-y-1 hover:shadow-[0_12px_20px_-8px_rgba(0,0,0,0.1)] transition-all duration-300 cursor-default group">
-      <div className={`w-12 h-12 rounded-2xl ${iconBg} shadow-sm flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}>{icon}</div>
-      <div>
-        <p className="text-2xl font-black text-slate-900 tracking-tight">{value}</p>
-        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">{label}</p>
+    <div className={`bg-white rounded-3xl border p-6 shadow-[0_10px_20px_-10px_rgba(0,0,0,0.04)] relative overflow-hidden group hover:shadow-lg transition-all duration-300`}>
+      <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${themes[color]} opacity-40 -mr-8 -mt-8 rounded-full blur-2xl group-hover:scale-125 transition-transform duration-500`}></div>
+      <div className="relative z-10">
+        <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center mb-4 border border-slate-100 shadow-sm">{icon}</div>
+        <p className="text-3xl font-black text-slate-900 tracking-tight">{value}</p>
+        <p className="text-xs font-bold text-slate-400 uppercase mt-1 tracking-widest">{label}</p>
       </div>
     </div>
   );
@@ -383,76 +379,78 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
   const isCompleted = item.status === 'Completed';
   const [localRemarks, setLocalRemarks] = useState(item.remarks || '');
   useEffect(() => { setLocalRemarks(item.remarks || ''); }, [item.remarks]);
-  const handleRemarksBlur = () => { if (localRemarks !== (item.remarks || '')) { onUpdateRemarks(item.id, localRemarks); } };
 
   return (
-    <tr className={`group border-b border-slate-50 transition-colors ${selected ? 'bg-blue-50/40' : 'hover:bg-slate-50/40'}`}>
-      <td className="px-4 py-4 text-center">
-        <input type="checkbox" checked={selected} onChange={onToggle} className="w-4 h-4 accent-blue-600 cursor-pointer rounded border-gray-300 shadow-sm transition-all" />
+    <tr className={`group transition-all duration-200 ${selected ? 'bg-blue-50/50' : 'hover:bg-slate-50/80'}`}>
+      <td className="px-6 py-4 text-center">
+        <input type="checkbox" checked={selected} onChange={onToggle} className="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
       </td>
       <td className="px-4 py-4">
-        <span className="bg-white text-indigo-700 px-2.5 py-1.5 rounded-lg font-mono font-black text-xs border border-indigo-100 shadow-[0_2px_4px_rgba(79,70,229,0.08)]">
-          {item.booking_id}
+        <span className="inline-flex px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 font-mono text-[11px] font-bold border border-slate-200 shadow-sm">
+          #{item.booking_id}
         </span>
       </td>
       <td className="px-4 py-4">
         <p className="font-bold text-slate-900 text-sm">{item.name}</p>
-        <p className="text-[11px] font-semibold text-slate-400 mt-0.5">{item.age ?? 'N/A'}Y &bull; {item.gender || 'N/A'}</p>
+        <p className="text-[11px] font-bold text-slate-400 uppercase mt-0.5">{item.age ?? 'N/A'}Y • {item.gender || 'N/A'}</p>
       </td>
       <td className="px-4 py-4">
-        {item.prescription_url ? ( 
-          <a href={item.prescription_url.startsWith('http') ? item.prescription_url : supabase.storage.from('prescriptions').getPublicUrl(item.prescription_url).data.publicUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-200 hover:text-blue-600 text-slate-700 rounded-xl text-xs font-bold transition-all active:scale-95">
+        {item.prescription_url ? (
+          <a href={item.prescription_url.startsWith('http') ? item.prescription_url : supabase.storage.from('prescriptions').getPublicUrl(item.prescription_url).data.publicUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-[11px] font-bold hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all shadow-sm">
             <FileText className="w-3.5 h-3.5" /> View
-          </a> 
-        ) : <span className="text-xs text-slate-300 font-medium italic">No upload</span>}
+          </a>
+        ) : <span className="text-[10px] font-bold text-slate-300 uppercase tracking-tighter">No Upload</span>}
       </td>
       <td className="px-4 py-4">
-        <a href={`tel:${item.mobile}`} className="flex items-center gap-1.5 text-slate-700 text-xs hover:text-blue-600 transition-colors font-bold tracking-tight">
-          <Phone className="w-3 h-3 text-slate-400" /> {item.mobile}
+        <a href={`tel:${item.mobile}`} className="flex items-center gap-1.5 text-slate-700 text-xs font-bold hover:text-blue-600 transition-colors">
+          <div className="w-5 h-5 rounded-md bg-blue-50 flex items-center justify-center"><Phone className="w-3 h-3 text-blue-600" /></div>
+          {item.mobile}
         </a>
         <div className="flex items-center gap-2 mt-2">
-          <select defaultValue="" onChange={e => { onWhatsApp(item.mobile, e.target.value, item); e.target.value = ''; }} className="text-[10px] font-bold px-2 py-1.5 rounded-lg border border-slate-200 bg-white shadow-sm text-slate-600 hover:border-slate-300 cursor-pointer focus:ring-2 focus:ring-blue-500/10 outline-none">
+          <select defaultValue="" onChange={e => { onWhatsApp(item.mobile, e.target.value, item); e.target.value = ''; }} className="text-[10px] font-bold px-2 py-1 rounded-md border border-slate-200 bg-white text-slate-600 cursor-pointer focus:ring-2 focus:ring-blue-500 outline-none shadow-sm">
             <option value="">TEMPLATES</option>
             <option value="welcome">Welcome</option>
             <option value="report">Reports</option>
             <option value="reminder">Reminder</option>
           </select>
-          <button onClick={() => onWhatsApp(item.mobile, 'default', item)} className="flex items-center gap-1 text-[11px] font-black text-emerald-600 hover:text-emerald-700 hover:underline transition-all">
-            <MessageCircle className="w-3.5 h-3.5" /> CHAT
+          <button onClick={() => onWhatsApp(item.mobile, 'default', item)} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors" title="Quick Chat">
+            <MessageCircle className="w-4 h-4" />
           </button>
         </div>
       </td>
       <td className="px-4 py-4">
-        <p className="font-bold text-slate-900 text-sm">{item.test}</p>
+        <p className="font-bold text-slate-800 text-sm leading-tight">{item.test}</p>
         <div className="flex items-center gap-1.5 mt-1">
-            <CalendarCheck className="w-3 h-3 text-blue-400" />
-            <p className="text-[11px] text-slate-500 font-bold">{item.appointment_date} <span className="text-slate-300 mx-0.5">@</span> {item.time || 'N/A'}</p>
+          <Clock className="w-3 h-3 text-slate-300" />
+          <p className="text-[11px] font-bold text-slate-500">{item.appointment_date}</p>
         </div>
       </td>
       <td className="px-4 py-4 min-w-[200px]">
-        <div className="relative group/remarks">
-          <textarea 
-            value={localRemarks} 
-            onChange={(e) => setLocalRemarks(e.target.value)} 
-            onBlur={handleRemarksBlur} 
-            placeholder="Click to add remarks..." 
-            rows={1} 
-            className="w-full text-[11px] font-medium p-2.5 bg-slate-50/50 border border-slate-200 shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)] rounded-xl focus:bg-white focus:border-blue-300 focus:shadow-md focus:ring-0 outline-none resize-none transition-all placeholder:text-slate-300" 
+        <div className="relative group/edit">
+          <textarea
+            value={localRemarks}
+            onChange={(e) => setLocalRemarks(e.target.value)}
+            onBlur={() => onUpdateRemarks(item.id, localRemarks)}
+            placeholder="Click to add note..."
+            rows={1}
+            className="w-full text-[11px] font-medium p-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-300 focus:ring-4 focus:ring-blue-50/50 outline-none resize-none transition-all"
           />
-          <Edit3 className="absolute right-2 top-2.5 w-3 h-3 text-slate-300 opacity-0 group-hover/remarks:opacity-100 transition-opacity pointer-events-none" />
+          <Edit3 className="absolute right-2 top-2 w-3 h-3 text-slate-300 opacity-0 group-hover/edit:opacity-100 transition-opacity" />
         </div>
       </td>
-      <td className="px-4 py-4">
-        <span className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border shadow-sm transition-all ${isCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-orange-50 text-orange-700 border-orange-200'}`}>
+      <td className="px-4 py-4 text-center">
+        <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${isCompleted ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100 shadow-sm'}`}>
           {item.status || 'Pending'}
         </span>
       </td>
-      <td className="px-4 py-4 text-right">
-        <div className="flex items-center justify-end gap-2">
-          <button onClick={() => onUpdateStatus(item.id, 'Completed')} title="Mark Completed" className="w-9 h-9 rounded-xl bg-white border border-slate-200 shadow-sm text-emerald-600 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 hover:shadow-lg hover:shadow-emerald-200 flex items-center justify-center transition-all active:scale-90">
-            <Check className="w-4 h-4 stroke-[3px]" />
-          </button>
-          <button onClick={() => onDelete(item.id)} title="Delete" className="w-9 h-9 rounded-xl bg-white border border-slate-200 shadow-sm text-red-500 hover:bg-red-500 hover:text-white hover:border-red-500 hover:shadow-lg hover:shadow-red-200 flex items-center justify-center transition-all active:scale-90">
+      <td className="px-6 py-4 text-right">
+        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          {!isCompleted && (
+            <button onClick={() => onUpdateStatus(item.id, 'Completed')} className="w-9 h-9 rounded-xl bg-white border border-slate-200 shadow-sm text-emerald-600 hover:bg-emerald-50 hover:border-emerald-200 flex items-center justify-center transition-all">
+              <Check className="w-4 h-4" />
+            </button>
+          )}
+          <button onClick={() => onDelete(item.id)} className="w-9 h-9 rounded-xl bg-white border border-slate-200 shadow-sm text-red-500 hover:bg-red-50 hover:border-red-200 flex items-center justify-center transition-all">
             <Trash2 className="w-4 h-4" />
           </button>
         </div>
