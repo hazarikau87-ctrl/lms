@@ -190,14 +190,14 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-[#f8fafc]">
       <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6">
 
-        {/* Header - Shaded Border Applied */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-[0_2px_10px_-3px_rgba(0,0,0,0.07)] px-6 py-4 mb-6 flex flex-wrap items-center justify-between gap-4">
+        {/* Header - Enhanced Shadows */}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-[0_8px_30px_rgb(0,0,0,0.04)] px-6 py-4 mb-6 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-md shadow-blue-600/20 flex-shrink-0">
+              <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-[0_4px_12px_rgba(37,99,235,0.25)] flex-shrink-0">
                 <FlaskConical className="w-5 h-5 text-white" />
               </div>
               <div>
@@ -208,8 +208,9 @@ export default function Dashboard() {
 
             <div className="w-px h-9 bg-gray-200 hidden sm:block" />
 
-            <div className="flex items-center gap-2.5 bg-slate-50 border border-gray-200 shadow-inner rounded-full px-3 py-1.5">
-              <div className="w-7 h-7 rounded-full border border-gray-200 bg-white overflow-hidden flex items-center justify-center flex-shrink-0">
+            {/* Pill with inner shadow and border */}
+            <div className="flex items-center gap-2.5 bg-slate-50 border border-slate-200 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)] rounded-full px-3 py-1.5">
+              <div className="w-7 h-7 rounded-full border border-gray-200 bg-white shadow-sm overflow-hidden flex items-center justify-center flex-shrink-0">
                 {lab?.logo_url ? (
                   <img src={lab.logo_url} alt="lab logo" className="w-full h-full object-cover" />
                 ) : (
@@ -223,7 +224,8 @@ export default function Dashboard() {
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="relative flex items-center gap-2 bg-gray-50 border border-gray-200 shadow-sm rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-blue-500 transition-all">
+            {/* Input Pills with deeper focus state */}
+            <div className="relative flex items-center gap-2 bg-gray-50 border border-gray-200 shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)] rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:bg-white focus-within:border-blue-400 transition-all">
               <CalendarCheck className="w-4 h-4 text-gray-400" />
               <input 
                 type="date"
@@ -238,75 +240,80 @@ export default function Dashboard() {
               )}
             </div>
 
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <div className="relative group">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
               <input
                 type="text"
                 value={search}
                 onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
                 placeholder="Search ID or Name..."
-                className="pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 shadow-sm bg-gray-50 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-56 transition"
+                className="pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)] bg-gray-50 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:bg-white focus:border-blue-400 w-56 transition-all"
               />
             </div>
-            <button onClick={signOut} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 shadow-sm bg-white text-sm font-semibold text-red-500 hover:bg-red-50 hover:border-red-200 transition">
+            <button onClick={signOut} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 shadow-sm bg-white text-sm font-semibold text-red-500 hover:bg-red-50 hover:border-red-200 hover:shadow-md transition-all active:scale-95">
               <LogOut className="w-4 h-4" />
               Logout
             </button>
           </div>
         </div>
 
-        {/* Stats - Shaded Border Applied */}
+        {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <StatCard icon={<CalendarCheck className="w-5 h-5 text-sky-600" />} iconBg="bg-sky-50" value={stats.total} label={selectedDate ? `Appointments on ${selectedDate}` : "Total Appointments"} />
           <StatCard icon={<Clock className="w-5 h-5 text-amber-600" />} iconBg="bg-amber-50" value={stats.pending} label="Pending Tests" />
           <StatCard icon={<CheckCheck className="w-5 h-5 text-emerald-600" />} iconBg="bg-emerald-50" value={stats.completed} label="Completed" />
         </div>
 
-        {/* Bulk Actions - Shaded Border Applied */}
+        {/* Bulk Actions Bar */}
         {selectedIds.size > 0 && (
-          <div className="bg-blue-50 border border-blue-200 shadow-md rounded-xl px-5 py-3 mb-5 flex flex-wrap items-center justify-between gap-3 animate-[slideDown_0.25s_ease]">
-            <span className="text-sm font-semibold text-blue-700">{selectedIds.size} Selected</span>
+          <div className="bg-white border border-blue-100 shadow-[0_10px_20px_-5px_rgba(37,99,235,0.15)] rounded-2xl px-5 py-3 mb-5 flex flex-wrap items-center justify-between gap-3 animate-[slideDown_0.2s_ease-out]">
+            <div className="flex items-center gap-2">
+               <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+               <span className="text-sm font-bold text-blue-700">{selectedIds.size} Selected</span>
+            </div>
             <div className="flex flex-wrap gap-2">
-              <button onClick={() => bulkUpdateStatus('Completed')} className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-emerald-700 border border-emerald-200 shadow-sm rounded-lg text-xs font-semibold hover:bg-emerald-100 transition"><CheckCircle2 className="w-3.5 h-3.5" /> Mark Done</button>
-              <button onClick={bulkDelete} className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-red-700 border border-red-200 shadow-sm rounded-lg text-xs font-semibold hover:bg-red-100 transition"><Trash2 className="w-3.5 h-3.5" /> Delete</button>
-              <button onClick={exportToPDF} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white border border-blue-700 shadow-sm rounded-lg text-xs font-semibold hover:bg-blue-700 transition"><FileDown className="w-3.5 h-3.5" /> Export PDF</button>
+              <button onClick={() => bulkUpdateStatus('Completed')} className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-emerald-700 border border-emerald-100 shadow-sm rounded-lg text-xs font-bold hover:bg-emerald-50 hover:border-emerald-200 transition-all"><CheckCircle2 className="w-3.5 h-3.5" /> Mark Done</button>
+              <button onClick={bulkDelete} className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-red-700 border border-red-100 shadow-sm rounded-lg text-xs font-bold hover:bg-red-50 hover:border-red-200 transition-all"><Trash2 className="w-3.5 h-3.5" /> Delete</button>
+              <button onClick={exportToPDF} className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 text-white border border-blue-700 shadow-[0_4px_10px_rgba(37,99,235,0.3)] rounded-lg text-xs font-bold hover:bg-blue-700 hover:shadow-blue-500/40 transition-all active:scale-95"><FileDown className="w-3.5 h-3.5" /> Export PDF</button>
             </div>
           </div>
         )}
 
-        {/* Table Card - Shaded Border Applied */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-[0_4px_20px_-5px_rgba(0,0,0,0.1)] overflow-hidden">
-          <div className="flex items-center gap-2 px-6 py-3 border-b border-gray-100 bg-gray-50/50">
-            <input type="checkbox" checked={isAllPageSelected} onChange={e => toggleSelectAll(e.target.checked)} className="w-4 h-4 accent-blue-600 cursor-pointer rounded border-gray-300 shadow-sm" />
-            <label className="text-xs font-medium text-gray-500 cursor-pointer select-none">Select all on this page</label>
+        {/* Main Table Container */}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.08)] overflow-hidden">
+          <div className="flex items-center gap-2 px-6 py-4 border-b border-gray-100 bg-gray-50/40">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg shadow-sm">
+              <input type="checkbox" checked={isAllPageSelected} onChange={e => toggleSelectAll(e.target.checked)} className="w-4 h-4 accent-blue-600 cursor-pointer rounded border-gray-300 transition-all" />
+              <label className="text-[11px] font-bold text-gray-500 cursor-pointer select-none uppercase tracking-tight">Select Page</label>
+            </div>
             
             <div className="ml-auto flex items-center gap-2">
-              <button onClick={fetchAll} title="Refresh data" className={`flex items-center justify-center p-1.5 text-gray-500 border border-gray-200 bg-white shadow-sm rounded-lg hover:text-blue-600 hover:border-blue-200 transition-all ${loading ? 'opacity-50' : ''}`} disabled={loading}>
-                <RotateCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              <button onClick={fetchAll} title="Refresh data" className={`flex items-center justify-center w-9 h-9 text-gray-500 border border-gray-200 bg-white shadow-sm rounded-xl hover:text-blue-600 hover:border-blue-200 hover:shadow-md transition-all ${loading ? 'opacity-50' : ''}`} disabled={loading}>
+                <RotateCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </button>
 
               <div className="relative flex items-center gap-2">
                 {!showDatePicker ? (
-                  <button onClick={() => setShowDatePicker(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-600 border border-gray-200 bg-white shadow-sm rounded-lg hover:text-blue-600 hover:border-blue-200 transition">
-                    <CalendarCheck className="w-3.5 h-3.5" /> Bulk Action (Range)
+                  <button onClick={() => setShowDatePicker(true)} className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-600 border border-gray-200 bg-white shadow-sm rounded-xl hover:text-blue-600 hover:border-blue-200 hover:shadow-md transition-all">
+                    <CalendarCheck className="w-3.5 h-3.5" /> Bulk Range
                   </button>
                 ) : (
-                  <div className="flex items-center gap-2 bg-white border border-blue-200 p-1.5 rounded-lg shadow-md">
-                    <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="text-xs border-none bg-gray-50 rounded-md focus:ring-0 text-gray-700 p-1 shadow-inner" />
-                    <span className="text-[10px] text-gray-400 font-bold">TO</span>
-                    <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="text-xs border-none bg-gray-50 rounded-md focus:ring-0 text-gray-700 p-1 shadow-inner" />
+                  <div className="flex items-center gap-2 bg-white border border-blue-200 p-1.5 rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.1)] animate-[fadeIn_0.2s_ease]">
+                    <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="text-xs border-none bg-slate-50 rounded-lg focus:ring-0 text-gray-700 p-1.5 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]" />
+                    <span className="text-[10px] text-gray-400 font-black">TO</span>
+                    <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="text-xs border-none bg-slate-50 rounded-lg focus:ring-0 text-gray-700 p-1.5 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]" />
                     {startDate && endDate && (
-                      <div className="flex items-center border-l ml-1 pl-1 gap-1">
-                        <button onClick={exportByRange} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition"><FileDown className="w-3.5 h-3.5" /></button>
-                        <button onClick={deleteByRange} className="p-1.5 text-red-500 hover:bg-red-50 rounded-md transition"><Trash2 className="w-3.5 h-3.5" /></button>
+                      <div className="flex items-center border-l border-gray-100 ml-1 pl-1 gap-1">
+                        <button onClick={exportByRange} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"><FileDown className="w-3.5 h-3.5" /></button>
+                        <button onClick={deleteByRange} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-3.5 h-3.5" /></button>
                       </div>
                     )}
-                    <button onClick={() => { setShowDatePicker(false); setStartDate(''); setEndDate(''); }} className="p-1.5 text-gray-400 hover:text-gray-600 border-l ml-1"><Check className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => { setShowDatePicker(false); setStartDate(''); setEndDate(''); }} className="p-1.5 text-gray-400 hover:text-gray-600 border-l border-gray-100 ml-1"><X className="w-3.5 h-3.5" /></button>
                   </div>
                 )}
               </div>
-              <button onClick={exportToPDF} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-600 border border-gray-200 bg-white shadow-sm rounded-lg hover:text-blue-600 hover:border-blue-200 transition">
-                <FileDown className="w-3.5 h-3.5" /> Export All PDF
+              <button onClick={exportToPDF} className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-600 border border-gray-200 bg-white shadow-sm rounded-xl hover:text-blue-600 hover:border-blue-200 hover:shadow-md transition-all">
+                <FileDown className="w-3.5 h-3.5" /> PDF
               </button>
             </div>
           </div>
@@ -314,28 +321,28 @@ export default function Dashboard() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1100px]">
               <thead>
-                <tr className="border-b-2 border-slate-100">
-                  <th className="w-10 px-4 py-3"></th>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Booking ID</th>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Patient</th>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Prescription</th>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Contact & WhatsApp</th>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Test / Schedule</th>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Remarks by lab</th>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Status</th>
-                  <th className="px-4 py-3 text-right text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Actions</th>
+                <tr className="border-b border-slate-100 bg-slate-50/30">
+                  <th className="w-10 px-4 py-4"></th>
+                  <th className="px-4 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest">Booking ID</th>
+                  <th className="px-4 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest">Patient Details</th>
+                  <th className="px-4 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest">Prescription</th>
+                  <th className="px-4 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest">Communication</th>
+                  <th className="px-4 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest">Test / Schedule</th>
+                  <th className="px-4 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest">Lab Remarks</th>
+                  <th className="px-4 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-widest">Status</th>
+                  <th className="px-4 py-4 text-right text-[11px] font-black text-slate-500 uppercase tracking-widest">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-50">
                 {loading ? (
-                  <tr><td colSpan={9} className="py-16 text-center"><RotateCw className="w-6 h-6 animate-spin mx-auto text-blue-500" /></td></tr>
+                  <tr><td colSpan={9} className="py-24 text-center"><RotateCw className="w-8 h-8 animate-spin mx-auto text-blue-500 opacity-20" /></td></tr>
                 ) : paginated.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="py-20 text-center text-gray-400">
                       <div className="flex flex-col items-center gap-2">
                         <Search className="w-10 h-10 opacity-10 mb-2" />
-                        <p className="text-sm font-medium">No appointment found.</p>
-                        <p className="text-xs">{selectedDate ? `Nothing scheduled for ${selectedDate}` : "Try adjusting your search query."}</p>
+                        <p className="text-sm font-semibold text-slate-500">No appointments found</p>
+                        <p className="text-xs text-slate-400">Try adjusting your filters or search terms.</p>
                       </div>
                     </td>
                   </tr>
@@ -346,10 +353,12 @@ export default function Dashboard() {
             </table>
           </div>
 
-          <div className="flex items-center justify-center gap-4 px-6 py-4 border-t border-gray-100 bg-gray-50/30">
-            <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 bg-white shadow-sm rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition"><ChevronLeft className="w-4 h-4" /> Prev</button>
-            <span className="text-sm font-medium text-gray-600">Page {currentPage} of {totalPages}</span>
-            <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 bg-white shadow-sm rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition">Next <ChevronRight className="w-4 h-4" /></button>
+          <div className="flex items-center justify-center gap-6 px-6 py-5 border-t border-gray-100 bg-gray-50/30">
+            <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 bg-white shadow-sm rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50 hover:shadow-md disabled:opacity-40 disabled:cursor-not-allowed transition-all"><ChevronLeft className="w-4 h-4" /> Previous</button>
+            <div className="px-3 py-1 bg-slate-100 rounded-lg shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)] border border-slate-200">
+                <span className="text-xs font-bold text-slate-600">Page {currentPage} <span className="text-slate-400 font-medium">of</span> {totalPages}</span>
+            </div>
+            <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 bg-white shadow-sm rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50 hover:shadow-md disabled:opacity-40 disabled:cursor-not-allowed transition-all">Next <ChevronRight className="w-4 h-4" /></button>
           </div>
         </div>
       </div>
@@ -357,14 +366,14 @@ export default function Dashboard() {
   );
 }
 
-// Sub-components
+// Sub-components with Shading
 function StatCard({ icon, iconBg, value, label }: { icon: React.ReactNode; iconBg: string; value: number; label: string }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.08)] px-5 py-4 flex items-center gap-4 hover:-translate-y-0.5 transition-all duration-200">
-      <div className={`w-12 h-12 rounded-xl ${iconBg} shadow-sm flex items-center justify-center flex-shrink-0`}>{icon}</div>
+    <div className="bg-white rounded-2xl border border-gray-200 shadow-[0_2px_10px_-2px_rgba(0,0,0,0.05)] px-5 py-5 flex items-center gap-4 hover:-translate-y-1 hover:shadow-[0_12px_20px_-8px_rgba(0,0,0,0.1)] transition-all duration-300 cursor-default group">
+      <div className={`w-12 h-12 rounded-2xl ${iconBg} shadow-sm flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}>{icon}</div>
       <div>
-        <p className="text-2xl font-bold text-gray-900">{value}</p>
-        <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+        <p className="text-2xl font-black text-slate-900 tracking-tight">{value}</p>
+        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">{label}</p>
       </div>
     </div>
   );
@@ -377,16 +386,77 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
   const handleRemarksBlur = () => { if (localRemarks !== (item.remarks || '')) { onUpdateRemarks(item.id, localRemarks); } };
 
   return (
-    <tr className={`border-b border-gray-50 hover:bg-slate-50/50 transition-colors ${selected ? 'bg-blue-50/40' : ''}`}>
-      <td className="px-4 py-4 text-center"><input type="checkbox" checked={selected} onChange={onToggle} className="w-4 h-4 accent-blue-600 cursor-pointer rounded border-gray-300" /></td>
-      <td className="px-4 py-4"><span className="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-lg font-mono font-bold text-xs border border-indigo-100 shadow-sm">{item.booking_id}</span></td>
-      <td className="px-4 py-4"><p className="font-semibold text-gray-900 text-sm">{item.name}</p><p className="text-xs text-gray-400 mt-0.5">{item.age ?? 'N/A'}Y &bull; {item.gender || 'N/A'}</p></td>
-      <td className="px-4 py-4">{item.prescription_url ? ( <a href={item.prescription_url.startsWith('http') ? item.prescription_url : supabase.storage.from('prescriptions').getPublicUrl(item.prescription_url).data.publicUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 shadow-sm hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-medium transition"><FileText className="w-3.5 h-3.5" /> View</a> ) : <span className="text-xs text-gray-400 italic">No Upload</span>}</td>
-      <td className="px-4 py-4"><a href={`tel:${item.mobile}`} className="flex items-center gap-1.5 text-gray-700 text-xs hover:text-blue-600 transition font-medium"><Phone className="w-3 h-3" /> {item.mobile}</a><div className="flex items-center gap-2 mt-1.5"><select defaultValue="" onChange={e => { onWhatsApp(item.mobile, e.target.value, item); e.target.value = ''; }} className="text-[11px] px-1.5 py-1 rounded-md border border-gray-200 bg-white shadow-sm text-gray-600 max-w-[90px] cursor-pointer"><option value="">Templates</option><option value="welcome">Welcome</option><option value="report">Reports</option><option value="reminder">Reminder</option></select><button onClick={() => onWhatsApp(item.mobile, 'default', item)} className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 transition"><MessageCircle className="w-3.5 h-3.5" /> Chat</button></div></td>
-      <td className="px-4 py-4"><p className="font-semibold text-gray-900 text-sm">{item.test}</p><p className="text-xs text-gray-400 mt-0.5 font-medium">{item.appointment_date} @ {item.time || 'N/A'}</p></td>
-      <td className="px-4 py-4 min-w-[180px]"><div className="relative group"><textarea value={localRemarks} onChange={(e) => setLocalRemarks(e.target.value)} onBlur={handleRemarksBlur} placeholder="Add remarks..." rows={1} className="w-full text-[11px] p-2 bg-gray-50/50 border border-gray-200 shadow-inner rounded-lg focus:bg-white focus:border-blue-200 focus:ring-0 outline-none resize-none transition-all" /><Edit3 className="absolute right-2 top-2 w-3 h-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" /></div></td>
-      <td className="px-4 py-4"><span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border shadow-sm ${isCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-orange-50 text-orange-700 border-orange-200'}`}>{item.status || 'Pending'}</span></td>
-      <td className="px-4 py-4 text-right"><div className="flex items-center justify-end gap-1.5"><button onClick={() => onUpdateStatus(item.id, 'Completed')} title="Mark Completed" className="w-8 h-8 rounded-lg bg-white border border-gray-200 shadow-sm text-emerald-600 hover:bg-emerald-50 hover:border-emerald-300 flex items-center justify-center transition"><Check className="w-3.5 h-3.5" /></button><button onClick={() => onDelete(item.id)} title="Delete" className="w-8 h-8 rounded-lg bg-white border border-gray-200 shadow-sm text-red-500 hover:bg-red-50 hover:border-red-300 flex items-center justify-center transition"><Trash2 className="w-3.5 h-3.5" /></button></div></td>
+    <tr className={`group border-b border-slate-50 transition-colors ${selected ? 'bg-blue-50/40' : 'hover:bg-slate-50/40'}`}>
+      <td className="px-4 py-4 text-center">
+        <input type="checkbox" checked={selected} onChange={onToggle} className="w-4 h-4 accent-blue-600 cursor-pointer rounded border-gray-300 shadow-sm transition-all" />
+      </td>
+      <td className="px-4 py-4">
+        <span className="bg-white text-indigo-700 px-2.5 py-1.5 rounded-lg font-mono font-black text-xs border border-indigo-100 shadow-[0_2px_4px_rgba(79,70,229,0.08)]">
+          {item.booking_id}
+        </span>
+      </td>
+      <td className="px-4 py-4">
+        <p className="font-bold text-slate-900 text-sm">{item.name}</p>
+        <p className="text-[11px] font-semibold text-slate-400 mt-0.5">{item.age ?? 'N/A'}Y &bull; {item.gender || 'N/A'}</p>
+      </td>
+      <td className="px-4 py-4">
+        {item.prescription_url ? ( 
+          <a href={item.prescription_url.startsWith('http') ? item.prescription_url : supabase.storage.from('prescriptions').getPublicUrl(item.prescription_url).data.publicUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-200 hover:text-blue-600 text-slate-700 rounded-xl text-xs font-bold transition-all active:scale-95">
+            <FileText className="w-3.5 h-3.5" /> View
+          </a> 
+        ) : <span className="text-xs text-slate-300 font-medium italic">No upload</span>}
+      </td>
+      <td className="px-4 py-4">
+        <a href={`tel:${item.mobile}`} className="flex items-center gap-1.5 text-slate-700 text-xs hover:text-blue-600 transition-colors font-bold tracking-tight">
+          <Phone className="w-3 h-3 text-slate-400" /> {item.mobile}
+        </a>
+        <div className="flex items-center gap-2 mt-2">
+          <select defaultValue="" onChange={e => { onWhatsApp(item.mobile, e.target.value, item); e.target.value = ''; }} className="text-[10px] font-bold px-2 py-1.5 rounded-lg border border-slate-200 bg-white shadow-sm text-slate-600 hover:border-slate-300 cursor-pointer focus:ring-2 focus:ring-blue-500/10 outline-none">
+            <option value="">TEMPLATES</option>
+            <option value="welcome">Welcome</option>
+            <option value="report">Reports</option>
+            <option value="reminder">Reminder</option>
+          </select>
+          <button onClick={() => onWhatsApp(item.mobile, 'default', item)} className="flex items-center gap-1 text-[11px] font-black text-emerald-600 hover:text-emerald-700 hover:underline transition-all">
+            <MessageCircle className="w-3.5 h-3.5" /> CHAT
+          </button>
+        </div>
+      </td>
+      <td className="px-4 py-4">
+        <p className="font-bold text-slate-900 text-sm">{item.test}</p>
+        <div className="flex items-center gap-1.5 mt-1">
+            <CalendarCheck className="w-3 h-3 text-blue-400" />
+            <p className="text-[11px] text-slate-500 font-bold">{item.appointment_date} <span className="text-slate-300 mx-0.5">@</span> {item.time || 'N/A'}</p>
+        </div>
+      </td>
+      <td className="px-4 py-4 min-w-[200px]">
+        <div className="relative group/remarks">
+          <textarea 
+            value={localRemarks} 
+            onChange={(e) => setLocalRemarks(e.target.value)} 
+            onBlur={handleRemarksBlur} 
+            placeholder="Click to add remarks..." 
+            rows={1} 
+            className="w-full text-[11px] font-medium p-2.5 bg-slate-50/50 border border-slate-200 shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)] rounded-xl focus:bg-white focus:border-blue-300 focus:shadow-md focus:ring-0 outline-none resize-none transition-all placeholder:text-slate-300" 
+          />
+          <Edit3 className="absolute right-2 top-2.5 w-3 h-3 text-slate-300 opacity-0 group-hover/remarks:opacity-100 transition-opacity pointer-events-none" />
+        </div>
+      </td>
+      <td className="px-4 py-4">
+        <span className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border shadow-sm transition-all ${isCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-orange-50 text-orange-700 border-orange-200'}`}>
+          {item.status || 'Pending'}
+        </span>
+      </td>
+      <td className="px-4 py-4 text-right">
+        <div className="flex items-center justify-end gap-2">
+          <button onClick={() => onUpdateStatus(item.id, 'Completed')} title="Mark Completed" className="w-9 h-9 rounded-xl bg-white border border-slate-200 shadow-sm text-emerald-600 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 hover:shadow-lg hover:shadow-emerald-200 flex items-center justify-center transition-all active:scale-90">
+            <Check className="w-4 h-4 stroke-[3px]" />
+          </button>
+          <button onClick={() => onDelete(item.id)} title="Delete" className="w-9 h-9 rounded-xl bg-white border border-slate-200 shadow-sm text-red-500 hover:bg-red-500 hover:text-white hover:border-red-500 hover:shadow-lg hover:shadow-red-200 flex items-center justify-center transition-all active:scale-90">
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </td>
     </tr>
   );
 }
