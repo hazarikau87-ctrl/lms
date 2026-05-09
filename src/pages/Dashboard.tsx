@@ -24,10 +24,10 @@ export default function Dashboard() {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
-  // NEW: Single date filter state
+  // Date filter state
   const [selectedDate, setSelectedDate] = useState('');
 
-  // Range-based date states (kept for your bulk actions)
+  // Range-based date states
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -66,30 +66,23 @@ export default function Dashboard() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // UPDATED: Combined Search and Date Filtering
   const filtered = useMemo(() => {
     let result = appointments;
-
-    // 1. Filter by specific date if selected
     if (selectedDate) {
       result = result.filter(a => a.appointment_date === selectedDate);
     }
-
-    // 2. Filter by search query
     const q = search.trim().toUpperCase();
     if (q) {
       result = result.filter(a =>
         a.name?.toUpperCase().includes(q) || a.booking_id?.toUpperCase().includes(q)
       );
     }
-
     return result;
   }, [appointments, search, selectedDate]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / RECORDS_PER_PAGE));
   const paginated = filtered.slice((currentPage - 1) * RECORDS_PER_PAGE, currentPage * RECORDS_PER_PAGE);
 
-  // Updated stats to reflect currently filtered data
   const stats = useMemo(() => ({
     total: filtered.length,
     pending: filtered.filter(a => a.status !== 'Completed').length,
@@ -200,8 +193,8 @@ export default function Dashboard() {
     <div className="min-h-screen bg-slate-50">
       <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6">
 
-        {/* Header */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-6 py-4 mb-6 flex flex-wrap items-center justify-between gap-4">
+        {/* Header - Shaded Border Applied */}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-[0_2px_10px_-3px_rgba(0,0,0,0.07)] px-6 py-4 mb-6 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-md shadow-blue-600/20 flex-shrink-0">
@@ -215,7 +208,7 @@ export default function Dashboard() {
 
             <div className="w-px h-9 bg-gray-200 hidden sm:block" />
 
-            <div className="flex items-center gap-2.5 bg-slate-50 border border-gray-200 rounded-full px-3 py-1.5">
+            <div className="flex items-center gap-2.5 bg-slate-50 border border-gray-200 shadow-inner rounded-full px-3 py-1.5">
               <div className="w-7 h-7 rounded-full border border-gray-200 bg-white overflow-hidden flex items-center justify-center flex-shrink-0">
                 {lab?.logo_url ? (
                   <img src={lab.logo_url} alt="lab logo" className="w-full h-full object-cover" />
@@ -230,8 +223,7 @@ export default function Dashboard() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* NEW: Automatic Date Selector */}
-            <div className="relative flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-blue-500 transition-all">
+            <div className="relative flex items-center gap-2 bg-gray-50 border border-gray-200 shadow-sm rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-blue-500 transition-all">
               <CalendarCheck className="w-4 h-4 text-gray-400" />
               <input 
                 type="date"
@@ -253,67 +245,67 @@ export default function Dashboard() {
                 value={search}
                 onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
                 placeholder="Search ID or Name..."
-                className="pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-56 transition"
+                className="pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 shadow-sm bg-gray-50 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-56 transition"
               />
             </div>
-            <button onClick={signOut} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-red-500 hover:bg-red-50 hover:border-red-200 transition">
+            <button onClick={signOut} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 shadow-sm bg-white text-sm font-semibold text-red-500 hover:bg-red-50 hover:border-red-200 transition">
               <LogOut className="w-4 h-4" />
               Logout
             </button>
           </div>
         </div>
 
-        {/* Stats */}
+        {/* Stats - Shaded Border Applied */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <StatCard icon={<CalendarCheck className="w-5 h-5 text-sky-600" />} iconBg="bg-sky-50" value={stats.total} label={selectedDate ? `Appointments on ${selectedDate}` : "Total Appointments"} />
           <StatCard icon={<Clock className="w-5 h-5 text-amber-600" />} iconBg="bg-amber-50" value={stats.pending} label="Pending Tests" />
           <StatCard icon={<CheckCheck className="w-5 h-5 text-emerald-600" />} iconBg="bg-emerald-50" value={stats.completed} label="Completed" />
         </div>
 
-        {/* Bulk Actions */}
+        {/* Bulk Actions - Shaded Border Applied */}
         {selectedIds.size > 0 && (
-          <div className="bg-blue-50 border border-blue-200 rounded-xl px-5 py-3 mb-5 flex flex-wrap items-center justify-between gap-3 animate-[slideDown_0.25s_ease]">
+          <div className="bg-blue-50 border border-blue-200 shadow-md rounded-xl px-5 py-3 mb-5 flex flex-wrap items-center justify-between gap-3 animate-[slideDown_0.25s_ease]">
             <span className="text-sm font-semibold text-blue-700">{selectedIds.size} Selected</span>
             <div className="flex flex-wrap gap-2">
-              <button onClick={() => bulkUpdateStatus('Completed')} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-semibold hover:bg-emerald-100 transition"><CheckCircle2 className="w-3.5 h-3.5" /> Mark Done</button>
-              <button onClick={bulkDelete} className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded-lg text-xs font-semibold hover:bg-red-100 transition"><Trash2 className="w-3.5 h-3.5" /> Delete</button>
-              <button onClick={exportToPDF} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold hover:bg-blue-200 transition"><FileDown className="w-3.5 h-3.5" /> Export PDF</button>
+              <button onClick={() => bulkUpdateStatus('Completed')} className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-emerald-700 border border-emerald-200 shadow-sm rounded-lg text-xs font-semibold hover:bg-emerald-100 transition"><CheckCircle2 className="w-3.5 h-3.5" /> Mark Done</button>
+              <button onClick={bulkDelete} className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-red-700 border border-red-200 shadow-sm rounded-lg text-xs font-semibold hover:bg-red-100 transition"><Trash2 className="w-3.5 h-3.5" /> Delete</button>
+              <button onClick={exportToPDF} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white border border-blue-700 shadow-sm rounded-lg text-xs font-semibold hover:bg-blue-700 transition"><FileDown className="w-3.5 h-3.5" /> Export PDF</button>
             </div>
           </div>
         )}
 
-        {/* Table Card */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        {/* Table Card - Shaded Border Applied */}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-[0_4px_20px_-5px_rgba(0,0,0,0.1)] overflow-hidden">
           <div className="flex items-center gap-2 px-6 py-3 border-b border-gray-100 bg-gray-50/50">
-            <input type="checkbox" checked={isAllPageSelected} onChange={e => toggleSelectAll(e.target.checked)} className="w-4 h-4 accent-blue-600 cursor-pointer rounded" />
+            <input type="checkbox" checked={isAllPageSelected} onChange={e => toggleSelectAll(e.target.checked)} className="w-4 h-4 accent-blue-600 cursor-pointer rounded border-gray-300 shadow-sm" />
             <label className="text-xs font-medium text-gray-500 cursor-pointer select-none">Select all on this page</label>
             
             <div className="ml-auto flex items-center gap-2">
-              <button onClick={fetchAll} title="Refresh data" className={`flex items-center justify-center p-1.5 text-gray-500 border border-gray-200 rounded-lg hover:bg-white hover:text-blue-600 hover:border-blue-200 transition-all ${loading ? 'opacity-50' : ''}`} disabled={loading}>
+              <button onClick={fetchAll} title="Refresh data" className={`flex items-center justify-center p-1.5 text-gray-500 border border-gray-200 bg-white shadow-sm rounded-lg hover:text-blue-600 hover:border-blue-200 transition-all ${loading ? 'opacity-50' : ''}`} disabled={loading}>
                 <RotateCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
               </button>
 
               <div className="relative flex items-center gap-2">
                 {!showDatePicker ? (
-                  <button onClick={() => setShowDatePicker(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg hover:bg-white hover:text-blue-600 hover:border-blue-200 transition">
+                  <button onClick={() => setShowDatePicker(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-600 border border-gray-200 bg-white shadow-sm rounded-lg hover:text-blue-600 hover:border-blue-200 transition">
                     <CalendarCheck className="w-3.5 h-3.5" /> Bulk Action (Range)
                   </button>
                 ) : (
-                  <div className="flex items-center gap-2 bg-white border border-blue-200 p-1.5 rounded-lg shadow-sm">
-                    <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="text-xs border-none bg-gray-50 rounded-md focus:ring-0 text-gray-700 p-1" />
+                  <div className="flex items-center gap-2 bg-white border border-blue-200 p-1.5 rounded-lg shadow-md">
+                    <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="text-xs border-none bg-gray-50 rounded-md focus:ring-0 text-gray-700 p-1 shadow-inner" />
                     <span className="text-[10px] text-gray-400 font-bold">TO</span>
-                    <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="text-xs border-none bg-gray-50 rounded-md focus:ring-0 text-gray-700 p-1" />
+                    <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="text-xs border-none bg-gray-50 rounded-md focus:ring-0 text-gray-700 p-1 shadow-inner" />
                     {startDate && endDate && (
-                      <div className="flex items-center border-l ml-1 pl-1">
-                        <button onClick={exportByRange} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md"><FileDown className="w-3.5 h-3.5" /></button>
-                        <button onClick={deleteByRange} className="p-1.5 text-red-500 hover:bg-red-50 rounded-md"><Trash2 className="w-3.5 h-3.5" /></button>
+                      <div className="flex items-center border-l ml-1 pl-1 gap-1">
+                        <button onClick={exportByRange} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition"><FileDown className="w-3.5 h-3.5" /></button>
+                        <button onClick={deleteByRange} className="p-1.5 text-red-500 hover:bg-red-50 rounded-md transition"><Trash2 className="w-3.5 h-3.5" /></button>
                       </div>
                     )}
-                    <button onClick={() => { setShowDatePicker(false); setStartDate(''); setEndDate(''); }} className="p-1.5 text-gray-400 hover:text-gray-600 border-l"><Check className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => { setShowDatePicker(false); setStartDate(''); setEndDate(''); }} className="p-1.5 text-gray-400 hover:text-gray-600 border-l ml-1"><Check className="w-3.5 h-3.5" /></button>
                   </div>
                 )}
               </div>
-              <button onClick={exportToPDF} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg hover:bg-white hover:text-blue-600 hover:border-blue-200 transition">
+              <button onClick={exportToPDF} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-600 border border-gray-200 bg-white shadow-sm rounded-lg hover:text-blue-600 hover:border-blue-200 transition">
                 <FileDown className="w-3.5 h-3.5" /> Export All PDF
               </button>
             </div>
@@ -354,10 +346,10 @@ export default function Dashboard() {
             </table>
           </div>
 
-          <div className="flex items-center justify-center gap-4 px-6 py-4 border-t border-gray-100">
-            <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition"><ChevronLeft className="w-4 h-4" /> Prev</button>
+          <div className="flex items-center justify-center gap-4 px-6 py-4 border-t border-gray-100 bg-gray-50/30">
+            <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 bg-white shadow-sm rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition"><ChevronLeft className="w-4 h-4" /> Prev</button>
             <span className="text-sm font-medium text-gray-600">Page {currentPage} of {totalPages}</span>
-            <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition">Next <ChevronRight className="w-4 h-4" /></button>
+            <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 bg-white shadow-sm rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition">Next <ChevronRight className="w-4 h-4" /></button>
           </div>
         </div>
       </div>
@@ -365,11 +357,11 @@ export default function Dashboard() {
   );
 }
 
-// Sub-components (StatCard and AppointmentRow)
+// Sub-components
 function StatCard({ icon, iconBg, value, label }: { icon: React.ReactNode; iconBg: string; value: number; label: string }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-4 flex items-center gap-4 hover:-translate-y-0.5 transition-transform duration-200">
-      <div className={`w-12 h-12 rounded-xl ${iconBg} flex items-center justify-center flex-shrink-0`}>{icon}</div>
+    <div className="bg-white rounded-2xl border border-gray-200 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.08)] px-5 py-4 flex items-center gap-4 hover:-translate-y-0.5 transition-all duration-200">
+      <div className={`w-12 h-12 rounded-xl ${iconBg} shadow-sm flex items-center justify-center flex-shrink-0`}>{icon}</div>
       <div>
         <p className="text-2xl font-bold text-gray-900">{value}</p>
         <p className="text-xs text-gray-500 mt-0.5">{label}</p>
@@ -378,7 +370,7 @@ function StatCard({ icon, iconBg, value, label }: { icon: React.ReactNode; iconB
   );
 }
 
-function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRemarks, onDelete, onWhatsApp }: { item: Appointment; selected: boolean; onToggle: () => void; onUpdateStatus: (id: number, status: string) => void; onUpdateRemarks: (id: number, remarks: string) => void; onDelete: (id: number) => void; onWhatsApp: (phone: string, type: string, item: Appointment) => void; }) {
+function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRemarks, onDelete, onWhatsApp }: any) {
   const isCompleted = item.status === 'Completed';
   const [localRemarks, setLocalRemarks] = useState(item.remarks || '');
   useEffect(() => { setLocalRemarks(item.remarks || ''); }, [item.remarks]);
@@ -386,15 +378,15 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
 
   return (
     <tr className={`border-b border-gray-50 hover:bg-slate-50/50 transition-colors ${selected ? 'bg-blue-50/40' : ''}`}>
-      <td className="px-4 py-4 text-center"><input type="checkbox" checked={selected} onChange={onToggle} className="w-4 h-4 accent-blue-600 cursor-pointer rounded" /></td>
-      <td className="px-4 py-4"><span className="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-lg font-mono font-bold text-xs">{item.booking_id}</span></td>
+      <td className="px-4 py-4 text-center"><input type="checkbox" checked={selected} onChange={onToggle} className="w-4 h-4 accent-blue-600 cursor-pointer rounded border-gray-300" /></td>
+      <td className="px-4 py-4"><span className="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-lg font-mono font-bold text-xs border border-indigo-100 shadow-sm">{item.booking_id}</span></td>
       <td className="px-4 py-4"><p className="font-semibold text-gray-900 text-sm">{item.name}</p><p className="text-xs text-gray-400 mt-0.5">{item.age ?? 'N/A'}Y &bull; {item.gender || 'N/A'}</p></td>
-      <td className="px-4 py-4">{item.prescription_url ? ( <a href={item.prescription_url.startsWith('http') ? item.prescription_url : supabase.storage.from('prescriptions').getPublicUrl(item.prescription_url).data.publicUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium border border-gray-200 transition"><FileText className="w-3.5 h-3.5" /> View</a> ) : <span className="text-xs text-gray-400 italic">No Upload</span>}</td>
-      <td className="px-4 py-4"><a href={`tel:${item.mobile}`} className="flex items-center gap-1.5 text-gray-700 text-xs hover:text-blue-600 transition"><Phone className="w-3 h-3" /> {item.mobile}</a><div className="flex items-center gap-2 mt-1.5"><select defaultValue="" onChange={e => { onWhatsApp(item.mobile, e.target.value, item); e.target.value = ''; }} className="text-[11px] px-1.5 py-1 rounded-md border border-gray-200 outline-none bg-white text-gray-600 max-w-[90px] cursor-pointer"><option value="">Templates</option><option value="welcome">Welcome</option><option value="report">Reports</option><option value="reminder">Reminder</option></select><button onClick={() => onWhatsApp(item.mobile, 'default', item)} className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 transition"><MessageCircle className="w-3.5 h-3.5" /> Chat</button></div></td>
-      <td className="px-4 py-4"><p className="font-semibold text-gray-900 text-sm">{item.test}</p><p className="text-xs text-gray-400 mt-0.5">{item.appointment_date} @ {item.time || 'N/A'}</p></td>
-      <td className="px-4 py-4 min-w-[180px]"><div className="relative group"><textarea value={localRemarks} onChange={(e) => setLocalRemarks(e.target.value)} onBlur={handleRemarksBlur} placeholder="Add remarks..." rows={1} className="w-full text-[11px] p-2 bg-gray-50/50 border border-transparent rounded-lg focus:bg-white focus:border-blue-200 focus:ring-0 outline-none resize-none transition-all" /><Edit3 className="absolute right-2 top-2 w-3 h-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" /></div></td>
-      <td className="px-4 py-4"><span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${isCompleted ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-700'}`}>{item.status || 'Pending'}</span></td>
-      <td className="px-4 py-4 text-right"><div className="flex items-center justify-end gap-1.5"><button onClick={() => onUpdateStatus(item.id, 'Completed')} title="Mark Completed" className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 flex items-center justify-center transition"><Check className="w-3.5 h-3.5" /></button><button onClick={() => onDelete(item.id)} title="Delete" className="w-8 h-8 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 flex items-center justify-center transition"><Trash2 className="w-3.5 h-3.5" /></button></div></td>
+      <td className="px-4 py-4">{item.prescription_url ? ( <a href={item.prescription_url.startsWith('http') ? item.prescription_url : supabase.storage.from('prescriptions').getPublicUrl(item.prescription_url).data.publicUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 shadow-sm hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-medium transition"><FileText className="w-3.5 h-3.5" /> View</a> ) : <span className="text-xs text-gray-400 italic">No Upload</span>}</td>
+      <td className="px-4 py-4"><a href={`tel:${item.mobile}`} className="flex items-center gap-1.5 text-gray-700 text-xs hover:text-blue-600 transition font-medium"><Phone className="w-3 h-3" /> {item.mobile}</a><div className="flex items-center gap-2 mt-1.5"><select defaultValue="" onChange={e => { onWhatsApp(item.mobile, e.target.value, item); e.target.value = ''; }} className="text-[11px] px-1.5 py-1 rounded-md border border-gray-200 bg-white shadow-sm text-gray-600 max-w-[90px] cursor-pointer"><option value="">Templates</option><option value="welcome">Welcome</option><option value="report">Reports</option><option value="reminder">Reminder</option></select><button onClick={() => onWhatsApp(item.mobile, 'default', item)} className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 transition"><MessageCircle className="w-3.5 h-3.5" /> Chat</button></div></td>
+      <td className="px-4 py-4"><p className="font-semibold text-gray-900 text-sm">{item.test}</p><p className="text-xs text-gray-400 mt-0.5 font-medium">{item.appointment_date} @ {item.time || 'N/A'}</p></td>
+      <td className="px-4 py-4 min-w-[180px]"><div className="relative group"><textarea value={localRemarks} onChange={(e) => setLocalRemarks(e.target.value)} onBlur={handleRemarksBlur} placeholder="Add remarks..." rows={1} className="w-full text-[11px] p-2 bg-gray-50/50 border border-gray-200 shadow-inner rounded-lg focus:bg-white focus:border-blue-200 focus:ring-0 outline-none resize-none transition-all" /><Edit3 className="absolute right-2 top-2 w-3 h-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" /></div></td>
+      <td className="px-4 py-4"><span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border shadow-sm ${isCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-orange-50 text-orange-700 border-orange-200'}`}>{item.status || 'Pending'}</span></td>
+      <td className="px-4 py-4 text-right"><div className="flex items-center justify-end gap-1.5"><button onClick={() => onUpdateStatus(item.id, 'Completed')} title="Mark Completed" className="w-8 h-8 rounded-lg bg-white border border-gray-200 shadow-sm text-emerald-600 hover:bg-emerald-50 hover:border-emerald-300 flex items-center justify-center transition"><Check className="w-3.5 h-3.5" /></button><button onClick={() => onDelete(item.id)} title="Delete" className="w-8 h-8 rounded-lg bg-white border border-gray-200 shadow-sm text-red-500 hover:bg-red-50 hover:border-red-300 flex items-center justify-center transition"><Trash2 className="w-3.5 h-3.5" /></button></div></td>
     </tr>
   );
 }
