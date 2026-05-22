@@ -152,9 +152,12 @@ export default function Dashboard() {
     fetchAll();
   };
 
-  const sendWhatsApp = (phone: string, type: string, item: Appointment) => {
+  const sendWhatsApp = (phone: string, type: string, item: any) => {
     if (!type) return;
-    const clean = phone.replace(/\D/g, '');
+    // THE FIX: Use the saved whatsapp number field, fallback to mobile if missing
+    const targetNumber = item.whatsapp || phone;
+    const clean = targetNumber.replace(/\D/g, '');
+    
     let msg = `Hello ${item.name}, this is regarding your booking ${item.booking_id}.`;
     if (WA_TEMPLATES[type]) {
       msg = WA_TEMPLATES[type].replace('[NAME]', item.name).replace('[DATE]', item.appointment_date).replace('[TIME]', item.time || 'your scheduled time').replace('[TEST]', item.test);
@@ -383,7 +386,34 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
       <td className="px-4 py-4"><span className="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-lg font-mono font-bold text-xs border border-indigo-100 shadow-sm">{item.booking_id}</span></td>
       <td className="px-4 py-4"><p className="font-semibold text-gray-900 text-sm">{item.name}</p><p className="text-xs text-gray-400 mt-0.5">{item.age ?? 'N/A'}Y &bull; {item.gender || 'N/A'}</p></td>
       <td className="px-4 py-4">{item.prescription_url ? ( <a href={item.prescription_url.startsWith('http') ? item.prescription_url : supabase.storage.from('prescriptions').getPublicUrl(item.prescription_url).data.publicUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 shadow-sm hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-medium transition"><FileText className="w-3.5 h-3.5" /> View</a> ) : <span className="text-xs text-gray-400 italic">No Upload</span>}</td>
-      <td className="px-4 py-4"><a href={`tel:${item.mobile}`} className="flex items-center gap-1.5 text-gray-700 text-xs hover:text-blue-600 transition font-medium"><Phone className="w-3 h-3" /> {item.mobile}</a><div className="flex items-center gap-2 mt-1.5"><select defaultValue="" onChange={e => { onWhatsApp(item.mobile, e.target.value, item); e.target.value = ''; }} className="text-[11px] px-1.5 py-1 rounded-md border border-gray-200 bg-white shadow-sm text-gray-600 max-w-[90px] cursor-pointer"><option value="">Templates</option><option value="welcome">Welcome</option><option value="report">Reports</option><option value="reminder">Reminder</option></select><button onClick={() => onWhatsApp(item.mobile, 'default', item)} className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 transition"><MessageCircle className="w-3.5 h-3.5" /> Chat</button></div></td>
+<td className="px-4 py-4">
+  {/* Keeps calling linked to primary mobile configuration */}
+  <a href={`tel:${item.mobile}`} className="flex items-center gap-1.5 text-gray-700 text-xs hover:text-blue-600 transition font-medium">
+    <Phone className="w-3 h-3" /> {item.mobile}
+  </a>
+  
+  <div className="flex items-center gap-2 mt-1.5">
+    {/* Pass item.whatsapp explicitly to the trigger option */}
+    <select 
+      defaultValue="" 
+      onChange={e => { onWhatsApp(item.whatsapp || item.mobile, e.target.value, item); e.target.value = ''; }} 
+      className="text-[11px] px-1.5 py-1 rounded-md border border-gray-200 bg-white shadow-sm text-gray-600 max-w-[90px] cursor-pointer"
+    >
+      <option value="">Templates</option>
+      <option value="welcome">Welcome</option>
+      <option value="report">Reports</option>
+      <option value="reminder">Reminder</option>
+    </select>
+    
+    {/* Chat Button now defaults cleanly to the isolated WhatsApp field identifier */}
+    <button 
+      onClick={() => onWhatsApp(item.whatsapp || item.mobile, 'default', item)} 
+      className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 transition"
+    >
+      <MessageCircle className="w-3.5 h-3.5" /> Chat
+    </button>
+  </div>
+</td>
       <td className="px-4 py-4"><p className="font-semibold text-gray-900 text-sm">{item.test}</p><p className="text-xs text-gray-400 mt-0.5 font-medium">{item.appointment_date} @ {item.time || 'N/A'}</p></td>
       <td className="px-4 py-4 min-w-[180px]"><div className="relative group"><textarea value={localRemarks} onChange={(e) => setLocalRemarks(e.target.value)} onBlur={handleRemarksBlur} placeholder="Add remarks..." rows={1} className="w-full text-[11px] p-2 bg-gray-50/50 border border-gray-200 shadow-inner rounded-lg focus:bg-white focus:border-blue-200 focus:ring-0 outline-none resize-none transition-all" /><Edit3 className="absolute right-2 top-2 w-3 h-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" /></div></td>
       <td className="px-4 py-4"><span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border shadow-sm ${isCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-orange-50 text-orange-700 border-orange-200'}`}>{item.status || 'Pending'}</span></td>
