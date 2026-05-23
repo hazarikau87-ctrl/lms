@@ -106,13 +106,23 @@ export default function Dashboard() {
   const clearSelection = () => setSelectedIds(new Set());
 
   const updateStatus = async (id: number, status: string) => {
-    await supabase.from('appointments').update({ status }).eq('id', id);
+    if (!lab?.id) return;
+    await supabase
+      .from('appointments')
+      .update({ status })
+      .eq('id', id)
+      .eq('lab_id', lab.id);
     fetchAll();
   };
 
   const updateRemarks = async (id: number, remarks: string) => {
+    if (!lab?.id) return;
     try {
-      await supabase.from('appointments').update({ remarks }).eq('id', id);
+      await supabase
+        .from('appointments')
+        .update({ remarks })
+        .eq('id', id)
+        .eq('lab_id', lab.id);
       setAppointments(prev => prev.map(a => a.id === id ? { ...a, remarks } : a));
     } catch (err) {
       console.error("Error updating remarks:", err);
@@ -120,41 +130,56 @@ export default function Dashboard() {
   };
 
   const deleteBooking = async (id: number) => {
-    if (!confirm('Move this record to trash?')) return;
-    await supabase.from('appointments').update({ is_deleted: true, deleted_at: new Date().toISOString() }).eq('id', id);
+    if (!confirm('Move this record to trash?') || !lab?.id) return;
+    await supabase
+      .from('appointments')
+      .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('lab_id', lab.id);
     fetchAll();
   };
 
   const bulkUpdateStatus = async (status: string) => {
-    if (!confirm(`Update ${selectedIds.size} item(s) to ${status}?`)) return;
-    await supabase.from('appointments').update({ status }).in('id', Array.from(selectedIds));
+    if (!confirm(`Update ${selectedIds.size} item(s) to ${status}?`) || !lab?.id) return;
+    await supabase
+      .from('appointments')
+      .update({ status })
+      .in('id', Array.from(selectedIds))
+      .eq('lab_id', lab.id);
     clearSelection();
     fetchAll();
   };
 
   const bulkDelete = async () => {
-    if (!confirm(`Move ${selectedIds.size} record(s) to trash?`)) return;
-    await supabase.from('appointments').update({ is_deleted: true, deleted_at: new Date().toISOString() }).in('id', Array.from(selectedIds));
+    if (!confirm(`Move ${selectedIds.size} record(s) to trash?`) || !lab?.id) return;
+    await supabase
+      .from('appointments')
+      .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+      .in('id', Array.from(selectedIds))
+      .eq('lab_id', lab.id);
     clearSelection();
     fetchAll();
   };
 
   const deleteByRange = async () => {
-    if (!startDate || !endDate) return alert("Please select both dates.");
+    if (!startDate || !endDate || !lab?.id) return alert("Please select both dates.");
     const toDelete = appointments.filter(a => 
       a.appointment_date >= startDate && a.appointment_date <= endDate
     );
     if (toDelete.length === 0) return alert("No records found in this range.");
     if (!confirm(`Move all ${toDelete.length} records from ${startDate} to ${endDate} to trash?`)) return;
     const idsToDelete = toDelete.map(a => a.id);
-    await supabase.from('appointments').update({ is_deleted: true, deleted_at: new Date().toISOString() }).in('id', idsToDelete);
+    await supabase
+      .from('appointments')
+      .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+      .in('id', idsToDelete)
+      .eq('lab_id', lab.id);
     setStartDate(''); setEndDate(''); setShowDatePicker(false);
     fetchAll();
   };
 
   const sendWhatsApp = (phone: string, type: string, item: any) => {
     if (!type) return;
-    // THE FIX: Use the saved whatsapp number field, fallback to mobile if missing
     const targetNumber = item.whatsapp || phone;
     const clean = targetNumber.replace(/\D/g, '');
     
@@ -193,11 +218,10 @@ export default function Dashboard() {
   };
 
   return (
-    /* Changed bg-slate-50 to a radial gradient for a shaded background effect */
     <div className="min-h-screen bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-slate-50 via-slate-100 to-gray-200">
       <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6">
 
-        {/* Header - Shaded Border Applied */}
+        {/* Header */}
         <div className="bg-white rounded-2xl border border-gray-200 shadow-[0_2px_10px_-3px_rgba(0,0,0,0.07)] px-6 py-4 mb-6 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-3">
@@ -259,14 +283,14 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Stats - Shaded Border Applied */}
+        {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <StatCard icon={<CalendarCheck className="w-5 h-5 text-sky-600" />} iconBg="bg-sky-50" value={stats.total} label={selectedDate ? `Appointments on ${selectedDate}` : "Total Appointments"} />
           <StatCard icon={<Clock className="w-5 h-5 text-amber-600" />} iconBg="bg-amber-50" value={stats.pending} label="Pending Tests" />
           <StatCard icon={<CheckCheck className="w-5 h-5 text-emerald-600" />} iconBg="bg-emerald-50" value={stats.completed} label="Completed" />
         </div>
 
-        {/* Bulk Actions - Shaded Border Applied */}
+        {/* Bulk Actions */}
         {selectedIds.size > 0 && (
           <div className="bg-blue-50 border border-blue-200 shadow-md rounded-xl px-5 py-3 mb-5 flex flex-wrap items-center justify-between gap-3 animate-[slideDown_0.25s_ease]">
             <span className="text-sm font-semibold text-blue-700">{selectedIds.size} Selected</span>
@@ -278,7 +302,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Table Card - Shaded Border Applied */}
+        {/* Table Card */}
         <div className="bg-white rounded-2xl border border-gray-200 shadow-[0_4px_20px_-5px_rgba(0,0,0,0.1)] overflow-hidden">
           <div className="flex items-center gap-2 px-6 py-3 border-b border-gray-100 bg-gray-50/50">
             <input type="checkbox" checked={isAllPageSelected} onChange={e => toggleSelectAll(e.target.checked)} className="w-4 h-4 accent-blue-600 cursor-pointer rounded border-gray-300 shadow-sm" />
@@ -386,34 +410,31 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
       <td className="px-4 py-4"><span className="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-lg font-mono font-bold text-xs border border-indigo-100 shadow-sm">{item.booking_id}</span></td>
       <td className="px-4 py-4"><p className="font-semibold text-gray-900 text-sm">{item.name}</p><p className="text-xs text-gray-400 mt-0.5">{item.age ?? 'N/A'}Y &bull; {item.gender || 'N/A'}</p></td>
       <td className="px-4 py-4">{item.prescription_url ? ( <a href={item.prescription_url.startsWith('http') ? item.prescription_url : supabase.storage.from('prescriptions').getPublicUrl(item.prescription_url).data.publicUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 shadow-sm hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-medium transition"><FileText className="w-3.5 h-3.5" /> View</a> ) : <span className="text-xs text-gray-400 italic">No Upload</span>}</td>
-<td className="px-4 py-4">
-  {/* Keeps calling linked to primary mobile configuration */}
-  <a href={`tel:${item.mobile}`} className="flex items-center gap-1.5 text-gray-700 text-xs hover:text-blue-600 transition font-medium">
-    <Phone className="w-3 h-3" /> {item.mobile}
-  </a>
-  
-  <div className="flex items-center gap-2 mt-1.5">
-    {/* Pass item.whatsapp explicitly to the trigger option */}
-    <select 
-      defaultValue="" 
-      onChange={e => { onWhatsApp(item.whatsapp || item.mobile, e.target.value, item); e.target.value = ''; }} 
-      className="text-[11px] px-1.5 py-1 rounded-md border border-gray-200 bg-white shadow-sm text-gray-600 max-w-[90px] cursor-pointer"
-    >
-      <option value="">Templates</option>
-      <option value="welcome">Welcome</option>
-      <option value="report">Reports</option>
-      <option value="reminder">Reminder</option>
-    </select>
-    
-    {/* Chat Button now defaults cleanly to the isolated WhatsApp field identifier */}
-    <button 
-      onClick={() => onWhatsApp(item.whatsapp || item.mobile, 'default', item)} 
-      className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 transition"
-    >
-      <MessageCircle className="w-3.5 h-3.5" /> Chat
-    </button>
-  </div>
-</td>
+      <td className="px-4 py-4">
+        <a href={`tel:${item.mobile}`} className="flex items-center gap-1.5 text-gray-700 text-xs hover:text-blue-600 transition font-medium">
+          <Phone className="w-3 h-3" /> {item.mobile}
+        </a>
+        
+        <div className="flex items-center gap-2 mt-1.5">
+          <select 
+            defaultValue="" 
+            onChange={e => { onWhatsApp(item.whatsapp || item.mobile, e.target.value, item); e.target.value = ''; }} 
+            className="text-[11px] px-1.5 py-1 rounded-md border border-gray-200 bg-white shadow-sm text-gray-600 max-w-[90px] cursor-pointer"
+          >
+            <option value="">Templates</option>
+            <option value="welcome">Welcome</option>
+            <option value="report">Reports</option>
+            <option value="reminder">Reminder</option>
+          </select>
+          
+          <button 
+            onClick={() => onWhatsApp(item.whatsapp || item.mobile, 'default', item)} 
+            className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 transition"
+          >
+            <MessageCircle className="w-3.5 h-3.5" /> Chat
+          </button>
+        </div>
+      </td>
       <td className="px-4 py-4"><p className="font-semibold text-gray-900 text-sm">{item.test}</p><p className="text-xs text-gray-400 mt-0.5 font-medium">{item.appointment_date} @ {item.time || 'N/A'}</p></td>
       <td className="px-4 py-4 min-w-[180px]"><div className="relative group"><textarea value={localRemarks} onChange={(e) => setLocalRemarks(e.target.value)} onBlur={handleRemarksBlur} placeholder="Add remarks..." rows={1} className="w-full text-[11px] p-2 bg-gray-50/50 border border-gray-200 shadow-inner rounded-lg focus:bg-white focus:border-blue-200 focus:ring-0 outline-none resize-none transition-all" /><Edit3 className="absolute right-2 top-2 w-3 h-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" /></div></td>
       <td className="px-4 py-4"><span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border shadow-sm ${isCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-orange-50 text-orange-700 border-orange-200'}`}>{item.status || 'Pending'}</span></td>
