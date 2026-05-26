@@ -108,12 +108,17 @@ export default function Dashboard() {
 
   const updateStatus = async (id: number, status: string) => {
     if (!lab?.id) return;
-    await supabase
-      .from('appointments')
-      .update({ status })
-      .eq('id', id)
-      .eq('lab_id', lab.id);
-    fetchAll();
+    try {
+      await supabase
+        .from('appointments')
+        .update({ status })
+        .eq('id', id)
+        .eq('lab_id', lab.id);
+      
+      setAppointments(prev => prev.map(a => a.id === id ? { ...a, status } : a));
+    } catch (err) {
+      console.error("Error updating status:", err);
+    }
   };
 
   const updateRemarks = async (id: number, remarks: string) => {
@@ -180,13 +185,17 @@ export default function Dashboard() {
   };
 
   const sendWhatsApp = (phone: string, type: string, item: any) => {
-    if (!type) return;
     const targetNumber = item.whatsapp || phone;
+    if (!targetNumber) return;
     const clean = targetNumber.replace(/\D/g, '');
     
     let msg = `Hello ${item.name}, this is regarding your booking ${item.booking_id}.`;
-    if (WA_TEMPLATES[type]) {
-      msg = WA_TEMPLATES[type].replace('[NAME]', item.name).replace('[DATE]', item.appointment_date).replace('[TIME]', item.time || 'your scheduled time').replace('[TEST]', item.test);
+    if (type !== 'default' && WA_TEMPLATES[type]) {
+      msg = WA_TEMPLATES[type]
+        .replace('[NAME]', item.name)
+        .replace('[DATE]', item.appointment_date)
+        .replace('[TIME]', item.time || 'your scheduled time')
+        .replace('[TEST]', item.test);
     }
     window.open(`https://wa.me/${clean}?text=${encodeURIComponent(msg)}`, '_blank');
   };
@@ -405,15 +414,36 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
   const isCompleted = item.status === 'Completed';
   const isCancelled = item.status === 'Cancelled';
   const [localRemarks, setLocalRemarks] = useState(item.remarks || '');
+  
   useEffect(() => { setLocalRemarks(item.remarks || ''); }, [item.remarks]);
-  const handleRemarksBlur = () => { if (localRemarks !== (item.remarks || '')) { onUpdateRemarks(item.id, localRemarks); } };
+  
+  const handleRemarksBlur = () => { 
+    if (localRemarks !== (item.remarks || '')) { 
+      onUpdateRemarks(item.id, localRemarks); 
+    } 
+  };
 
   return (
     <tr className={`border-b border-gray-50 hover:bg-slate-50/50 transition-colors ${selected ? 'bg-blue-50/40' : ''}`}>
-      <td className="px-4 py-4 text-center"><input type="checkbox" checked={selected} onChange={onToggle} className="w-4 h-4 accent-blue-600 cursor-pointer rounded border-gray-300" /></td>
-      <td className="px-4 py-4"><span className="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-lg font-mono font-bold text-xs border border-indigo-100 shadow-sm">{item.booking_id}</span></td>
-      <td className="px-4 py-4"><p className="font-semibold text-gray-900 text-sm">{item.name}</p><p className="text-xs text-gray-400 mt-0.5">{item.age ?? 'N/A'}Y &bull; {item.gender || 'N/A'}</p></td>
-      <td className="px-4 py-4">{item.prescription_url ? ( <a href={item.prescription_url.startsWith('http') ? item.prescription_url : supabase.storage.from('prescriptions').getPublicUrl(item.prescription_url).data.publicUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 shadow-sm hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-medium transition"><FileText className="w-3.5 h-3.5" /> View</a> ) : <span className="text-xs text-gray-400 italic">No Upload</span>}</td>
+      <td className="px-4 py-4 text-center">
+        <input type="checkbox" checked={selected} onChange={onToggle} className="w-4 h-4 accent-blue-600 cursor-pointer rounded border-gray-300" />
+      </td>
+      <td className="px-4 py-4">
+        <span className="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-lg font-mono font-bold text-xs border border-indigo-100 shadow-sm">{item.booking_id}</span>
+      </td>
+      <td className="px-4 py-4">
+        <p className="font-semibold text-gray-900 text-sm">{item.name}</p>
+        <p className="text-xs text-gray-400 mt-0.5">{item.age ?? 'N/A'}Y &bull; {item.gender || 'N/A'}</p>
+      </td>
+      <td className="px-4 py-4">
+        {item.prescription_url ? ( 
+          <a href={item.prescription_url.startsWith('http') ? item.prescription_url : supabase.storage.from('prescriptions').getPublicUrl(item.prescription_url).data.publicUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 shadow-sm hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-medium transition">
+            <FileText className="w-3.5 h-3.5" /> View
+          </a> 
+        ) : (
+          <span className="text-xs text-gray-400 italic">No Upload</span>
+        )}
+      </td>
       <td className="px-4 py-4">
         <a href={`tel:${item.mobile}`} className="flex items-center gap-1.5 text-gray-700 text-xs hover:text-blue-600 transition font-medium">
           <Phone className="w-3 h-3" /> {item.mobile}
@@ -422,8 +452,8 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
         <div className="flex items-center gap-2 mt-1.5">
           <select 
             defaultValue="" 
-            onChange={e => { onWhatsApp(item.whatsapp || item.mobile, e.target.value, item); e.target.value = ''; }} 
-            className="text-[11px] px-1.5 py-1 rounded-md border border-gray-200 bg-white shadow-sm text-gray-600 max-w-[90px] cursor-pointer"
+            onChange={e => { onWhatsApp(item.mobile, e.target.value, item); e.target.value = ''; }} 
+            className="text-[11px] px-1.5 py-1 rounded-md border border-gray-200 bg-white shadow-sm text-gray-600 max-w-[90px] cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
           >
             <option value="">Templates</option>
             <option value="welcome">Welcome</option>
@@ -432,15 +462,30 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
           </select>
           
           <button 
-            onClick={() => onWhatsApp(item.whatsapp || item.mobile, 'default', item)} 
+            onClick={() => onWhatsApp(item.mobile, 'default', item)} 
             className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 transition"
           >
             <MessageCircle className="w-3.5 h-3.5" /> Chat
           </button>
         </div>
       </td>
-      <td className="px-4 py-4"><p className="font-semibold text-gray-900 text-sm">{item.test}</p><p className="text-xs text-gray-400 mt-0.5 font-medium">{item.appointment_date} @ {item.time || 'N/A'}</p></td>
-      <td className="px-4 py-4 min-w-[180px]"><div className="relative group"><textarea value={localRemarks} onChange={(e) => setLocalRemarks(e.target.value)} onBlur={handleRemarksBlur} placeholder="Add remarks..." rows={1} className="w-full text-[11px] p-2 bg-gray-50/50 border border-gray-200 shadow-inner rounded-lg focus:bg-white focus:border-blue-200 focus:ring-0 outline-none resize-none transition-all" /><Edit3 className="absolute right-2 top-2 w-3 h-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" /></div></td>
+      <td className="px-4 py-4">
+        <p className="font-semibold text-gray-900 text-sm">{item.test}</p>
+        <p className="text-xs text-gray-400 mt-0.5 font-medium">{item.appointment_date} @ {item.time || 'N/A'}</p>
+      </td>
+      <td className="px-4 py-4 min-w-[180px]">
+        <div className="relative group">
+          <textarea 
+            value={localRemarks} 
+            onChange={(e) => setLocalRemarks(e.target.value)} 
+            onBlur={handleRemarksBlur} 
+            placeholder="Add remarks..." 
+            rows={1} 
+            className="w-full text-[11px] p-2 bg-gray-50/50 border border-gray-200 shadow-inner rounded-lg focus:bg-white focus:border-blue-200 focus:ring-0 outline-none resize-none transition-all" 
+          />
+          <Edit3 className="absolute right-2 top-2 w-3 h-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+        </div>
+      </td>
       <td className="px-4 py-4">
         <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border shadow-sm ${
           isCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
@@ -452,13 +497,25 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
       </td>
       <td className="px-4 py-4 text-right">
         <div className="flex items-center justify-end gap-1.5">
-          <button onClick={() => onUpdateStatus(item.id, 'Completed')} title="Mark Completed" className="w-8 h-8 rounded-lg bg-white border border-gray-200 shadow-sm text-emerald-600 hover:bg-emerald-50 hover:border-emerald-300 flex items-center justify-center transition">
+          <button 
+            onClick={() => onUpdateStatus(item.id, 'Completed')} 
+            title="Mark Completed" 
+            className="w-8 h-8 rounded-lg bg-white border border-gray-200 shadow-sm text-emerald-600 hover:bg-emerald-50 hover:border-emerald-300 flex items-center justify-center transition"
+          >
             <Check className="w-3.5 h-3.5" />
           </button>
-          <button onClick={() => onUpdateStatus(item.id, 'Cancelled')} title="Cancel Appointment" className="w-8 h-8 rounded-lg bg-white border border-gray-200 shadow-sm text-red-500 hover:bg-red-50 hover:border-red-300 flex items-center justify-center transition">
+          <button 
+            onClick={() => onUpdateStatus(item.id, 'Cancelled')} 
+            title="Cancel Appointment" 
+            className="w-8 h-8 rounded-lg bg-white border border-gray-200 shadow-sm text-red-500 hover:bg-red-50 hover:border-red-300 flex items-center justify-center transition"
+          >
             <X className="w-3.5 h-3.5" />
           </button>
-          <button onClick={() => onDelete(item.id)} title="Delete" className="w-8 h-8 rounded-lg bg-white border border-gray-200 shadow-sm text-gray-400 hover:bg-gray-100 hover:border-gray-300 flex items-center justify-center transition">
+          <button 
+            onClick={() => onDelete(item.id)} 
+            title="Delete" 
+            className="w-8 h-8 rounded-lg bg-white border border-gray-200 shadow-sm text-gray-400 hover:bg-red-50 hover:text-red-500 hover:border-red-200 flex items-center justify-center transition"
+          >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         </div>
