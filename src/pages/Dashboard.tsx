@@ -24,6 +24,9 @@ export default function Dashboard() {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
+  // Clickable status filter state ('all' | 'pending' | 'completed')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed'>('all');
+
   // Date filter state
   const [selectedDate, setSelectedDate] = useState('');
 
@@ -66,28 +69,52 @@ export default function Dashboard() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  // Compute stats based *only* on Date & Search filters so Card totals stay consistently informative
+  const stats = useMemo(() => {
+    let baseFiltered = appointments;
+    if (selectedDate) {
+      baseFiltered = baseFiltered.filter(a => a.appointment_date === selectedDate);
+    }
+    const q = search.trim().toUpperCase();
+    if (q) {
+      baseFiltered = baseFiltered.filter(a =>
+        a.name?.toUpperCase().includes(q) || a.booking_id?.toUpperCase().includes(q)
+      );
+    }
+
+    return {
+      total: baseFiltered.length,
+      pending: baseFiltered.filter(a => a.status !== 'Completed').length,
+      completed: baseFiltered.filter(a => a.status === 'Completed').length,
+    };
+  }, [appointments, search, selectedDate]);
+
+  // Master Filter Pipeline (Date -> Search Query -> Clicked Status Tab)
   const filtered = useMemo(() => {
     let result = appointments;
+    
     if (selectedDate) {
       result = result.filter(a => a.appointment_date === selectedDate);
     }
+    
     const q = search.trim().toUpperCase();
     if (q) {
       result = result.filter(a =>
         a.name?.toUpperCase().includes(q) || a.booking_id?.toUpperCase().includes(q)
       );
     }
+
+    if (statusFilter === 'pending') {
+      result = result.filter(a => a.status !== 'Completed');
+    } else if (statusFilter === 'completed') {
+      result = result.filter(a => a.status === 'Completed');
+    }
+
     return result;
-  }, [appointments, search, selectedDate]);
+  }, [appointments, search, selectedDate, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / RECORDS_PER_PAGE));
   const paginated = filtered.slice((currentPage - 1) * RECORDS_PER_PAGE, currentPage * RECORDS_PER_PAGE);
-
-  const stats = useMemo(() => ({
-    total: filtered.length,
-    pending: filtered.filter(a => a.status !== 'Completed').length,
-    completed: filtered.filter(a => a.status === 'Completed').length,
-  }), [filtered]);
 
   const toggleRow = (id: number) => {
     setSelectedIds(prev => {
@@ -283,11 +310,35 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Stats */}
+        {/* Clickable Interactive Stats Component */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          <StatCard icon={<CalendarCheck className="w-5 h-5 text-sky-600" />} iconBg="bg-sky-50" value={stats.total} label={selectedDate ? `Appointments on ${selectedDate}` : "Total Appointments"} />
-          <StatCard icon={<Clock className="w-5 h-5 text-amber-600" />} iconBg="bg-amber-50" value={stats.pending} label="Pending Tests" />
-          <StatCard icon={<CheckCheck className="w-5 h-5 text-emerald-600" />} iconBg="bg-emerald-50" value={stats.completed} label="Completed" />
+          <StatCard 
+            icon={<CalendarCheck className="w-5 h-5 text-sky-600" />} 
+            iconBg="bg-sky-50" 
+            value={stats.total} 
+            label={selectedDate ? `Appointments on ${selectedDate}` : "Total Appointments"} 
+            isActive={statusFilter === 'all'}
+            onClick={() => { setStatusFilter('all'); setCurrentPage(1); }}
+            activeColor="border-sky-500 bg-sky-50/20 ring-2 ring-sky-100"
+          />
+          <StatCard 
+            icon={<Clock className="w-5 h-5 text-amber-600" />} 
+            iconBg="bg-amber-50" 
+            value={stats.pending} 
+            label="Pending Tests" 
+            isActive={statusFilter === 'pending'}
+            onClick={() => { setStatusFilter('pending'); setCurrentPage(1); }}
+            activeColor="border-amber-500 bg-amber-50/20 ring-2 ring-amber-100"
+          />
+          <StatCard 
+            icon={<CheckCheck className="w-5 h-5 text-emerald-600" />} 
+            iconBg="bg-emerald-50" 
+            value={stats.completed} 
+            label="Completed" 
+            isActive={statusFilter === 'completed'}
+            onClick={() => { setStatusFilter('completed'); setCurrentPage(1); }}
+            activeColor="border-emerald-500 bg-emerald-50/20 ring-2 ring-emerald-100"
+          />
         </div>
 
         {/* Bulk Actions */}
@@ -308,6 +359,11 @@ export default function Dashboard() {
             <input type="checkbox" checked={isAllPageSelected} onChange={e => toggleSelectAll(e.target.checked)} className="w-4 h-4 accent-blue-600 cursor-pointer rounded border-gray-300 shadow-sm" />
             <label className="text-xs font-medium text-gray-500 cursor-pointer select-none">Select all on this page</label>
             
+            {/* View scope indicator label */}
+            <span className="ml-4 text-xs font-semibold px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md border border-slate-200 uppercase tracking-wider">
+              Showing: {statusFilter}
+            </span>
+
             <div className="ml-auto flex items-center gap-2">
               <button onClick={fetchAll} title="Refresh data" className={`flex items-center justify-center p-1.5 text-gray-500 border border-gray-200 bg-white shadow-sm rounded-lg hover:text-blue-600 hover:border-blue-200 transition-all ${loading ? 'opacity-50' : ''}`} disabled={loading}>
                 <RotateCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -363,7 +419,12 @@ export default function Dashboard() {
                       <div className="flex flex-col items-center gap-2">
                         <Search className="w-10 h-10 opacity-10 mb-2" />
                         <p className="text-sm font-medium">No appointment found.</p>
-                        <p className="text-xs">{selectedDate ? `Nothing scheduled for ${selectedDate}` : "Try adjusting your search query."}</p>
+                        <p className="text-xs">
+                          {statusFilter !== 'all' 
+                            ? `No records found matching status format: "${statusFilter}"` 
+                            : selectedDate ? `Nothing scheduled for ${selectedDate}` : "Try adjusting your search query."
+                          }
+                        </p>
                       </div>
                     </td>
                   </tr>
@@ -385,16 +446,31 @@ export default function Dashboard() {
   );
 }
 
+interface StatCardProps {
+  icon: React.ReactNode;
+  iconBg: string;
+  value: number;
+  label: string;
+  isActive: boolean;
+  onClick: () => void;
+  activeColor: string;
+}
+
 // Sub-components
-function StatCard({ icon, iconBg, value, label }: { icon: React.ReactNode; iconBg: string; value: number; label: string }) {
+function StatCard({ icon, iconBg, value, label, isActive, onClick, activeColor }: StatCardProps) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.08)] px-5 py-4 flex items-center gap-4 hover:-translate-y-0.5 transition-all duration-200">
+    <button 
+      onClick={onClick}
+      className={`text-left w-full bg-white rounded-2xl border px-5 py-4 flex items-center gap-4 hover:-translate-y-0.5 transition-all duration-200 outline-none ${
+        isActive ? activeColor : 'border-gray-200 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.08)]'
+      }`}
+    >
       <div className={`w-12 h-12 rounded-xl ${iconBg} shadow-sm flex items-center justify-center flex-shrink-0`}>{icon}</div>
       <div>
         <p className="text-2xl font-bold text-gray-900">{value}</p>
-        <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+        <p className="text-xs text-gray-500 mt-0.5 font-medium">{label}</p>
       </div>
-    </div>
+    </button>
   );
 }
 
