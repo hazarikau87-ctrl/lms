@@ -12,7 +12,7 @@ const RECORDS_PER_PAGE = 10;
 const WA_TEMPLATES: Record<string, string> = {
   welcome: 'Hello [NAME], thank you for choosing our lab. Your appointment is confirmed for [DATE] at [TIME].',
   report: 'Hello [NAME], your lab reports for [TEST] are now ready. Please visit our portal to download.',
-  reminder: 'Reminder: [NAME], you have an appointment tomorrow ([DATE]) at [TIME]. Please remember to fast if required.',
+  reminder: 'Reminder: [NAME], you have an appointment on ([DATE]) at [TIME]. Please remember to fast if required.',
 };
 
 export default function Dashboard() {
@@ -262,11 +262,19 @@ export default function Dashboard() {
               <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-md shadow-blue-600/20 flex-shrink-0">
                 <FlaskConical className="w-5 h-5 text-white" />
               </div>
-              <div>
-                <h1 className="text-lg font-bold text-gray-900" style={{ fontFamily: 'Poppins, sans-serif' }}>Lab Management System</h1>
-                <p className="text-[10px] font-medium text-gray-400 uppercase tracking-widest">By Next Appointment</p>
-              </div>
-            </div>
+              <div className="flex items-center gap-3">
+  <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-md shadow-blue-600/20 flex-shrink-0">
+    <FlaskConical className="w-5 h-5 text-white" />
+  </div>
+  <div>
+    <h1 className="text-lg font-bold text-gray-900" style={{ fontFamily: 'Poppins, sans-serif' }}>
+      LabOps Scheduler
+    </h1>
+    <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">
+      By Zebnox Cloud
+    </p>
+  </div>
+</div>
 
             <div className="w-px h-9 bg-gray-200 hidden sm:block" />
 
