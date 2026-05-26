@@ -15,6 +15,16 @@ const WA_TEMPLATES: Record<string, string> = {
   reminder: 'Reminder: [NAME], you have an appointment on ([DATE]) at [TIME]. Please remember to fast if required.',
 };
 
+interface AppointmentRowProps {
+  item: Appointment & { [key: string]: any }; // safely allows dynamically handled data structures
+  selected: boolean;
+  onToggle: () => void;
+  onUpdateStatus: (id: number, status: string) => Promise<void>;
+  onUpdateRemarks: (id: number, remarks: string) => Promise<void>;
+  onDelete: (id: number) => Promise<void>;
+  onWhatsApp: (phone: string, type: string, item: any) => void;
+}
+
 export default function Dashboard() {
   const { user, signOut } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -26,7 +36,7 @@ export default function Dashboard() {
 
   // Filters state
   const [selectedDate, setSelectedDate] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all'); // 'all' | 'pending' | 'completed' | 'cancelled'
+  const [statusFilter, setStatusFilter] = useState<string>('all'); 
 
   // Range-based date states
   const [startDate, setStartDate] = useState('');
@@ -67,7 +77,6 @@ export default function Dashboard() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // Derived stats from global list matching only the date constraint if applied
   const stats = useMemo(() => {
     let baseList = appointments;
     if (selectedDate) {
@@ -81,7 +90,6 @@ export default function Dashboard() {
     };
   }, [appointments, selectedDate]);
 
-  // Handle compound text matching + state filters
   const filtered = useMemo(() => {
     let result = appointments;
     
@@ -232,7 +240,7 @@ export default function Dashboard() {
     const labName = lab?.lab_name || 'Partner Lab';
     doc.setFillColor(26, 115, 232); doc.rect(0, 0, 210, 42, 'F');
     doc.setTextColor(255, 255, 255); doc.setFontSize(20); doc.setFont('helvetica', 'bold'); doc.text(labName.toUpperCase(), 14, 22);
-    doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.text('Generated via Lab Management System by Next Appointment', 14, 31);
+    doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.text('Generated via LabOps Scheduler by Zebnox Cloud', 14, 31);
     doc.setFontSize(9); doc.text(`Exported on: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`, 14, 38);
     const rows = dataToExport.map(item => [item.booking_id, { content: `${item.name}\n${item.age ?? 'N/A'}Y / ${item.gender || ''}\n${item.mobile || 'N/A'}`, styles: { fontStyle: 'bold' as const } }, item.test, `${item.appointment_date}\n${item.time || 'N/A'}`, item.remarks || '-', { content: (item.status || 'Pending').toUpperCase(), styles: { textColor: item.status === 'Completed' ? [46, 125, 50] as [number, number, number] : item.status === 'Cancelled' ? [185, 28, 28] as [number, number, number] : [194, 65, 12] as [number, number, number], fontStyle: 'bold' as const } } ]);
     autoTable(doc, { startY: 50, head: [['ID', 'Patient Details', 'Test', 'Schedule', 'Remarks', 'Status']], body: rows, theme: 'striped', headStyles: { fillColor: [26, 115, 232] as [number, number, number] }, styles: { fontSize: 9, valign: 'middle' } });
@@ -262,19 +270,15 @@ export default function Dashboard() {
               <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-md shadow-blue-600/20 flex-shrink-0">
                 <FlaskConical className="w-5 h-5 text-white" />
               </div>
-              <div className="flex items-center gap-3">
-  <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-md shadow-blue-600/20 flex-shrink-0">
-    <FlaskConical className="w-5 h-5 text-white" />
-  </div>
-  <div>
-    <h1 className="text-lg font-bold text-gray-900" style={{ fontFamily: 'Poppins, sans-serif' }}>
-      LabOps Scheduler
-    </h1>
-    <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">
-      By Zebnox Cloud
-    </p>
-  </div>
-</div>
+              <div>
+                <h1 className="text-lg font-bold text-gray-900" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                  LabOps Scheduler
+                </h1>
+                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">
+                  By Zebnox Cloud
+                </p>
+              </div>
+            </div>
 
             <div className="w-px h-9 bg-gray-200 hidden sm:block" />
 
@@ -484,7 +488,7 @@ function StatCard({ icon, iconBg, value, label, isActive, onClick }: { icon: Rea
   );
 }
 
-function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRemarks, onDelete, onWhatsApp }: any) {
+function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRemarks, onDelete, onWhatsApp }: AppointmentRowProps) {
   const isCompleted = item.status === 'Completed';
   const isCancelled = item.status === 'Cancelled';
   const [localRemarks, setLocalRemarks] = useState(item.remarks || '');
