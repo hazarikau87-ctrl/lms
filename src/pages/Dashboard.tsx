@@ -271,13 +271,10 @@ export default function Dashboard() {
                 <FlaskConical className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h1 className="text-lg font-bold text-gray-900" style={{ fontFamily: 'Poppins, sans-serif' }}>
-                  LabOps Scheduler
-                </h1>
-                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">
-                  Powered by Zebnox
-                </p>
-              </div>
+                  <h1 className="text-lg font-bold text-gray-900" style={{ fontFamily: 'Poppins, sans-serif' }}> LabOps Scheduler</h1>
+                    <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">
+                       Powered by Zebnox </p>
+                </div>
             </div>
 
             <div className="w-px h-9 bg-gray-200 hidden sm:block" />
