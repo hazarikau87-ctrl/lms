@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   FlaskConical, LogOut, Search, CalendarCheck, Clock, CheckCheck,
   Phone, FileText, Check, Trash2, ChevronLeft, ChevronRight,
-  MessageCircle, Building2, FileDown, CheckCircle2, RotateCw, Edit3, X
+  MessageCircle, Building2, FileDown, CheckCircle2, RotateCw, Edit3, X, XCircle
 } from 'lucide-react';
 import { supabase, Appointment, Lab } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -23,9 +23,6 @@ export default function Dashboard() {
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-
-  // Clickable status filter state ('all' | 'pending' | 'completed')
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed'>('all');
 
   // Date filter state
   const [selectedDate, setSelectedDate] = useState('');
@@ -69,52 +66,29 @@ export default function Dashboard() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // Compute stats based *only* on Date & Search filters so Card totals stay consistently informative
-  const stats = useMemo(() => {
-    let baseFiltered = appointments;
-    if (selectedDate) {
-      baseFiltered = baseFiltered.filter(a => a.appointment_date === selectedDate);
-    }
-    const q = search.trim().toUpperCase();
-    if (q) {
-      baseFiltered = baseFiltered.filter(a =>
-        a.name?.toUpperCase().includes(q) || a.booking_id?.toUpperCase().includes(q)
-      );
-    }
-
-    return {
-      total: baseFiltered.length,
-      pending: baseFiltered.filter(a => a.status !== 'Completed').length,
-      completed: baseFiltered.filter(a => a.status === 'Completed').length,
-    };
-  }, [appointments, search, selectedDate]);
-
-  // Master Filter Pipeline (Date -> Search Query -> Clicked Status Tab)
   const filtered = useMemo(() => {
     let result = appointments;
-    
     if (selectedDate) {
       result = result.filter(a => a.appointment_date === selectedDate);
     }
-    
     const q = search.trim().toUpperCase();
     if (q) {
       result = result.filter(a =>
         a.name?.toUpperCase().includes(q) || a.booking_id?.toUpperCase().includes(q)
       );
     }
-
-    if (statusFilter === 'pending') {
-      result = result.filter(a => a.status !== 'Completed');
-    } else if (statusFilter === 'completed') {
-      result = result.filter(a => a.status === 'Completed');
-    }
-
     return result;
-  }, [appointments, search, selectedDate, statusFilter]);
+  }, [appointments, search, selectedDate]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / RECORDS_PER_PAGE));
   const paginated = filtered.slice((currentPage - 1) * RECORDS_PER_PAGE, currentPage * RECORDS_PER_PAGE);
+
+  const stats = useMemo(() => ({
+    total: filtered.length,
+    pending: filtered.filter(a => a.status !== 'Completed' && a.status !== 'Cancelled').length,
+    completed: filtered.filter(a => a.status === 'Completed').length,
+    cancelled: filtered.filter(a => a.status === 'Cancelled').length,
+  }), [filtered]);
 
   const toggleRow = (id: number) => {
     setSelectedIds(prev => {
@@ -227,7 +201,7 @@ export default function Dashboard() {
     doc.setTextColor(255, 255, 255); doc.setFontSize(20); doc.setFont('helvetica', 'bold'); doc.text(labName.toUpperCase(), 14, 22);
     doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.text('Generated via Lab Management System by Next Appointment', 14, 31);
     doc.setFontSize(9); doc.text(`Exported on: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`, 14, 38);
-    const rows = dataToExport.map(item => [item.booking_id, { content: `${item.name}\n${item.age ?? 'N/A'}Y / ${item.gender || ''}\n${item.mobile || 'N/A'}`, styles: { fontStyle: 'bold' as const } }, item.test, `${item.appointment_date}\n${item.time || 'N/A'}`, item.remarks || '-', { content: (item.status || 'Pending').toUpperCase(), styles: { textColor: item.status === 'Completed' ? [46, 125, 50] as [number, number, number] : [194, 65, 12] as [number, number, number], fontStyle: 'bold' as const } } ]);
+    const rows = dataToExport.map(item => [item.booking_id, { content: `${item.name}\n${item.age ?? 'N/A'}Y / ${item.gender || ''}\n${item.mobile || 'N/A'}`, styles: { fontStyle: 'bold' as const } }, item.test, `${item.appointment_date}\n${item.time || 'N/A'}`, item.remarks || '-', { content: (item.status || 'Pending').toUpperCase(), styles: { textColor: item.status === 'Completed' ? [46, 125, 50] as [number, number, number] : item.status === 'Cancelled' ? [185, 28, 28] as [number, number, number] : [194, 65, 12] as [number, number, number], fontStyle: 'bold' as const } } ]);
     autoTable(doc, { startY: 50, head: [['ID', 'Patient Details', 'Test', 'Schedule', 'Remarks', 'Status']], body: rows, theme: 'striped', headStyles: { fillColor: [26, 115, 232] as [number, number, number] }, styles: { fontSize: 9, valign: 'middle' } });
     doc.save(`${labName}_Report.pdf`);
   };
@@ -310,35 +284,12 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Clickable Interactive Stats Component */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          <StatCard 
-            icon={<CalendarCheck className="w-5 h-5 text-sky-600" />} 
-            iconBg="bg-sky-50" 
-            value={stats.total} 
-            label={selectedDate ? `Appointments on ${selectedDate}` : "Total Appointments"} 
-            isActive={statusFilter === 'all'}
-            onClick={() => { setStatusFilter('all'); setCurrentPage(1); }}
-            activeColor="border-sky-500 bg-sky-50/20 ring-2 ring-sky-100"
-          />
-          <StatCard 
-            icon={<Clock className="w-5 h-5 text-amber-600" />} 
-            iconBg="bg-amber-50" 
-            value={stats.pending} 
-            label="Pending Tests" 
-            isActive={statusFilter === 'pending'}
-            onClick={() => { setStatusFilter('pending'); setCurrentPage(1); }}
-            activeColor="border-amber-500 bg-amber-50/20 ring-2 ring-amber-100"
-          />
-          <StatCard 
-            icon={<CheckCheck className="w-5 h-5 text-emerald-600" />} 
-            iconBg="bg-emerald-50" 
-            value={stats.completed} 
-            label="Completed" 
-            isActive={statusFilter === 'completed'}
-            onClick={() => { setStatusFilter('completed'); setCurrentPage(1); }}
-            activeColor="border-emerald-500 bg-emerald-50/20 ring-2 ring-emerald-100"
-          />
+        {/* Stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
+          <StatCard icon={<CalendarCheck className="w-5 h-5 text-sky-600" />} iconBg="bg-sky-50" value={stats.total} label={selectedDate ? `Appointments on ${selectedDate}` : "Total Appointments"} />
+          <StatCard icon={<Clock className="w-5 h-5 text-amber-600" />} iconBg="bg-amber-50" value={stats.pending} label="Pending Tests" />
+          <StatCard icon={<CheckCheck className="w-5 h-5 text-emerald-600" />} iconBg="bg-emerald-50" value={stats.completed} label="Completed" />
+          <StatCard icon={<XCircle className="w-5 h-5 text-red-600" />} iconBg="bg-red-50" value={stats.cancelled} label="Cancelled" />
         </div>
 
         {/* Bulk Actions */}
@@ -347,6 +298,7 @@ export default function Dashboard() {
             <span className="text-sm font-semibold text-blue-700">{selectedIds.size} Selected</span>
             <div className="flex flex-wrap gap-2">
               <button onClick={() => bulkUpdateStatus('Completed')} className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-emerald-700 border border-emerald-200 shadow-sm rounded-lg text-xs font-semibold hover:bg-emerald-100 transition"><CheckCircle2 className="w-3.5 h-3.5" /> Mark Done</button>
+              <button onClick={() => bulkUpdateStatus('Cancelled')} className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-red-600 border border-red-200 shadow-sm rounded-lg text-xs font-semibold hover:bg-red-100 transition"><XCircle className="w-3.5 h-3.5" /> Cancel Selected</button>
               <button onClick={bulkDelete} className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-red-700 border border-red-200 shadow-sm rounded-lg text-xs font-semibold hover:bg-red-100 transition"><Trash2 className="w-3.5 h-3.5" /> Delete</button>
               <button onClick={exportToPDF} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white border border-blue-700 shadow-sm rounded-lg text-xs font-semibold hover:bg-blue-700 transition"><FileDown className="w-3.5 h-3.5" /> Export PDF</button>
             </div>
@@ -359,11 +311,6 @@ export default function Dashboard() {
             <input type="checkbox" checked={isAllPageSelected} onChange={e => toggleSelectAll(e.target.checked)} className="w-4 h-4 accent-blue-600 cursor-pointer rounded border-gray-300 shadow-sm" />
             <label className="text-xs font-medium text-gray-500 cursor-pointer select-none">Select all on this page</label>
             
-            {/* View scope indicator label */}
-            <span className="ml-4 text-xs font-semibold px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md border border-slate-200 uppercase tracking-wider">
-              Showing: {statusFilter}
-            </span>
-
             <div className="ml-auto flex items-center gap-2">
               <button onClick={fetchAll} title="Refresh data" className={`flex items-center justify-center p-1.5 text-gray-500 border border-gray-200 bg-white shadow-sm rounded-lg hover:text-blue-600 hover:border-blue-200 transition-all ${loading ? 'opacity-50' : ''}`} disabled={loading}>
                 <RotateCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -419,12 +366,7 @@ export default function Dashboard() {
                       <div className="flex flex-col items-center gap-2">
                         <Search className="w-10 h-10 opacity-10 mb-2" />
                         <p className="text-sm font-medium">No appointment found.</p>
-                        <p className="text-xs">
-                          {statusFilter !== 'all' 
-                            ? `No records found matching status format: "${statusFilter}"` 
-                            : selectedDate ? `Nothing scheduled for ${selectedDate}` : "Try adjusting your search query."
-                          }
-                        </p>
+                        <p className="text-xs">{selectedDate ? `Nothing scheduled for ${selectedDate}` : "Try adjusting your search query."}</p>
                       </div>
                     </td>
                   </tr>
@@ -446,36 +388,22 @@ export default function Dashboard() {
   );
 }
 
-interface StatCardProps {
-  icon: React.ReactNode;
-  iconBg: string;
-  value: number;
-  label: string;
-  isActive: boolean;
-  onClick: () => void;
-  activeColor: string;
-}
-
 // Sub-components
-function StatCard({ icon, iconBg, value, label, isActive, onClick, activeColor }: StatCardProps) {
+function StatCard({ icon, iconBg, value, label }: { icon: React.ReactNode; iconBg: string; value: number; label: string }) {
   return (
-    <button 
-      onClick={onClick}
-      className={`text-left w-full bg-white rounded-2xl border px-5 py-4 flex items-center gap-4 hover:-translate-y-0.5 transition-all duration-200 outline-none ${
-        isActive ? activeColor : 'border-gray-200 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.08)]'
-      }`}
-    >
+    <div className="bg-white rounded-2xl border border-gray-200 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.08)] px-5 py-4 flex items-center gap-4 hover:-translate-y-0.5 transition-all duration-200">
       <div className={`w-12 h-12 rounded-xl ${iconBg} shadow-sm flex items-center justify-center flex-shrink-0`}>{icon}</div>
       <div>
         <p className="text-2xl font-bold text-gray-900">{value}</p>
-        <p className="text-xs text-gray-500 mt-0.5 font-medium">{label}</p>
+        <p className="text-xs text-gray-500 mt-0.5">{label}</p>
       </div>
-    </button>
+    </div>
   );
 }
 
 function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRemarks, onDelete, onWhatsApp }: any) {
   const isCompleted = item.status === 'Completed';
+  const isCancelled = item.status === 'Cancelled';
   const [localRemarks, setLocalRemarks] = useState(item.remarks || '');
   useEffect(() => { setLocalRemarks(item.remarks || ''); }, [item.remarks]);
   const handleRemarksBlur = () => { if (localRemarks !== (item.remarks || '')) { onUpdateRemarks(item.id, localRemarks); } };
@@ -513,8 +441,28 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
       </td>
       <td className="px-4 py-4"><p className="font-semibold text-gray-900 text-sm">{item.test}</p><p className="text-xs text-gray-400 mt-0.5 font-medium">{item.appointment_date} @ {item.time || 'N/A'}</p></td>
       <td className="px-4 py-4 min-w-[180px]"><div className="relative group"><textarea value={localRemarks} onChange={(e) => setLocalRemarks(e.target.value)} onBlur={handleRemarksBlur} placeholder="Add remarks..." rows={1} className="w-full text-[11px] p-2 bg-gray-50/50 border border-gray-200 shadow-inner rounded-lg focus:bg-white focus:border-blue-200 focus:ring-0 outline-none resize-none transition-all" /><Edit3 className="absolute right-2 top-2 w-3 h-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" /></div></td>
-      <td className="px-4 py-4"><span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border shadow-sm ${isCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-orange-50 text-orange-700 border-orange-200'}`}>{item.status || 'Pending'}</span></td>
-      <td className="px-4 py-4 text-right"><div className="flex items-center justify-end gap-1.5"><button onClick={() => onUpdateStatus(item.id, 'Completed')} title="Mark Completed" className="w-8 h-8 rounded-lg bg-white border border-gray-200 shadow-sm text-emerald-600 hover:bg-emerald-50 hover:border-emerald-300 flex items-center justify-center transition"><Check className="w-3.5 h-3.5" /></button><button onClick={() => onDelete(item.id)} title="Delete" className="w-8 h-8 rounded-lg bg-white border border-gray-200 shadow-sm text-red-500 hover:bg-red-50 hover:border-red-300 flex items-center justify-center transition"><Trash2 className="w-3.5 h-3.5" /></button></div></td>
+      <td className="px-4 py-4">
+        <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border shadow-sm ${
+          isCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
+          isCancelled ? 'bg-red-50 text-red-700 border-red-200' : 
+          'bg-orange-50 text-orange-700 border-orange-200'
+        }`}>
+          {item.status || 'Pending'}
+        </span>
+      </td>
+      <td className="px-4 py-4 text-right">
+        <div className="flex items-center justify-end gap-1.5">
+          <button onClick={() => onUpdateStatus(item.id, 'Completed')} title="Mark Completed" className="w-8 h-8 rounded-lg bg-white border border-gray-200 shadow-sm text-emerald-600 hover:bg-emerald-50 hover:border-emerald-300 flex items-center justify-center transition">
+            <Check className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={() => onUpdateStatus(item.id, 'Cancelled')} title="Cancel Appointment" className="w-8 h-8 rounded-lg bg-white border border-gray-200 shadow-sm text-red-500 hover:bg-red-50 hover:border-red-300 flex items-center justify-center transition">
+            <X className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={() => onDelete(item.id)} title="Delete" className="w-8 h-8 rounded-lg bg-white border border-gray-200 shadow-sm text-gray-400 hover:bg-gray-100 hover:border-gray-300 flex items-center justify-center transition">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </td>
     </tr>
   );
 }
