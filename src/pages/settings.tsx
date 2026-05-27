@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { 
   Building2, ArrowLeft, Upload, Plus, Trash2, 
   Settings as SettingsIcon, ShieldCheck, RefreshCw, CheckCircle2,
-  ListPlus, Info, Edit3, X, Coins
+  ListPlus, Info, Edit3, X, Coins, Check
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -37,6 +37,11 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
   const [tempLogoUrl, setTempLogoUrl] = useState('');
   const [newTestName, setNewTestName] = useState('');
   const [newTestPrice, setNewTestPrice] = useState('');
+
+  // Inline Editing States for Existing Tests
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editTestName, setEditTestName] = useState('');
+  const [editTestPrice, setEditTestPrice] = useState('');
 
   useEffect(() => {
     async function loadLabSettings() {
@@ -92,6 +97,7 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
     setActiveModal('none');
     setNewTestName('');
     setNewTestPrice('');
+    setEditingIndex(null);
   };
 
   const handleSaveBrand = async (e: React.FormEvent) => {
@@ -141,6 +147,41 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
     }
   };
 
+  // Start Inline Edit Mode for an Existing Test Row
+  const startInlineEdit = (index: number, test: LabTestItem) => {
+    setEditingIndex(index);
+    setEditTestName(test.name);
+    setEditTestPrice(test.price.toString());
+  };
+
+  // Save Inline Edited Test Row Back to Supabase
+  const handleSaveInlineEdit = async (indexToUpdate: number) => {
+    if (!editTestName.trim() || !editTestPrice.trim() || !labId) return;
+    
+    const updatedTests = tests.map((test, idx) => {
+      if (idx === indexToUpdate) {
+        return { name: editTestName.trim(), price: parseFloat(editTestPrice) || 0 };
+      }
+      return test;
+    });
+
+    setSaving(true);
+    try {
+      await supabase
+        .from('labs')
+        .update({ tests: updatedTests })
+        .eq('id', labId);
+      
+      setTests(updatedTests);
+      setEditingIndex(null);
+      showToast("Catalog item updated!");
+    } catch (err) {
+      console.error("Error updating inline catalog item:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleRemoveTest = async (indexToRemove: number) => {
     if (!labId) return;
     const updatedTests = tests.filter((_, idx) => idx !== indexToRemove);
@@ -153,6 +194,8 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
         .eq('id', labId);
       
       setTests(updatedTests);
+      // Reset editing states if the active element is deleted
+      if (editingIndex === indexToRemove) setEditingIndex(null);
       showToast("Test removed from catalog.");
     } catch (err) {
       console.error("Error dropping catalog item:", err);
@@ -393,7 +436,7 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
               <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                 <div>
                   <h3 className="text-sm font-semibold text-slate-900">Manage Diagnostics Catalog</h3>
-                  <p className="text-[11px] text-slate-500">Inject or terminate test profiles real-time into database layers.</p>
+                  <p className="text-[11px] text-slate-500">Inject, update, or terminate test profiles real-time into database layers.</p>
                 </div>
                 <button onClick={closeModal} className="p-1 hover:bg-slate-200/60 rounded-lg text-slate-400 hover:text-slate-600 transition">
                   <X className="w-4 h-4" />
@@ -401,7 +444,7 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
               </div>
               
               <div className="p-6 space-y-4">
-                {/* Embedded Inline Injector Input Block Form */}
+                {/* Add New Test Block */}
                 <div className="bg-slate-50 rounded-xl p-3 border border-slate-200/60 flex flex-col sm:flex-row gap-2">
                   <div className="relative flex-1">
                     <ListPlus className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -444,19 +487,74 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
                     </div>
                   ) : (
                     tests.map((test, index) => (
-                      <div key={index} className="px-4 py-2.5 flex items-center justify-between hover:bg-slate-50/50 transition group">
-                        <span className="text-xs font-medium text-slate-700">{test.name}</span>
-                        <div className="flex items-center gap-3">
-                          <span className="font-mono text-xs font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">₹{test.price}</span>
-                          <button
-                            type="button"
-                            disabled={saving}
-                            onClick={() => handleRemoveTest(index)}
-                            className="text-slate-400 hover:text-rose-600 p-1 hover:bg-rose-50 rounded transition disabled:opacity-50"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                      <div key={index} className="px-4 py-2.5 flex items-center justify-between hover:bg-slate-50/30 transition min-h-[50px]">
+                        
+                        {editingIndex === index ? (
+                          /* === INLINE EDIT MODE ACTIVE === */
+                          <div className="flex items-center gap-2 w-full animate-in fade-in duration-100">
+                            <input 
+                              type="text" 
+                              value={editTestName}
+                              onChange={(e) => setEditTestName(e.target.value)}
+                              className="flex-1 px-2.5 py-1 text-xs border border-indigo-400 rounded-lg focus:outline-none bg-white text-slate-900 font-medium"
+                            />
+                            <div className="relative w-24">
+                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-slate-400 font-medium">₹</span>
+                              <input 
+                                type="number" 
+                                value={editTestPrice}
+                                onChange={(e) => setEditTestPrice(e.target.value)}
+                                className="w-full pl-5 pr-2 py-1 text-xs border border-indigo-400 rounded-lg focus:outline-none bg-white text-slate-900 font-mono font-bold"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                onClick={() => handleSaveInlineEdit(index)}
+                                title="Save changes"
+                                className="p-1 text-emerald-600 hover:bg-emerald-50 rounded border border-emerald-200 transition"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setEditingIndex(null)}
+                                title="Cancel"
+                                className="p-1 text-slate-400 hover:bg-slate-100 rounded border border-slate-200 transition"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          /* === READ ONLY VIEW MODE === */
+                          <>
+                            <span className="text-xs font-medium text-slate-700">{test.name}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-xs font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200/40">
+                                ₹{test.price}
+                              </span>
+                              <div className="flex items-center gap-0.5 opacity-60 group-hover:opacity-100 transition">
+                                <button
+                                  type="button"
+                                  onClick={() => startInlineEdit(index, test)}
+                                  title="Edit test parameters"
+                                  className="text-slate-400 hover:text-indigo-600 p-1 hover:bg-indigo-50 rounded transition"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={saving}
+                                  onClick={() => handleRemoveTest(index)}
+                                  title="Remove from inventory"
+                                  className="text-slate-400 hover:text-rose-600 p-1 hover:bg-rose-50 rounded transition disabled:opacity-50"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          </>
+                        )}
+
                       </div>
                     ))
                   )}
