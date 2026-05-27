@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { 
   Building2, ArrowLeft, Upload, Plus, Trash2, 
   Settings as SettingsIcon, ShieldCheck, RefreshCw, CheckCircle2,
-  ListPlus, Info, Edit3, X, Coins, Check
+  ListPlus, Info, Edit3, X, Coins, Check, Phone, Mail
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -17,7 +17,7 @@ interface LabTestItem {
   price: number;
 }
 
-type ModalType = 'none' | 'brand' | 'catalog';
+type ModalType = 'none' | 'brand' | 'catalog' | 'contact';
 
 export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
   const { user } = useAuth();
@@ -31,10 +31,17 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
   const [labName, setLabName] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   const [tests, setTests] = useState<LabTestItem[]>([]);
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [email, setEmail] = useState('');
 
   // Temporary Edit Form States (Used within modals)
   const [tempLabName, setTempLabName] = useState('');
   const [tempLogoUrl, setTempLogoUrl] = useState('');
+  const [tempPhoneNumber, setTempPhoneNumber] = useState('');
+  const [tempWhatsappNumber, setTempWhatsappNumber] = useState('');
+  const [tempEmail, setTempEmail] = useState('');
+  
   const [newTestName, setNewTestName] = useState('');
   const [newTestPrice, setNewTestPrice] = useState('');
 
@@ -59,14 +66,16 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
           
           const { data: labData } = await supabase
             .from('labs')
-            .select('lab_name, logo_url, available_tests') // Column target syntax fixed
+            .select('lab_name, logo_url, available_tests, phone_number, whatsapp_number, email')
             .eq('id', adminLink.lab_id)
             .maybeSingle();
 
           if (labData) {
             setLabName(labData.lab_name || '');
             setLogoUrl(labData.logo_url || '');
-            // Read values directly out of your available_tests jsonb field
+            setPhoneNumber(labData.phone_number || '');
+            setWhatsappNumber(labData.whatsapp_number || '');
+            setEmail(labData.email || '');
             setTests(Array.isArray(labData.available_tests) ? labData.available_tests : []);
           }
         }
@@ -92,6 +101,13 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
 
   const openCatalogModal = () => {
     setActiveModal('catalog');
+  };
+
+  const openContactModal = () => {
+    setTempPhoneNumber(phoneNumber);
+    setTempWhatsappNumber(whatsappNumber);
+    setTempEmail(email);
+    setActiveModal('contact');
   };
 
   const closeModal = () => {
@@ -123,6 +139,33 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
     }
   };
 
+  const handleSaveContact = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!labId) return;
+    setSaving(true);
+    try {
+      await supabase
+        .from('labs')
+        .update({ 
+          phone_number: tempPhoneNumber, 
+          whatsapp_number: tempWhatsappNumber, 
+          email: tempEmail 
+        })
+        .eq('id', labId);
+      
+      setPhoneNumber(tempPhoneNumber);
+      setWhatsappNumber(tempWhatsappNumber);
+      setEmail(tempEmail);
+      showToast("Contact credentials synchronized!");
+      onLabUpdated();
+      closeModal();
+    } catch (err) {
+      console.error("Error updating contact infrastructure settings:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleAddTest = async () => {
     if (!newTestName.trim() || !newTestPrice.trim() || !labId) return;
     const updatedTests = [
@@ -134,7 +177,7 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
     try {
       await supabase
         .from('labs')
-        .update({ available_tests: updatedTests }) // Updates available_tests column
+        .update({ available_tests: updatedTests })
         .eq('id', labId);
       
       setTests(updatedTests);
@@ -148,14 +191,12 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
     }
   };
 
-  // Start Inline Edit Mode for an Existing Test Row
   const startInlineEdit = (index: number, test: LabTestItem) => {
     setEditingIndex(index);
     setEditTestName(test.name);
     setEditTestPrice(test.price.toString());
   };
 
-  // Save Inline Edited Test Row Back to Supabase
   const handleSaveInlineEdit = async (indexToUpdate: number) => {
     if (!editTestName.trim() || !editTestPrice.trim() || !labId) return;
     
@@ -170,7 +211,7 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
     try {
       await supabase
         .from('labs')
-        .update({ available_tests: updatedTests }) // Updates available_tests column
+        .update({ available_tests: updatedTests })
         .eq('id', labId);
       
       setTests(updatedTests);
@@ -191,7 +232,7 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
     try {
       await supabase
         .from('labs')
-        .update({ available_tests: updatedTests }) // Updates available_tests column
+        .update({ available_tests: updatedTests })
         .eq('id', labId);
       
       setTests(updatedTests);
@@ -280,6 +321,35 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
               </button>
             </div>
 
+            {/* Contact Channels Card */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="space-y-2 flex-1">
+                <h3 className="text-sm font-semibold text-slate-900">Communication & Notification Desks</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-xs text-slate-500">
+                  <div className="flex items-center gap-2 truncate">
+                    <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span className="truncate">{phoneNumber || 'No phone set'}</span>
+                  </div>
+                  <div className="flex items-center gap-2 truncate">
+                    <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.513 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.713-1.455L0 24zm6.59-4.846c1.642.975 3.251 1.489 4.814 1.491 5.487.002 9.947-4.461 9.95-9.95.001-2.659-1.03-5.159-2.905-7.037a9.83 9.83 0 0 0-7.042-2.922C5.934.734 1.473 5.199 1.47 10.69c-.001 1.673.447 3.307 1.299 4.757L1.825 21.79l6.596-1.732z"/>
+                    </svg>
+                    <span className="truncate">{whatsappNumber || 'No WhatsApp set'}</span>
+                  </div>
+                  <div className="flex items-center gap-2 truncate">
+                    <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span className="truncate">{email || 'No email set'}</span>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={openContactModal}
+                className="w-full sm:w-auto px-4 py-2 text-xs border border-slate-200 hover:border-slate-300 rounded-xl font-medium transition flex items-center justify-center gap-2 hover:bg-slate-50 text-slate-700 shadow-sm shrink-0"
+              >
+                <Edit3 className="w-3.5 h-3.5" /> Edit Contacts
+              </button>
+            </div>
+
             {/* Inventory Overview Card */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
               <div className="flex items-center justify-between">
@@ -325,6 +395,14 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
                     </p>
                   </div>
                 </div>
+
+                {/* Micro Meta Badges for Contacts in Preview */}
+                {(phoneNumber || email) && (
+                  <div className="mt-2 flex flex-wrap gap-1.5 px-1 text-[9px] text-slate-400 font-mono">
+                    {phoneNumber && <span className="truncate max-w-[100px]">📞 {phoneNumber}</span>}
+                    {email && <span className="truncate max-w-[120px]">✉️ {email}</span>}
+                  </div>
+                )}
                 
                 <div className="mt-4 bg-white rounded-xl border border-slate-200/60 p-4 space-y-3">
                   <div>
@@ -407,6 +485,87 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
                   >
                     {saving ? <RefreshCw className="w-3 h-3 animate-spin" /> : null}
                     Save Properties
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Contact Infrastructure Update Modal Configuration Card */}
+          {activeModal === 'contact' && (
+            <div className="bg-white w-full max-w-md rounded-2xl border border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">Update Contact Gateways</h3>
+                  <p className="text-[11px] text-slate-500">Configure phone lines, message targets, and email routes.</p>
+                </div>
+                <button onClick={closeModal} className="p-1 hover:bg-slate-200/60 rounded-lg text-slate-400 hover:text-slate-600 transition">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <form onSubmit={handleSaveContact}>
+                <div className="p-6 space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1.5">Phone Number</label>
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="tel"
+                        value={tempPhoneNumber}
+                        onChange={(e) => setTempPhoneNumber(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:border-indigo-500 transition text-slate-900"
+                        placeholder="e.g., +91 98765 43210"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1.5">WhatsApp Business Number</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.513 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.713-1.455L0 24zm6.59-4.846c1.642.975 3.251 1.489 4.814 1.491 5.487.002 9.947-4.461 9.95-9.95.001-2.659-1.03-5.159-2.905-7.037a9.83 9.83 0 0 0-7.042-2.922C5.934.734 1.473 5.199 1.47 10.69c-.001 1.673.447 3.307 1.299 4.757L1.825 21.79l6.596-1.732z"/>
+                        </svg>
+                      </span>
+                      <input
+                        type="tel"
+                        value={tempWhatsappNumber}
+                        onChange={(e) => setTempWhatsappNumber(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:border-indigo-500 transition text-slate-900"
+                        placeholder="e.g., +91 98765 43210"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1.5">Administrative Email Address</label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="email"
+                        value={tempEmail}
+                        onChange={(e) => setTempEmail(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:border-indigo-500 transition text-slate-900"
+                        placeholder="e.g., desk@citylabs.com"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="px-6 py-3.5 border-t border-slate-100 bg-slate-50 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="px-4 py-2 text-xs border border-slate-200 rounded-xl font-medium hover:bg-white text-slate-600 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="px-4 py-2 text-xs bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    {saving ? <RefreshCw className="w-3 h-3 animate-spin" /> : null}
+                    Save Contacts
                   </button>
                 </div>
               </form>
