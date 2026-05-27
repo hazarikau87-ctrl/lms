@@ -370,59 +370,78 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
 
           </div>
 
-          {/* Right Column Realtime Live Preview Viewport */}
-          <div className="space-y-6 lg:sticky lg:top-8">
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
-              <div>
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Live Viewport Preview</h3>
-                <p className="text-[11px] text-slate-500 mt-0.5">Real-time mapping parameters mirrored to public checkouts.</p>
-              </div>
-              
-              <div className="border border-slate-200/80 rounded-xl bg-slate-50/50 p-4">
-                <div className="bg-white rounded-xl border border-slate-200/60 p-4 shadow-sm flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
-                    {logoUrl ? (
-                      <img src={logoUrl} alt="Preview Logo" className="w-full h-full object-cover" />
-                    ) : (
-                      <Building2 className="w-4 h-4 text-slate-400" />
-                    )}
-                  </div>
-                  <div className="truncate flex-1">
-                    <p className="text-xs font-bold text-slate-800 truncate">{labName || 'Untitled Clinic Endpoint'}</p>
-                    <p className="text-[10px] text-emerald-600 font-medium flex items-center gap-1 mt-0.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
-                      Accepting Bookings
-                    </p>
-                  </div>
-                </div>
+          {/* Right Column: Business Intelligence & Quick Actions */}
+<div className="space-y-6 lg:sticky lg:top-8">
+  
+  {/* Quick Action: New Booking Launcher */}
+  <div className="bg-indigo-600 rounded-2xl p-6 shadow-lg shadow-indigo-200 border border-indigo-500">
+    <h3 className="text-white font-semibold text-sm mb-1">Direct Patient Intake</h3>
+    <p className="text-indigo-100 text-[11px] mb-4">Register a walk-in patient or phone booking instantly.</p>
+    <button 
+      onClick={() => alert("Internal Booking Modal coming soon!")}
+      className="w-full bg-white text-indigo-600 py-2.5 rounded-xl text-xs font-bold hover:bg-indigo-50 transition shadow-sm flex items-center justify-center gap-2"
+    >
+      <Plus className="w-4 h-4" /> New Internal Booking
+    </button>
+  </div>
 
-                {/* Micro Meta Badges for Contacts in Preview */}
-                {(phoneNumber || email) && (
-                  <div className="mt-2 flex flex-wrap gap-1.5 px-1 text-[9px] text-slate-400 font-mono">
-                    {phoneNumber && <span className="truncate max-w-[100px]">📞 {phoneNumber}</span>}
-                    {email && <span className="truncate max-w-[120px]">✉️ {email}</span>}
-                  </div>
-                )}
-                
-                <div className="mt-4 bg-white rounded-xl border border-slate-200/60 p-4 space-y-3">
-                  <div>
-                    <div className="h-1.5 w-12 bg-slate-200 rounded mb-1.5"></div>
-                    <div className="h-8 w-full bg-slate-50 border border-slate-200/60 rounded-lg flex items-center px-3 justify-between text-[11px] text-slate-400 font-medium">
-                      <span>Select target diagnostic run...</span>
-                      <span className="text-[9px] text-slate-400">▼</span>
-                    </div>
-                  </div>
-                  <div className="h-8 w-full bg-indigo-600 rounded-lg flex items-center justify-center text-[11px] font-semibold text-white shadow-sm">
-                    Proceed to Booking
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+  {/* Business Intelligence Panel */}
+  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-6">
+    <div>
+      <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+        <Coins className="w-3.5 h-3.5" /> Catalog Insights
+      </h3>
+    </div>
 
-        </div>
+    <div className="space-y-4">
+      {/* Insight 1: Catalog Value */}
+      <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+        <p className="text-[10px] text-slate-500 uppercase font-bold tracking-tight">Average Test Price</p>
+        <p className="text-xl font-bold text-slate-900 mt-1">
+          ₹{tests.length > 0 
+            ? (tests.reduce((acc, curr) => acc + curr.price, 0) / tests.length).toFixed(0) 
+            : '0'}
+        </p>
+        <p className="text-[10px] text-slate-400 mt-1">Based on {tests.length} active catalog items</p>
       </div>
 
+      {/* Insight 2: High Value Item */}
+      {tests.length > 0 && (
+        <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100">
+          <p className="text-[10px] text-emerald-600 uppercase font-bold tracking-tight">Premium Service</p>
+          <div className="flex justify-between items-end mt-1">
+            <p className="text-sm font-bold text-slate-800 truncate pr-2">
+              {[...tests].sort((a, b) => b.price - a.price)[0].name}
+            </p>
+            <p className="text-sm font-mono font-bold text-emerald-700">
+              ₹{[...tests].sort((a, b) => b.price - a.price)[0].price}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Insight 3: Growth Tip */}
+      <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100">
+        <div className="flex items-start gap-2">
+          <Info className="w-3.5 h-3.5 text-indigo-500 mt-0.5" />
+          <div>
+            <p className="text-[10px] text-indigo-700 font-bold uppercase">Growth Tip</p>
+            <p className="text-[11px] text-slate-600 leading-relaxed mt-1">
+              Adding "Full Body Checkup" bundles usually increases average booking value by 25%.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* Footer Link */}
+    <div className="pt-2 border-t border-slate-100 text-center">
+      <button className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700 uppercase tracking-widest">
+        View Full Revenue Report
+      </button>
+    </div>
+  </div>
+</div>
       {/* ================= MODAL OVERLAYS BACKDROP COMPONENTS ================= */}
       {activeModal !== 'none' && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
