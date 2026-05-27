@@ -35,6 +35,281 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [email, setEmail] = useState('');
 
+  // Temporary Edit Form States
+  const [tempLabName, setTempLabName] = useState('');
+  const [tempLogoUrl, setTempLogoUrl] = useState('');
+  const [tempPhoneNumber, setTempPhoneNumber] = useState('');
+  const [tempWhatsappNumber, setTempWhatsappNumber] = useState('');
+  const [tempEmail, setTempEmail] = useState('');
+  
+  const [newTestName, setNewTestName] = useState('');
+  const [newTestPrice, setNewTestPrice] = useState('');
+
+  // Inline Editing States
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editTestName, setEditTestName] = useState('');
+  const [editTestPrice, setEditTestPrice] = useState('');
+
+  useEffect(() => {
+    async function loadLabSettings() {
+      if (!user?.id) return;
+      setLoading(true);
+      try {
+        const { data: adminLink } = await supabase
+          .from('lab_admins')
+          .select('lab_id')
+          .eq('user_id', user.id)
+          .single();
+
+        if (adminLink?.lab_id) {
+          setLabId(adminLink.lab_id);
+          const { data: labData } = await supabase
+            .from('labs')
+            .select('lab_name, logo_url, available_tests, phone_number, whatsapp_number, email')
+            .eq('id', adminLink.lab_id)
+            .maybeSingle();
+
+          if (labData) {
+            setLabName(labData.lab_name || '');
+            setLogoUrl(labData.logo_url || '');
+            setPhoneNumber(labData.phone_number || '');
+            setWhatsappNumber(labData.whatsapp_number || '');
+            setEmail(labData.email || '');
+            setTests(Array.isArray(labData.available_tests) ? labData.available_tests : []);
+          }
+        }
+      } catch (err) {
+        console.error("Error loading configurations:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadLabSettings();
+  }, [user?.id]);
+
+  const showToast = (msg: string) => {
+    setSuccessMessage(msg);
+    setTimeout(() => setSuccessMessage(''), 3000);
+  };
+
+  const closeModal = () => {
+    setActiveModal('none');
+    setNewTestName('');
+    setNewTestPrice('');
+    setEditingIndex(null);
+  };
+
+  const handleSaveBrand = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!labId) return;
+    setSaving(true);
+    try {
+      await supabase.from('labs').update({ lab_name: tempLabName, logo_url: tempLogoUrl }).eq('id', labId);
+      setLabName(tempLabName);
+      setLogoUrl(tempLogoUrl);
+      showToast("Identity saved!");
+      onLabUpdated();
+      closeModal();
+    } finally { setSaving(false); }
+  };
+
+  const handleSaveContact = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!labId) return;
+    setSaving(true);
+    try {
+      await supabase.from('labs').update({ 
+        phone_number: tempPhoneNumber, whatsapp_number: tempWhatsappNumber, email: tempEmail 
+      }).eq('id', labId);
+      setPhoneNumber(tempPhoneNumber);
+      setWhatsappNumber(tempWhatsappNumber);
+      setEmail(tempEmail);
+      showToast("Contacts updated!");
+      onLabUpdated();
+      closeModal();
+    } finally { setSaving(false); }
+  };
+
+  const handleAddTest = async () => {
+    if (!newTestName.trim() || !newTestPrice.trim() || !labId) return;
+    const updatedTests = [...tests, { name: newTestName.trim(), price: Number(newTestPrice) }];
+    setSaving(true);
+    try {
+      await supabase.from('labs').update({ available_tests: updatedTests }).eq('id', labId);
+      setTests(updatedTests);
+      setNewTestName('');
+      setNewTestPrice('');
+      showToast("Test added!");
+    } finally { setSaving(false); }
+  };
+
+  const handleSaveInlineEdit = async (indexToUpdate: number) => {
+    const updatedTests = tests.map((t, i) => i === indexToUpdate ? { name: editTestName, price: Number(editTestPrice) } : t);
+    setSaving(true);
+    try {
+      await supabase.from('labs').update({ available_tests: updatedTests }).eq('id', labId);
+      setTests(updatedTests);
+      setEditingIndex(null);
+      showToast("Updated!");
+    } finally { setSaving(false); }
+  };
+
+  const handleRemoveTest = async (index: number) => {
+    const updatedTests = tests.filter((_, i) => i !== index);
+    setSaving(true);
+    try {
+      await supabase.from('labs').update({ available_tests: updatedTests }).eq('id', labId);
+      setTests(updatedTests);
+      showToast("Removed!");
+    } finally { setSaving(false); }
+  };
+
+  if (loading) return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <RefreshCw className="w-6 h-6 animate-spin text-indigo-600" />
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-900 antialiased">
+      <div className="max-w-5xl mx-auto px-4 py-10">
+        
+        {successMessage && (
+          <div className="fixed bottom-6 right-6 bg-slate-950 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 z-50">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <span className="text-xs font-medium">{successMessage}</span>
+          </div>
+        )}
+
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-8 mb-8 border-b">
+          <div className="flex items-center gap-4">
+            <button onClick={onBack} className="p-2.5 hover:bg-white rounded-xl border transition shadow-sm"><ArrowLeft className="w-4 h-4" /></button>
+            <div>
+              <div className="flex items-center gap-2"><SettingsIcon className="w-5 h-5 text-indigo-600" /><h1 className="text-xl font-semibold">Lab Control Center</h1></div>
+            </div>
+          </div>
+          <div className="text-xs bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg border border-emerald-200">Secured System Active</div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2 space-y-6">
+            <div className="bg-white rounded-2xl border p-6 flex justify-between items-center">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 bg-slate-100 rounded-2xl border flex items-center justify-center overflow-hidden">
+                  {logoUrl ? <img src={logoUrl} className="w-full h-full object-cover" /> : <Building2 className="w-6 h-6 text-slate-400" />}
+                </div>
+                <h2 className="text-sm font-semibold">{labName || 'No Name Set'}</h2>
+              </div>
+              <button onClick={() => { setTempLabName(labName); setTempLogoUrl(logoUrl); setActiveModal('brand'); }} className="px-4 py-2 text-xs border rounded-xl hover:bg-slate-50"><Edit3 className="w-3.5 h-3.5" /></button>
+            </div>
+
+            <div className="bg-white rounded-2xl border p-6 flex justify-between items-center">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs text-slate-500">
+                <div className="flex items-center gap-2"><Phone className="w-3.5 h-3.5" />{phoneNumber || 'N/A'}</div>
+                <div className="flex items-center gap-2"><Mail className="w-3.5 h-3.5" />{email || 'N/A'}</div>
+              </div>
+              <button onClick={() => { setTempPhoneNumber(phoneNumber); setTempWhatsappNumber(whatsappNumber); setTempEmail(email); setActiveModal('contact'); }} className="px-4 py-2 text-xs border rounded-xl hover:bg-slate-50"><Edit3 className="w-3.5 h-3.5" /></button>
+            </div>
+
+            <div className="bg-white rounded-2xl border p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold">Assigned Catalog Inventory</h3>
+                  {tests.length > 0 ? (
+                    <p className="text-xs text-slate-500 mt-0.5">Currently exposing <span className="font-bold text-indigo-600">{tests.length}</span> active runs.</p>
+                  ) : (
+                    <p className="text-xs text-rose-500 mt-0.5 font-medium">Your catalog is empty. Patients cannot book online.</p>
+                  )}
+                </div>
+                <button onClick={() => setActiveModal('catalog')} className="px-4 py-2 text-xs bg-slate-900 text-white rounded-xl flex items-center gap-2"><ListPlus className="w-3.5 h-3.5" /> Manage</button>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Sidebar: Business Intelligence */}
+          <div className="space-y-6 lg:sticky lg:top-8">
+            <div className="bg-indigo-600 rounded-2xl p-6 shadow-lg border border-indigo-500">
+              <h3 className="text-white font-semibold text-sm">Direct Patient Intake</h3>
+              <p className="text-indigo-100 text-[11px] mb-4">Register walk-in patients instantly.</p>
+              <button onClick={() => alert("Booking module coming soon!")} className="w-full bg-white text-indigo-600 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2"><Plus className="w-4 h-4" /> New Booking</button>
+            </div>
+
+            <div className="bg-white rounded-2xl border p-5 space-y-6">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2"><Coins className="w-3.5 h-3.5" /> Catalog Insights</h3>
+              <div className="space-y-4">
+                <div className="p-3 bg-slate-50 rounded-xl border">
+                  <p className="text-[10px] text-slate-500 uppercase font-bold">Average Test Price</p>
+                  <p className="text-xl font-bold text-slate-900 mt-1">₹{tests.length > 0 ? (tests.reduce((acc, curr) => acc + Number(curr.price), 0) / tests.length).toFixed(0) : '0'}</p>
+                </div>
+
+                {tests.length > 0 && (
+                  <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100">
+                    <p className="text-[10px] text-emerald-600 uppercase font-bold">Premium Service</p>
+                    <div className="flex justify-between items-end mt-1">
+                      <p className="text-sm font-bold truncate pr-2">{[...tests].sort((a, b) => b.price - a.price)[0].name}</p>
+                      <p className="text-sm font-mono font-bold text-emerald-700">₹{[...tests].sort((a, b) => b.price - a.price)[0].price}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Modals Logic */}
+        {activeModal !== 'none' && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            {activeModal === 'brand' && (
+               <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl">
+                <h3 className="text-sm font-semibold mb-4">Update Identity</h3>
+                <form onSubmit={handleSaveBrand} className="space-y-4">
+                  <input value={tempLabName} onChange={(e) => setTempLabName(e.target.value)} className="w-full p-2 border rounded-xl text-sm" placeholder="Lab Name" />
+                  <input value={tempLogoUrl} onChange={(e) => setTempLogoUrl(e.target.value)} className="w-full p-2 border rounded-xl text-sm" placeholder="Logo URL" />
+                  <div className="flex justify-end gap-2"><button type="button" onClick={closeModal} className="text-xs">Cancel</button><button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs">Save</button></div>
+                </form>
+               </div>
+            )}
+            
+            {activeModal === 'catalog' && (
+              <div className="bg-white w-full max-w-lg rounded-2xl p-6 shadow-2xl overflow-hidden">
+                <div className="flex justify-between mb-4"><h3 className="text-sm font-semibold">Manage Catalog</h3><button onClick={closeModal}><X className="w-4 h-4"/></button></div>
+                <div className="flex gap-2 mb-4">
+                  <input value={newTestName} onChange={(e) => setNewTestName(e.target.value)} placeholder="Test Name" className="flex-1 p-2 border rounded-lg text-xs" />
+                  <input value={newTestPrice} onChange={(e) => setNewTestPrice(e.target.value)} placeholder="Price" className="w-24 p-2 border rounded-lg text-xs" type="number" />
+                  <button onClick={handleAddTest} className="bg-indigo-600 text-white px-3 py-2 rounded-lg text-xs font-bold">Add</button>
+                </div>
+                <div className="max-h-60 overflow-y-auto space-y-2">
+                  {tests.map((test, index) => (
+                    <div key={index} className="p-2 bg-slate-50 rounded-lg flex justify-between items-center text-xs">
+                      <span>{test.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold">₹{test.price}</span>
+                        <button onClick={() => handleRemoveTest(index)} className="text-rose-500"><Trash2 className="w-3.5 h-3.5" /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 flex justify-end"><button onClick={closeModal} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs">Done</button></div>
+              </div>
+            )}
+
+            {activeModal === 'contact' && (
+               <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl">
+                <h3 className="text-sm font-semibold mb-4">Update Contacts</h3>
+                <form onSubmit={handleSaveContact} className="space-y-4">
+                  <input value={tempPhoneNumber} onChange={(e) => setTempPhoneNumber(e.target.value)} className="w-full p-2 border rounded-xl text-sm" placeholder="Phone" />
+                  <input value={tempEmail} onChange={(e) => setTempEmail(e.target.value)} className="w-full p-2 border rounded-xl text-sm" placeholder="Email" />
+                  <div className="flex justify-end gap-2"><button type="button" onClick={closeModal} className="text-xs">Cancel</button><button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs">Save</button></div>
+                </form>
+               </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
   // Temporary Edit Form States (Used within modals)
   const [tempLabName, setTempLabName] = useState('');
   const [tempLogoUrl, setTempLogoUrl] = useState('');
