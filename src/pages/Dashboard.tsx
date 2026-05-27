@@ -2,10 +2,12 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   FlaskConical, LogOut, Search, CalendarCheck, Clock, CheckCheck,
   Phone, FileText, Check, Trash2, ChevronLeft, ChevronRight,
-  MessageCircle, Building2, FileDown, CheckCircle2, RotateCw, Edit3, X, XCircle
+  MessageCircle, Building2, FileDown, CheckCircle2, RotateCw, Edit3, X, XCircle, Settings as SettingsIcon, LayoutDashboard
 } from 'lucide-react';
 import { supabase, Appointment, Lab } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+// Import your settings component relative to your pages structure
+import Settings from './settings';
 
 const RECORDS_PER_PAGE = 10;
 
@@ -27,6 +29,7 @@ interface AppointmentRowProps {
 
 export default function Dashboard() {
   const { user, signOut } = useAuth();
+  const [currentView, setCurrentView] = useState<'dashboard' | 'settings'>('dashboard');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [lab, setLab] = useState<Lab | null>(null);
   const [loading, setLoading] = useState(true);
@@ -294,31 +297,55 @@ export default function Dashboard() {
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="relative flex items-center gap-2 bg-gray-50 border border-gray-200 shadow-sm rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-blue-500 transition-all">
-              <CalendarCheck className="w-4 h-4 text-gray-400" />
-              <input 
-                type="date"
-                value={selectedDate}
-                onChange={(e) => { setSelectedDate(e.target.value); setCurrentPage(1); }}
-                className="bg-transparent border-none text-xs text-gray-900 focus:ring-0 p-0 outline-none cursor-pointer"
-              />
-              {selectedDate && (
-                <button onClick={() => { setSelectedDate(''); setCurrentPage(1); }} className="p-0.5 hover:bg-gray-200 rounded-full">
-                  <X className="w-3 h-3 text-gray-400" />
-                </button>
-              )}
-            </div>
+            {/* View Switching Navigation Button */}
+            {currentView === 'dashboard' ? (
+              <button 
+                onClick={() => setCurrentView('settings')} 
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 shadow-sm bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:text-blue-600 transition"
+              >
+                <SettingsIcon className="w-4 h-4" />
+                Settings
+              </button>
+            ) : (
+              <button 
+                onClick={() => setCurrentView('dashboard')} 
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 shadow-sm bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:text-blue-600 transition"
+              >
+                <LayoutDashboard className="w-4 h-4" />
+                Dashboard
+              </button>
+            )}
 
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                type="text"
-                value={search}
-                onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
-                placeholder="Search ID or Name..."
-                className="pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 shadow-sm bg-gray-50 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-56 transition"
-              />
-            </div>
+            {currentView === 'dashboard' && (
+              <>
+                <div className="relative flex items-center gap-2 bg-gray-50 border border-gray-200 shadow-sm rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-blue-500 transition-all">
+                  <CalendarCheck className="w-4 h-4 text-gray-400" />
+                  <input 
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => { setSelectedDate(e.target.value); setCurrentPage(1); }}
+                    className="bg-transparent border-none text-xs text-gray-900 focus:ring-0 p-0 outline-none cursor-pointer"
+                  />
+                  {selectedDate && (
+                    <button onClick={() => { setSelectedDate(''); setCurrentPage(1); }} className="p-0.5 hover:bg-gray-200 rounded-full">
+                      <X className="w-3 h-3 text-gray-400" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
+                    placeholder="Search ID or Name..."
+                    className="pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 shadow-sm bg-gray-50 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-56 transition"
+                  />
+                </div>
+              </>
+            )}
+            
             <button onClick={signOut} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 shadow-sm bg-white text-sm font-semibold text-red-500 hover:bg-red-50 hover:border-red-200 transition">
               <LogOut className="w-4 h-4" />
               Logout
@@ -326,140 +353,149 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Clickable Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
-          <StatCard 
-            icon={<CalendarCheck className="w-5 h-5 text-sky-600" />} 
-            iconBg="bg-sky-50" 
-            value={stats.total} 
-            label={selectedDate ? `Appointments on ${selectedDate}` : "Total Appointments"} 
-            isActive={statusFilter === 'all'}
-            onClick={() => handleStatusFilterClick('all')}
-          />
-          <StatCard 
-            icon={<Clock className="w-5 h-5 text-amber-600" />} 
-            iconBg="bg-amber-50" 
-            value={stats.pending} 
-            label="Pending Tests" 
-            isActive={statusFilter === 'pending'}
-            onClick={() => handleStatusFilterClick('pending')}
-          />
-          <StatCard 
-            icon={<CheckCheck className="w-5 h-5 text-emerald-600" />} 
-            iconBg="bg-emerald-50" 
-            value={stats.completed} 
-            label="Completed" 
-            isActive={statusFilter === 'completed'}
-            onClick={() => handleStatusFilterClick('completed')}
-          />
-          <StatCard 
-            icon={<XCircle className="w-5 h-5 text-red-600" />} 
-            iconBg="bg-red-50" 
-            value={stats.cancelled} 
-            label="Cancelled" 
-            isActive={statusFilter === 'cancelled'}
-            onClick={() => handleStatusFilterClick('cancelled')}
-          />
-        </div>
-
-        {/* Bulk Actions */}
-        {selectedIds.size > 0 && (
-          <div className="bg-blue-50 border border-blue-200 shadow-md rounded-xl px-5 py-3 mb-5 flex flex-wrap items-center justify-between gap-3 animate-[slideDown_0.25s_ease]">
-            <span className="text-sm font-semibold text-blue-700">{selectedIds.size} Selected</span>
-            <div className="flex flex-wrap gap-2">
-              <button onClick={() => bulkUpdateStatus('Completed')} className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-emerald-700 border border-emerald-200 shadow-sm rounded-lg text-xs font-semibold hover:bg-emerald-100 transition"><CheckCircle2 className="w-3.5 h-3.5" /> Mark Done</button>
-              <button onClick={() => bulkUpdateStatus('Cancelled')} className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-red-600 border border-red-200 shadow-sm rounded-lg text-xs font-semibold hover:bg-red-100 transition"><XCircle className="w-3.5 h-3.5" /> Cancel Selected</button>
-              <button onClick={bulkDelete} className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-red-700 border border-red-200 shadow-sm rounded-lg text-xs font-semibold hover:bg-red-100 transition"><Trash2 className="w-3.5 h-3.5" /> Delete</button>
-              <button onClick={exportToPDF} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white border border-blue-700 shadow-sm rounded-lg text-xs font-semibold hover:bg-blue-700 transition"><FileDown className="w-3.5 h-3.5" /> Export PDF</button>
-            </div>
+        {/* View Layout Renderer */}
+        {currentView === 'settings' ? (
+          <div className="animate-[fadeIn_0.2s_ease]">
+            <Settings />
           </div>
-        )}
+        ) : (
+          <>
+            {/* Clickable Stats */}
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
+              <StatCard 
+                icon={<CalendarCheck className="w-5 h-5 text-sky-600" />} 
+                iconBg="bg-sky-50" 
+                value={stats.total} 
+                label={selectedDate ? `Appointments on ${selectedDate}` : "Total Appointments"} 
+                isActive={statusFilter === 'all'}
+                onClick={() => handleStatusFilterClick('all')}
+              />
+              <StatCard 
+                icon={<Clock className="w-5 h-5 text-amber-600" />} 
+                iconBg="bg-amber-50" 
+                value={stats.pending} 
+                label="Pending Tests" 
+                isActive={statusFilter === 'pending'}
+                onClick={() => handleStatusFilterClick('pending')}
+              />
+              <StatCard 
+                icon={<CheckCheck className="w-5 h-5 text-emerald-600" />} 
+                iconBg="bg-emerald-50" 
+                value={stats.completed} 
+                label="Completed" 
+                isActive={statusFilter === 'completed'}
+                onClick={() => handleStatusFilterClick('completed')}
+              />
+              <StatCard 
+                icon={<XCircle className="w-5 h-5 text-red-600" />} 
+                iconBg="bg-red-50" 
+                value={stats.cancelled} 
+                label="Cancelled" 
+                isActive={statusFilter === 'cancelled'}
+                onClick={() => handleStatusFilterClick('cancelled')}
+              />
+            </div>
 
-        {/* Table Card */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-[0_4px_20px_-5px_rgba(0,0,0,0.1)] overflow-hidden">
-          <div className="flex items-center gap-2 px-6 py-3 border-b border-gray-100 bg-gray-50/50">
-            <input type="checkbox" checked={isAllPageSelected} onChange={e => toggleSelectAll(e.target.checked)} className="w-4 h-4 accent-blue-600 cursor-pointer rounded border-gray-300 shadow-sm" />
-            <label className="text-xs font-medium text-gray-500 cursor-pointer select-none">Select all on this page</label>
-            
-            {statusFilter !== 'all' && (
-              <span className="ml-4 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100 flex items-center gap-1">
-                Filter: {statusFilter}
-                <button onClick={() => setStatusFilter('all')} className="hover:text-blue-900 ml-1 font-bold">×</button>
-              </span>
+            {/* Bulk Actions */}
+            {selectedIds.size > 0 && (
+              <div className="bg-blue-50 border border-blue-200 shadow-md rounded-xl px-5 py-3 mb-5 flex flex-wrap items-center justify-between gap-3 animate-[slideDown_0.25s_ease]">
+                <span className="text-sm font-semibold text-blue-700">{selectedIds.size} Selected</span>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => bulkUpdateStatus('Completed')} className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-emerald-700 border border-emerald-200 shadow-sm rounded-lg text-xs font-semibold hover:bg-emerald-100 transition"><CheckCircle2 className="w-3.5 h-3.5" /> Mark Done</button>
+                  <button onClick={() => bulkUpdateStatus('Cancelled')} className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-red-600 border border-red-200 shadow-sm rounded-lg text-xs font-semibold hover:bg-red-100 transition"><XCircle className="w-3.5 h-3.5" /> Cancel Selected</button>
+                  <button onClick={bulkDelete} className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-red-700 border border-red-200 shadow-sm rounded-lg text-xs font-semibold hover:bg-red-100 transition"><Trash2 className="w-3.5 h-3.5" /> Delete</button>
+                  <button onClick={exportToPDF} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white border border-blue-700 shadow-sm rounded-lg text-xs font-semibold hover:bg-blue-700 transition"><FileDown className="w-3.5 h-3.5" /> Export PDF</button>
+                </div>
+              </div>
             )}
 
-            <div className="ml-auto flex items-center gap-2">
-              <button onClick={fetchAll} title="Refresh data" className={`flex items-center justify-center p-1.5 text-gray-500 border border-gray-200 bg-white shadow-sm rounded-lg hover:text-blue-600 hover:border-blue-200 transition-all ${loading ? 'opacity-50' : ''}`} disabled={loading}>
-                <RotateCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              </button>
+            {/* Table Card */}
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-[0_4px_20px_-5px_rgba(0,0,0,0.1)] overflow-hidden">
+              <div className="flex items-center gap-2 px-6 py-3 border-b border-gray-100 bg-gray-50/50">
+                <input type="checkbox" checked={isAllPageSelected} onChange={e => toggleSelectAll(e.target.checked)} className="w-4 h-4 accent-blue-600 cursor-pointer rounded border-gray-300 shadow-sm" />
+                <label className="text-xs font-medium text-gray-500 cursor-pointer select-none">Select all on this page</label>
+                
+                {statusFilter !== 'all' && (
+                  <span className="ml-4 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100 flex items-center gap-1">
+                    Filter: {statusFilter}
+                    <button onClick={() => setStatusFilter('all')} className="hover:text-blue-900 ml-1 font-bold">×</button>
+                  </span>
+                )}
 
-              <div className="relative flex items-center gap-2">
-                {!showDatePicker ? (
-                  <button onClick={() => setShowDatePicker(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-600 border border-gray-200 bg-white shadow-sm rounded-lg hover:text-blue-600 hover:border-blue-200 transition">
-                    <CalendarCheck className="w-3.5 h-3.5" /> Bulk Action (Range)
+                <div className="ml-auto flex items-center gap-2">
+                  <button onClick={fetchAll} title="Refresh data" className={`flex items-center justify-center p-1.5 text-gray-500 border border-gray-200 bg-white shadow-sm rounded-lg hover:text-blue-600 hover:border-blue-200 transition-all ${loading ? 'opacity-50' : ''}`} disabled={loading}>
+                    <RotateCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
                   </button>
-                ) : (
-                  <div className="flex items-center gap-2 bg-white border border-blue-200 p-1.5 rounded-lg shadow-md">
-                    <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="text-xs border-none bg-gray-50 rounded-md focus:ring-0 text-gray-700 p-1 shadow-inner" />
-                    <span className="text-[10px] text-gray-400 font-bold">TO</span>
-                    <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="text-xs border-none bg-gray-50 rounded-md focus:ring-0 text-gray-700 p-1 shadow-inner" />
-                    {startDate && endDate && (
-                      <div className="flex items-center border-l ml-1 pl-1 gap-1">
-                        <button onClick={exportByRange} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition"><FileDown className="w-3.5 h-3.5" /></button>
-                        <button onClick={deleteByRange} className="p-1.5 text-red-500 hover:bg-red-50 rounded-md transition"><Trash2 className="w-3.5 h-3.5" /></button>
+
+                  <div className="relative flex items-center gap-2">
+                    {!showDatePicker ? (
+                      <button onClick={() => setShowDatePicker(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-600 border border-gray-200 bg-white shadow-sm rounded-lg hover:text-blue-600 hover:border-blue-200 transition">
+                        <CalendarCheck className="w-3.5 h-3.5" /> Bulk Action (Range)
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-2 bg-white border border-blue-200 p-1.5 rounded-lg shadow-md">
+                        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="text-xs border-none bg-gray-50 rounded-md focus:ring-0 text-gray-700 p-1 shadow-inner" />
+                        <span className="text-[10px] text-gray-400 font-bold">TO</span>
+                        <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="text-xs border-none bg-gray-50 rounded-md focus:ring-0 text-gray-700 p-1 shadow-inner" />
+                        {startDate && endDate && (
+                          <div className="flex items-center border-l ml-1 pl-1 gap-1">
+                            <button onClick={exportByRange} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition"><FileDown className="w-3.5 h-3.5" /></button>
+                            <button onClick={deleteByRange} className="p-1.5 text-red-500 hover:bg-red-50 rounded-md transition"><Trash2 className="w-3.5 h-3.5" /></button>
+                          </div>
+                        )}
+                        <button onClick={() => { setShowDatePicker(false); setStartDate(''); setEndDate(''); }} className="p-1.5 text-gray-400 hover:text-gray-600 border-l ml-1"><Check className="w-3.5 h-3.5" /></button>
                       </div>
                     )}
-                    <button onClick={() => { setShowDatePicker(false); setStartDate(''); setEndDate(''); }} className="p-1.5 text-gray-400 hover:text-gray-600 border-l ml-1"><Check className="w-3.5 h-3.5" /></button>
                   </div>
-                )}
+                  <button onClick={exportToPDF} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-600 border border-gray-200 bg-white shadow-sm rounded-lg hover:text-blue-600 hover:border-blue-200 transition">
+                    <FileDown className="w-3.5 h-3.5" /> Export All PDF
+                  </button>
+                </div>
               </div>
-              <button onClick={exportToPDF} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-600 border border-gray-200 bg-white shadow-sm rounded-lg hover:text-blue-600 hover:border-blue-200 transition">
-                <FileDown className="w-3.5 h-3.5" /> Export All PDF
-              </button>
+
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1100px]">
+                  <thead>
+                    <tr className="border-b-2 border-slate-100">
+                      <th className="w-10 px-4 py-3"></th>
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Booking ID</th>
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Patient</th>
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Prescription</th>
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Contact & WhatsApp</th>
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Test / Schedule</th>
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Remarks by lab</th>
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Status</th>
+                      <th className="px-4 py-3 text-right text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loading ? (
+                      <tr><td colSpan={9} className="py-16 text-center"><RotateCw className="w-6 h-6 animate-spin mx-auto text-blue-500" /></td></tr>
+                    ) : paginated.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="py-20 text-center text-gray-400">
+                          <div className="flex flex-col items-center gap-2">
+                            <Search className="w-10 h-10 opacity-10 mb-2" />
+                            <p className="text-sm font-medium">No appointment found.</p>
+                            <p className="text-xs">{selectedDate ? `Nothing scheduled for ${selectedDate}` : "Try adjusting your filters or search query."}</p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : paginated.map(item => (
+                      <AppointmentRow key={item.id} item={item} selected={selectedIds.has(item.id)} onToggle={() => toggleRow(item.id)} onUpdateStatus={updateStatus} onUpdateRemarks={updateRemarks} onDelete={deleteBooking} onWhatsApp={sendWhatsApp} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex items-center justify-center gap-4 px-6 py-4 border-t border-gray-100 bg-gray-50/30">
+                <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 bg-white shadow-sm rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition"><ChevronLeft className="w-4 h-4" /> Prev</button>
+                <span className="text-sm font-medium text-gray-600">Page {currentPage} of {totalPages}</span>
+                <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 bg-white shadow-sm rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition">Next <ChevronRight className="w-4 h-4" /></button>
+              </div>
             </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1100px]">
-              <thead>
-                <tr className="border-b-2 border-slate-100">
-                  <th className="w-10 px-4 py-3"></th>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Booking ID</th>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Patient</th>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Prescription</th>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Contact & WhatsApp</th>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Test / Schedule</th>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Remarks by lab</th>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Status</th>
-                  <th className="px-4 py-3 text-right text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr><td colSpan={9} className="py-16 text-center"><RotateCw className="w-6 h-6 animate-spin mx-auto text-blue-500" /></td></tr>
-                ) : paginated.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="py-20 text-center text-gray-400">
-                      <div className="flex flex-col items-center gap-2">
-                        <Search className="w-10 h-10 opacity-10 mb-2" />
-                        <p className="text-sm font-medium">No appointment found.</p>
-                        <p className="text-xs">{selectedDate ? `Nothing scheduled for ${selectedDate}` : "Try adjusting your filters or search query."}</p>
-                      </div>
-                    </td>
-                  </tr>
-                ) : paginated.map(item => (
-                  <AppointmentRow key={item.id} item={item} selected={selectedIds.has(item.id)} onToggle={() => toggleRow(item.id)} onUpdateStatus={updateStatus} onUpdateRemarks={updateRemarks} onDelete={deleteBooking} onWhatsApp={sendWhatsApp} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="flex items-center justify-center gap-4 px-6 py-4 border-t border-gray-100 bg-gray-50/30">
-            <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 bg-white shadow-sm rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition"><ChevronLeft className="w-4 h-4" /> Prev</button>
-            <span className="text-sm font-medium text-gray-600">Page {currentPage} of {totalPages}</span>
-            <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 bg-white shadow-sm rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition">Next <ChevronRight className="w-4 h-4" /></button>
-          </div>
-        </div>
+          </>
+        )}
       </div>
     </div>
   );
