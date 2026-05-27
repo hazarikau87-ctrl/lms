@@ -59,14 +59,14 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
           
           const { data: labData } = await supabase
             .from('labs')
-            .select('lab_name, logo_url, available_tests') // 👈 Fixed column target syntax
+            .select('lab_name, logo_url, available_tests') // Column target syntax fixed
             .eq('id', adminLink.lab_id)
             .maybeSingle();
 
           if (labData) {
             setLabName(labData.lab_name || '');
             setLogoUrl(labData.logo_url || '');
-            // 👈 Read values directly out of your available_tests jsonb field
+            // Read values directly out of your available_tests jsonb field
             setTests(Array.isArray(labData.available_tests) ? labData.available_tests : []);
           }
         }
@@ -134,7 +134,7 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
     try {
       await supabase
         .from('labs')
-        .update({ available_tests: updatedTests }) // 👈 Updates available_tests column
+        .update({ available_tests: updatedTests }) // Updates available_tests column
         .eq('id', labId);
       
       setTests(updatedTests);
@@ -170,7 +170,7 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
     try {
       await supabase
         .from('labs')
-        .update({ available_tests: updatedTests }) // 👈 Updates available_tests column
+        .update({ available_tests: updatedTests }) // Updates available_tests column
         .eq('id', labId);
       
       setTests(updatedTests);
@@ -191,7 +191,7 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
     try {
       await supabase
         .from('labs')
-        .update({ available_tests: updatedTests }) // 👈 Updates available_tests column
+        .update({ available_tests: updatedTests }) // Updates available_tests column
         .eq('id', labId);
       
       setTests(updatedTests);
@@ -281,11 +281,13 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
             </div>
 
             {/* Inventory Overview Card */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+              <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-semibold text-slate-900">Assigned Catalog Inventory</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Active diagnostic runs exposed to the front checkout interface.</p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Currently exposing <span className="font-bold text-indigo-600">{tests.length}</span> active runs to front checkout interfaces.
+                  </p>
                 </div>
                 <button
                   onClick={openCatalogModal}
@@ -293,25 +295,6 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
                 >
                   <ListPlus className="w-3.5 h-3.5" /> Manage Catalog
                 </button>
-              </div>
-
-              {/* Read Only Compact Summary View */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-1">
-                {tests.length === 0 ? (
-                  <div className="sm:col-span-2 text-center py-8 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
-                    <Info className="w-4 h-4 text-slate-400 mx-auto mb-1.5" />
-                    <p className="text-xs text-slate-400 italic">No assigned entries found in your database records.</p>
-                  </div>
-                ) : (
-                  tests.map((test, index) => (
-                    <div key={index} className="px-4 py-3 bg-slate-50/60 rounded-xl border border-slate-200/50 flex items-center justify-between">
-                      <span className="text-xs font-medium text-slate-700 truncate max-w-[160px]">{test.name}</span>
-                      <span className="font-mono text-xs font-bold text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded">
-                        ₹{test.price}
-                      </span>
-                    </div>
-                  ))
-                )}
               </div>
             </div>
 
