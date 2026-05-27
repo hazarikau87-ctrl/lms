@@ -59,14 +59,15 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
           
           const { data: labData } = await supabase
             .from('labs')
-            .select('*')
+            .select('lab_name, logo_url, available_tests') // 👈 Fixed column target syntax
             .eq('id', adminLink.lab_id)
             .maybeSingle();
 
           if (labData) {
             setLabName(labData.lab_name || '');
             setLogoUrl(labData.logo_url || '');
-            setTests(Array.isArray(labData.tests) ? labData.tests : []);
+            // 👈 Read values directly out of your available_tests jsonb field
+            setTests(Array.isArray(labData.available_tests) ? labData.available_tests : []);
           }
         }
       } catch (err) {
@@ -133,7 +134,7 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
     try {
       await supabase
         .from('labs')
-        .update({ tests: updatedTests })
+        .update({ available_tests: updatedTests }) // 👈 Updates available_tests column
         .eq('id', labId);
       
       setTests(updatedTests);
@@ -169,7 +170,7 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
     try {
       await supabase
         .from('labs')
-        .update({ tests: updatedTests })
+        .update({ available_tests: updatedTests }) // 👈 Updates available_tests column
         .eq('id', labId);
       
       setTests(updatedTests);
@@ -190,11 +191,10 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
     try {
       await supabase
         .from('labs')
-        .update({ tests: updatedTests })
+        .update({ available_tests: updatedTests }) // 👈 Updates available_tests column
         .eq('id', labId);
       
       setTests(updatedTests);
-      // Reset editing states if the active element is deleted
       if (editingIndex === indexToRemove) setEditingIndex(null);
       showToast("Test removed from catalog.");
     } catch (err) {
