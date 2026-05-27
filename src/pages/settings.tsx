@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { 
-  Building2, ArrowLeft, Save, Upload, Plus, Trash2, 
+  Building2, ArrowLeft, Upload, Plus, Trash2, 
   Settings as SettingsIcon, ShieldCheck, RefreshCw, CheckCircle2,
-  ListPlus, Info
+  ListPlus, Info, Edit3, X, Coins
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -17,19 +17,24 @@ interface LabTestItem {
   price: number;
 }
 
+type ModalType = 'none' | 'brand' | 'catalog';
+
 export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [activeModal, setActiveModal] = useState<ModalType>('none');
   
-  // Form profile states
+  // Database Core Source-of-Truth States
   const [labId, setLabId] = useState<string | null>(null);
   const [labName, setLabName] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
-  
-  // Tests management array
   const [tests, setTests] = useState<LabTestItem[]>([]);
+
+  // Temporary Edit Form States (Used within modals)
+  const [tempLabName, setTempLabName] = useState('');
+  const [tempLogoUrl, setTempLogoUrl] = useState('');
   const [newTestName, setNewTestName] = useState('');
   const [newTestPrice, setNewTestPrice] = useState('');
 
@@ -73,42 +78,87 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
     setTimeout(() => setSuccessMessage(''), 3000);
   };
 
-  const handleSaveProfile = async (e: React.FormEvent) => {
+  const openBrandModal = () => {
+    setTempLabName(labName);
+    setTempLogoUrl(logoUrl);
+    setActiveModal('brand');
+  };
+
+  const openCatalogModal = () => {
+    setActiveModal('catalog');
+  };
+
+  const closeModal = () => {
+    setActiveModal('none');
+    setNewTestName('');
+    setNewTestPrice('');
+  };
+
+  const handleSaveBrand = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!labId) return;
     setSaving(true);
     try {
       await supabase
         .from('labs')
-        .update({
-          lab_name: labName,
-          logo_url: logoUrl,
-          tests: tests
-        })
+        .update({ lab_name: tempLabName, logo_url: tempLogoUrl })
         .eq('id', labId);
       
-      showToast("Settings saved successfully!");
+      setLabName(tempLabName);
+      setLogoUrl(tempLogoUrl);
+      showToast("Identity configuration saved!");
       onLabUpdated();
+      closeModal();
     } catch (err) {
-      console.error("Error updates profile settings:", err);
+      console.error("Error updating profile settings:", err);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleAddTest = () => {
-    if (!newTestName.trim() || !newTestPrice.trim()) return;
+  const handleAddTest = async () => {
+    if (!newTestName.trim() || !newTestPrice.trim() || !labId) return;
     const updatedTests = [
       ...tests, 
       { name: newTestName.trim(), price: parseFloat(newTestPrice) || 0 }
     ];
-    setTests(updatedTests);
-    setNewTestName('');
-    setNewTestPrice('');
+    
+    setSaving(true);
+    try {
+      await supabase
+        .from('labs')
+        .update({ tests: updatedTests })
+        .eq('id', labId);
+      
+      setTests(updatedTests);
+      setNewTestName('');
+      setNewTestPrice('');
+      showToast("Test added to inventory!");
+    } catch (err) {
+      console.error("Error sync catalog item:", err);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleRemoveTest = (indexToRemove: number) => {
-    setTests(tests.filter((_, idx) => idx !== indexToRemove));
+  const handleRemoveTest = async (indexToRemove: number) => {
+    if (!labId) return;
+    const updatedTests = tests.filter((_, idx) => idx !== indexToRemove);
+    
+    setSaving(true);
+    try {
+      await supabase
+        .from('labs')
+        .update({ tests: updatedTests })
+        .eq('id', labId);
+      
+      setTests(updatedTests);
+      showToast("Test removed from catalog.");
+    } catch (err) {
+      console.error("Error dropping catalog item:", err);
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) {
@@ -116,7 +166,7 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <RefreshCw className="w-6 h-6 animate-spin text-indigo-600" />
-          <span className="text-xs font-medium text-slate-500 tracking-wide">Loading configuration...</span>
+          <span className="text-xs font-medium text-slate-500 tracking-wide">Loading configurations...</span>
         </div>
       </div>
     );
@@ -126,15 +176,15 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
     <div className="min-h-screen bg-slate-50 text-slate-900 antialiased selection:bg-indigo-100">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         
-        {/* Banner Alert Notification */}
+        {/* Toast Alert */}
         {successMessage && (
-          <div className="fixed bottom-6 right-6 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 border border-slate-800 animate-in fade-in slide-in-from-bottom-4 duration-300 z-50">
+          <div className="fixed bottom-6 right-6 bg-slate-950 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 border border-slate-800 animate-in fade-in slide-in-from-bottom-4 z-50">
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
             <span className="text-xs font-medium">{successMessage}</span>
           </div>
         )}
 
-        {/* Header Action Row */}
+        {/* Top Header Navigation Row */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-8 mb-8 border-b border-slate-200">
           <div className="flex items-center gap-4">
             <button 
@@ -146,165 +196,93 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
             <div>
               <div className="flex items-center gap-2">
                 <SettingsIcon className="w-5 h-5 text-indigo-600" />
-                <h1 className="text-xl font-semibold tracking-tight text-slate-900">Lab Settings</h1>
+                <h1 className="text-xl font-semibold tracking-tight text-slate-900">Lab Control Center</h1>
               </div>
-              <p className="text-xs text-slate-500 mt-0.5">Manage your clinic identity, branding configurations, and test offering catalog.</p>
+              <p className="text-xs text-slate-500 mt-0.5">Configure system infrastructure credentials, identities, and public catalogs.</p>
             </div>
           </div>
           <div className="self-start sm:self-center text-xs bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5 border border-emerald-200/60">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Core Engine Operational
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Secured System Active
           </div>
         </div>
 
+        {/* Two-Column Overview Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
           
-          {/* Main Controls Configuration Form */}
-          <div className="lg:col-span-2 space-y-8">
-            <form onSubmit={handleSaveProfile} className="space-y-8">
-              
-              {/* Profile Card */}
-              <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-6">
+          {/* Main Dashboard Display Cards */}
+          <div className="lg:col-span-2 space-y-6">
+            
+            {/* Identity Card Profile */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 bg-slate-100 rounded-2xl border border-slate-200 flex items-center justify-center overflow-hidden shrink-0">
+                  {logoUrl ? (
+                    <img src={logoUrl} alt="Logo" className="w-full h-full object-cover" />
+                  ) : (
+                    <Building2 className="w-6 h-6 text-slate-400" />
+                  )}
+                </div>
                 <div>
-                  <h2 className="text-sm font-semibold text-slate-900">Lab Identity</h2>
-                  <p className="text-xs text-slate-500 mt-0.5">Update public-facing info used on checkout panels and invoices.</p>
-                </div>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-2">Display Name</label>
-                    <div className="relative">
-                      <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                      <input
-                        type="text"
-                        required
-                        value={labName}
-                        onChange={(e) => setLabName(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50/50 text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition"
-                        placeholder="e.g., Apex Diagnostic Labs"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-2">Branding Brand Logo URL</label>
-                    <div className="relative">
-                      <Upload className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                      <input
-                        type="url"
-                        value={logoUrl}
-                        onChange={(e) => setLogoUrl(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50/50 text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition font-mono text-xs"
-                        placeholder="https://yourdomain.com/assets/logo.png"
-                      />
-                    </div>
-                  </div>
+                  <h2 className="text-sm font-semibold text-slate-900">{labName || 'No Name Set'}</h2>
+                  <p className="text-xs text-slate-400 font-mono mt-0.5 truncate max-w-[280px] sm:max-w-md">
+                    {logoUrl ? 'Custom Brand Logo Linked' : 'No custom branding path provided'}
+                  </p>
                 </div>
               </div>
+              <button
+                onClick={openBrandModal}
+                className="w-full sm:w-auto px-4 py-2 text-xs border border-slate-200 hover:border-slate-300 rounded-xl font-medium transition flex items-center justify-center gap-2 hover:bg-slate-50 text-slate-700 shadow-sm"
+              >
+                <Edit3 className="w-3.5 h-3.5" /> Edit Identity
+              </button>
+            </div>
 
-              {/* Dynamic Catalog Section */}
-              <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-sm font-semibold text-slate-900">Test Inventory & Rates</h2>
-                    <p className="text-xs text-slate-500 mt-0.5">Configure available panel runs mapping to patient checkouts.</p>
-                  </div>
-                  <span className="text-[11px] bg-indigo-50 text-indigo-700 font-semibold px-2.5 py-1 rounded-full border border-indigo-100">
-                    {tests.length} Active {tests.length === 1 ? 'Test' : 'Tests'}
-                  </span>
+            {/* Inventory Overview Card */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">Assigned Catalog Inventory</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Active diagnostic runs exposed to the front checkout interface.</p>
                 </div>
-
-                <div className="bg-slate-50 rounded-xl p-3 border border-slate-200/60 flex flex-col sm:flex-row gap-2">
-                  <div className="relative flex-1">
-                    <ListPlus className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input
-                      type="text"
-                      value={newTestName}
-                      onChange={(e) => setNewTestName(e.target.value)}
-                      placeholder="Test name (e.g., Complete Blood Count)"
-                      className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 bg-white rounded-lg focus:outline-none focus:border-indigo-500 transition"
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <div className="relative w-28">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400">₹</span>
-                      <input
-                        type="number"
-                        value={newTestPrice}
-                        onChange={(e) => setNewTestPrice(e.target.value)}
-                        placeholder="0.00"
-                        className="w-full pl-6 pr-3 py-2 text-xs border border-slate-200 bg-white rounded-lg focus:outline-none focus:border-indigo-500 transition font-mono"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleAddTest}
-                      className="px-4 py-2 bg-slate-900 text-white rounded-lg text-xs font-semibold hover:bg-slate-800 transition shadow-sm flex items-center justify-center gap-1 shrink-0"
-                    >
-                      <Plus className="w-3.5 h-3.5" /> Add
-                    </button>
-                  </div>
-                </div>
-
-                {/* Listing Grid Layout */}
-                <div className="border border-slate-200/60 rounded-xl divide-y divide-slate-100 overflow-hidden bg-white max-h-64 overflow-y-auto">
-                  {tests.length === 0 ? (
-                    <div className="text-center py-8">
-                      <Info className="w-4 h-4 text-slate-400 mx-auto mb-1.5" />
-                      <p className="text-xs text-slate-400 italic">No assigned entries compiled in catalog roster yet.</p>
-                    </div>
-                  ) : (
-                    tests.map((test, index) => (
-                      <div key={index} className="px-4 py-3 flex items-center justify-between hover:bg-slate-50/60 transition group">
-                        <span className="text-xs font-medium text-slate-700">{test.name}</span>
-                        <div className="flex items-center gap-4">
-                          <span className="font-mono text-xs font-bold text-slate-600 bg-slate-100/80 px-2 py-0.5 rounded border border-slate-200/40">₹{test.price}</span>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveTest(index)}
-                            className="text-slate-400 hover:text-rose-600 p-1 hover:bg-rose-50 rounded transition"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* Bottom Sticky Action Footer Row Container */}
-              <div className="flex justify-end pt-2">
                 <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white font-medium text-xs rounded-xl shadow-md hover:bg-indigo-700 transition disabled:opacity-50 font-semibold"
+                  onClick={openCatalogModal}
+                  className="px-4 py-2 text-xs bg-slate-900 text-white hover:bg-slate-800 rounded-xl font-semibold transition flex items-center gap-2 shadow-sm"
                 >
-                  {saving ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      Updating Configurations...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-3.5 h-3.5" />
-                      Save Configurations
-                    </>
-                  )}
+                  <ListPlus className="w-3.5 h-3.5" /> Manage Catalog
                 </button>
               </div>
-            </form>
+
+              {/* Read Only Compact Summary View */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-1">
+                {tests.length === 0 ? (
+                  <div className="sm:col-span-2 text-center py-8 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                    <Info className="w-4 h-4 text-slate-400 mx-auto mb-1.5" />
+                    <p className="text-xs text-slate-400 italic">No assigned entries found in your database records.</p>
+                  </div>
+                ) : (
+                  tests.map((test, index) => (
+                    <div key={index} className="px-4 py-3 bg-slate-50/60 rounded-xl border border-slate-200/50 flex items-center justify-between">
+                      <span className="text-xs font-medium text-slate-700 truncate max-w-[160px]">{test.name}</span>
+                      <span className="font-mono text-xs font-bold text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded">
+                        ₹{test.price}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
           </div>
 
-          {/* Realtime Live Preview Box Frame */}
+          {/* Right Column Realtime Live Preview Viewport */}
           <div className="space-y-6 lg:sticky lg:top-8">
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
               <div>
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Live Form Context</h3>
-                <p className="text-[11px] text-slate-500 mt-0.5">How your lab appears to incoming patients online.</p>
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Live Viewport Preview</h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">Real-time mapping parameters mirrored to public checkouts.</p>
               </div>
               
-              <div className="border border-slate-200/80 rounded-xl overflow-hidden bg-slate-50/50 p-4">
-                {/* Client Side Form Component Simulation Structure Header Block */}
+              <div className="border border-slate-200/80 rounded-xl bg-slate-50/50 p-4">
                 <div className="bg-white rounded-xl border border-slate-200/60 p-4 shadow-sm flex items-center gap-3">
                   <div className="w-9 h-9 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
                     {logoUrl ? (
@@ -314,7 +292,7 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
                     )}
                   </div>
                   <div className="truncate flex-1">
-                    <p className="text-xs font-bold text-slate-800 truncate">{labName || 'Untitled Partner Lab'}</p>
+                    <p className="text-xs font-bold text-slate-800 truncate">{labName || 'Untitled Clinic Endpoint'}</p>
                     <p className="text-[10px] text-emerald-600 font-medium flex items-center gap-1 mt-0.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
                       Accepting Bookings
@@ -322,26 +300,182 @@ export default function Settings({ onBack, onLabUpdated }: SettingsProps) {
                   </div>
                 </div>
                 
-                {/* Simulated Interactive Core Fields Form Selection Content Context Box */}
                 <div className="mt-4 bg-white rounded-xl border border-slate-200/60 p-4 space-y-3">
                   <div>
                     <div className="h-1.5 w-12 bg-slate-200 rounded mb-1.5"></div>
                     <div className="h-8 w-full bg-slate-50 border border-slate-200/60 rounded-lg flex items-center px-3 justify-between text-[11px] text-slate-400 font-medium">
-                      <span>Select requested analysis panel...</span>
+                      <span>Select target diagnostic run...</span>
                       <span className="text-[9px] text-slate-400">▼</span>
                     </div>
                   </div>
-                  <div className="h-8 w-full bg-indigo-600 rounded-lg flex items-center justify-center text-[11px] font-semibold text-white shadow-sm shadow-indigo-600/10">
-                    Proceed to Scheduling
+                  <div className="h-8 w-full bg-indigo-600 rounded-lg flex items-center justify-center text-[11px] font-semibold text-white shadow-sm">
+                    Proceed to Booking
                   </div>
                 </div>
               </div>
-              <p className="text-[10px] text-slate-400 text-center italic">Form previews rendering configurations engine alterations natively.</p>
             </div>
           </div>
 
         </div>
       </div>
+
+      {/* ================= MODAL OVERLAYS BACKDROP COMPONENTS ================= */}
+      {activeModal !== 'none' && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          
+          {/* Identity Update Modal Configuration Card */}
+          {activeModal === 'brand' && (
+            <div className="bg-white w-full max-w-md rounded-2xl border border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">Update Profile Context</h3>
+                  <p className="text-[11px] text-slate-500">Modify legal name declarations and graphic assets.</p>
+                </div>
+                <button onClick={closeModal} className="p-1 hover:bg-slate-200/60 rounded-lg text-slate-400 hover:text-slate-600 transition">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <form onSubmit={handleSaveBrand}>
+                <div className="p-6 space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-2">Display Name</label>
+                    <div className="relative">
+                      <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="text"
+                        required
+                        value={tempLabName}
+                        onChange={(e) => setTempLabName(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:border-indigo-500 transition text-slate-900"
+                        placeholder="e.g., City Diagnostic Center"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-2">Brand Graphic Asset URL</label>
+                    <div className="relative">
+                      <Upload className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="url"
+                        value={tempLogoUrl}
+                        onChange={(e) => setTempLogoUrl(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:border-indigo-500 transition font-mono text-xs text-slate-900"
+                        placeholder="https://example.com/logo.png"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="px-6 py-3.5 border-t border-slate-100 bg-slate-50 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="px-4 py-2 text-xs border border-slate-200 rounded-xl font-medium hover:bg-white text-slate-600 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="px-4 py-2 text-xs bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    {saving ? <RefreshCw className="w-3 h-3 animate-spin" /> : null}
+                    Save Properties
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Test Catalog Management Full Sheet Overlay Modal Context */}
+          {activeModal === 'catalog' && (
+            <div className="bg-white w-full max-w-lg rounded-2xl border border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">Manage Diagnostics Catalog</h3>
+                  <p className="text-[11px] text-slate-500">Inject or terminate test profiles real-time into database layers.</p>
+                </div>
+                <button onClick={closeModal} className="p-1 hover:bg-slate-200/60 rounded-lg text-slate-400 hover:text-slate-600 transition">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              
+              <div className="p-6 space-y-4">
+                {/* Embedded Inline Injector Input Block Form */}
+                <div className="bg-slate-50 rounded-xl p-3 border border-slate-200/60 flex flex-col sm:flex-row gap-2">
+                  <div className="relative flex-1">
+                    <ListPlus className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      value={newTestName}
+                      onChange={(e) => setNewTestName(e.target.value)}
+                      placeholder="e.g., Liver Function Test (LFT)"
+                      className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 bg-white rounded-lg focus:outline-none focus:border-indigo-500 text-slate-900"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="relative w-24">
+                      <Coins className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                      <input
+                        type="number"
+                        value={newTestPrice}
+                        onChange={(e) => setNewTestPrice(e.target.value)}
+                        placeholder="Rate"
+                        className="w-full pl-8 pr-2 py-2 text-xs border border-slate-200 bg-white rounded-lg focus:outline-none focus:border-indigo-500 text-slate-900 font-mono"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={handleAddTest}
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 transition flex items-center gap-1 disabled:opacity-50 shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Add
+                    </button>
+                  </div>
+                </div>
+
+                {/* Modals Scrollable Dynamic Entries Listing Block Viewport */}
+                <div className="border border-slate-200/60 rounded-xl divide-y divide-slate-100 overflow-hidden bg-white max-h-60 overflow-y-auto">
+                  {tests.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Info className="w-4 h-4 text-slate-400 mx-auto mb-1.5" />
+                      <p className="text-xs text-slate-400 italic">No assigned entries compiled in catalog roster yet.</p>
+                    </div>
+                  ) : (
+                    tests.map((test, index) => (
+                      <div key={index} className="px-4 py-2.5 flex items-center justify-between hover:bg-slate-50/50 transition group">
+                        <span className="text-xs font-medium text-slate-700">{test.name}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="font-mono text-xs font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">₹{test.price}</span>
+                          <button
+                            type="button"
+                            disabled={saving}
+                            onClick={() => handleRemoveTest(index)}
+                            className="text-slate-400 hover:text-rose-600 p-1 hover:bg-rose-50 rounded transition disabled:opacity-50"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+              <div className="px-6 py-3.5 border-t border-slate-100 bg-slate-50 flex justify-end">
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="px-5 py-2 text-xs bg-slate-900 text-white rounded-xl font-medium hover:bg-slate-800 transition"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          )}
+
+        </div>
+      )}
     </div>
   );
 }
