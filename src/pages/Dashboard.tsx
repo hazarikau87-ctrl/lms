@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   FlaskConical, LogOut, Search, CalendarCheck, Clock, CheckCheck,
   Phone, FileText, Check, Trash2, ChevronLeft, ChevronRight,
-  MessageCircle, Building2, FileDown, CheckCircle2, RotateCw, Edit3, X, XCircle, Settings as SettingsIcon, LayoutDashboard, MapPin
+  MessageCircle, Building2, FileDown, CheckCircle2, RotateCw, Edit3, X, XCircle, Settings as SettingsIcon, LayoutDashboard, MapPin, Beaker
 } from 'lucide-react';
 import { supabase, Appointment, Lab } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -25,7 +25,8 @@ interface AppointmentRowProps {
   onUpdateRemarks: (id: number, remarks: string) => Promise<void>;
   onDelete: (id: number) => Promise<void>;
   onWhatsApp: (phone: string, type: string, item: any) => void;
-  onViewAddress: (item: any) => void; // Explicitly map modal dispatch context layer
+  onViewAddress: (item: any) => void; 
+  onViewTests: (item: any) => void; // Dispatches target element context window to the dynamic test modal
 }
 
 export default function Dashboard() {
@@ -47,8 +48,9 @@ export default function Dashboard() {
   const [endDate, setEndDate] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  // Address Modal State Target Window
+  // Modal State Control Windows
   const [selectedAddressItem, setSelectedAddressItem] = useState<any | null>(null);
+  const [selectedTestItem, setSelectedTestItem] = useState<any | null>(null);
 
   const fetchAll = useCallback(async () => {
     if (!user?.id) return;
@@ -266,6 +268,12 @@ export default function Dashboard() {
     generatePDF(toExport);
   };
 
+  // Helper parser handles separating multiple comma-joined tests cleanly inside the modal layout 
+  const parsedTests = useMemo(() => {
+    if (!selectedTestItem?.test) return [];
+    return selectedTestItem.test.split(',').map((t: string) => t.trim()).filter(Boolean);
+  }, [selectedTestItem]);
+
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-slate-50 via-slate-100 to-gray-200">
       <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6">
@@ -467,7 +475,6 @@ export default function Dashboard() {
                       <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Prescription</th>
                       <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Contact & WhatsApp</th>
                       <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Test / Schedule</th>
-                      {/* PLACED EXACTLY BETWEEN TEST/SCHEDULE AND REMARKS BY LAB */}
                       <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Address</th>
                       <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Remarks by lab</th>
                       <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Status</th>
@@ -498,6 +505,7 @@ export default function Dashboard() {
                         onDelete={deleteBooking} 
                         onWhatsApp={sendWhatsApp} 
                         onViewAddress={setSelectedAddressItem}
+                        onViewTests={setSelectedTestItem}
                       />
                     ))}
                   </tbody>
@@ -573,6 +581,73 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* DYNAMIC INVESTIGATION LISTS PORTAL MODAL */}
+      {selectedTestItem && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-[fadeIn_0.15s_ease-out]">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-xl max-w-md w-full overflow-hidden animate-[scaleUp_0.15s_ease-out]">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-2 text-indigo-700">
+                <Beaker className="w-4 h-4" />
+                <h3 className="font-bold text-gray-900 text-sm">Prescribed Investigations</h3>
+              </div>
+              <button 
+                onClick={() => setSelectedTestItem(null)}
+                className="p-1 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div className="flex justify-between items-start gap-4">
+                <div>
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-600 block mb-0.5">Patient Name</span>
+                  <p className="text-sm font-semibold text-gray-800">{selectedTestItem.name}</p>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-600 block mb-0.5">Booking ID</span>
+                  <p className="text-xs font-mono font-bold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded inline-block border border-indigo-100">{selectedTestItem.booking_id}</p>
+                </div>
+              </div>
+              
+              <hr className="border-gray-100" />
+
+              <div>
+                <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-600 block mb-2">
+                  Selected Test Profiles ({parsedTests.length})
+                </span>
+                <div className="max-h-60 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                  {parsedTests.length > 0 ? (
+                    parsedTests.map((testName, idx) => (
+                      <div 
+                        key={idx} 
+                        className="flex items-center gap-2.5 px-3 py-2 bg-slate-50 border border-gray-200/80 rounded-xl transition hover:bg-slate-100/70"
+                      >
+                        <div className="w-5 h-5 rounded-md bg-indigo-50 border border-indigo-100 flex items-center justify-center text-[10px] font-bold text-indigo-600 shadow-sm">
+                          {idx + 1}
+                        </div>
+                        <p className="text-xs font-semibold text-gray-700 truncate">{testName}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-xs text-gray-400 italic">No investigations specified mapping found.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-3.5 bg-gray-50/50 border-t border-gray-100 flex justify-end">
+              <button 
+                onClick={() => setSelectedTestItem(null)}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-xs shadow-md shadow-indigo-600/10 transition"
+              >
+                Dismiss View
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -597,7 +672,7 @@ function StatCard({ icon, iconBg, value, label, isActive, onClick }: { icon: Rea
   );
 }
 
-function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRemarks, onDelete, onWhatsApp, onViewAddress }: AppointmentRowProps) {
+function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRemarks, onDelete, onWhatsApp, onViewAddress, onViewTests }: AppointmentRowProps) {
   const isCompleted = item.status === 'Completed';
   const isCancelled = item.status === 'Cancelled';
   const [localRemarks, setLocalRemarks] = useState(item.remarks || '');
@@ -610,8 +685,13 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
     } 
   };
 
-  // Safe checks across variations of schema configurations
   const isHomeCollection = item.bookingType === 'home' || item.booking_type === 'home';
+
+  // Count how many tests are in the string to display on the action badge trigger
+  const totalTestCount = useMemo(() => {
+    if (!item.test) return 0;
+    return item.test.split(',').map((t: string) => t.trim()).filter(Boolean).length;
+  }, [item.test]);
 
   return (
     <tr className={`border-b border-gray-50 hover:bg-slate-50/50 transition-colors ${selected ? 'bg-blue-50/40' : ''}`}>
@@ -659,12 +739,20 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
           </button>
         </div>
       </td>
+      
+      {/* TEST / SCHEDULE PACKED MODAL PORTAL LINK CONTAINER */}
       <td className="px-4 py-4">
-        <p className="font-semibold text-gray-900 text-sm">{item.test}</p>
-        <p className="text-xs text-gray-400 mt-0.5 font-medium">{item.appointment_date} @ {item.time || 'N/A'}</p>
+        <button
+          type="button"
+          onClick={() => onViewTests(item)}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100/80 text-indigo-700 border border-indigo-200 shadow-sm rounded-lg text-xs font-semibold transition active:scale-[0.97]"
+        >
+          <Beaker className="w-3.5 h-3.5 text-indigo-600" /> 
+          View Investigations {totalTestCount > 1 ? `(${totalTestCount})` : ''}
+        </button>
+        <p className="text-xs text-gray-400 mt-1 font-medium">{item.appointment_date} @ {item.time || 'N/A'}</p>
       </td>
       
-      {/* PLACED EXACTLY BETWEEN TEST/SCHEDULE AND REMARKS BY LAB */}
       <td className="px-4 py-4">
         {isHomeCollection ? (
           <button
