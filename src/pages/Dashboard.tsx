@@ -546,7 +546,7 @@ export default function Dashboard() {
               <div>
                 <span className="text-[10px] uppercase font-bold tracking-wider text-blue-600 block mb-1">Full Address</span>
                 <p className="text-sm text-gray-700 leading-relaxed bg-gray-50 p-3 rounded-xl border border-gray-200 font-medium">
-                  {selectedAddressItem.addressLine || selectedAddressItem.address || 'No address profile mapping stored.'}
+                  {selectedAddressItem.address_line || selectedAddressItem.address || 'No address profile mapping stored.'}
                 </p>
               </div>
 
