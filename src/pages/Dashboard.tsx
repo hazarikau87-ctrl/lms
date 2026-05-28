@@ -275,33 +275,33 @@ export default function Dashboard() {
   }, [selectedTestItem]);
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-slate-50 via-slate-100 to-gray-200">
-      <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6">
+    <div className="min-h-screen bg-slate-50 text-slate-900 selection:bg-blue-500 selection:text-white antialiased">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         {/* Header */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-[0_2px_10px_-3px_rgba(0,0,0,0.07)] px-6 py-4 mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm px-6 py-4 mb-8 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-md shadow-blue-600/20 flex-shrink-0">
+              <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-sm shadow-blue-600/10 flex-shrink-0">
                 <FlaskConical className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h1 className="text-lg font-bold text-gray-900" style={{ fontFamily: 'Poppins, sans-serif' }}> LabOps Scheduler</h1>
-                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Powered by Zebnox</p>
+                <h1 className="text-base font-bold tracking-tight text-slate-900">LabOps Scheduler</h1>
+                <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wider">Powered by Zebnox</p>
               </div>
             </div>
 
-            <div className="w-px h-9 bg-gray-200 hidden sm:block" />
+            <div className="w-px h-8 bg-slate-200 hidden sm:block" />
 
-            <div className="flex items-center gap-2.5 bg-slate-50 border border-gray-200 shadow-inner rounded-full px-3 py-1.5">
-              <div className="w-7 h-7 rounded-full border border-gray-200 bg-white overflow-hidden flex items-center justify-center flex-shrink-0">
+            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/60 rounded-full px-3 py-1">
+              <div className="w-5 h-5 rounded-full border border-slate-200 bg-white overflow-hidden flex items-center justify-center flex-shrink-0">
                 {lab?.logo_url ? (
                   <img src={lab.logo_url} alt="lab logo" className="w-full h-full object-cover" />
                 ) : (
-                  <Building2 className="w-3.5 h-3.5 text-gray-400" />
+                  <Building2 className="w-3 text-slate-400" />
                 )}
               </div>
-              <span className="text-sm font-semibold text-gray-800">
+              <span className="text-xs font-semibold text-slate-700">
                 {loading ? 'Loading...' : (lab?.lab_name || 'Partner Lab')}
               </span>
             </div>
@@ -311,53 +311,53 @@ export default function Dashboard() {
             {currentView === 'dashboard' ? (
               <button 
                 onClick={() => setCurrentView('settings')} 
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 shadow-sm bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:text-blue-600 transition"
+                className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
               >
-                <SettingsIcon className="w-4 h-4" />
+                <SettingsIcon className="w-3.5 h-3.5" />
                 Settings
               </button>
             ) : (
               <button 
                 onClick={() => setCurrentView('dashboard')} 
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 shadow-sm bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:text-blue-600 transition"
+                className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
               >
-                <LayoutDashboard className="w-4 h-4" />
+                <LayoutDashboard className="w-3.5 h-3.5" />
                 Dashboard
               </button>
             )}
 
             {currentView === 'dashboard' && (
               <>
-                <div className="relative flex items-center gap-2 bg-gray-50 border border-gray-200 shadow-sm rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-blue-500 transition-all">
-                  <CalendarCheck className="w-4 h-4 text-gray-400" />
+                <div className="relative flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-all">
+                  <CalendarCheck className="w-3.5 h-3.5 text-slate-400" />
                   <input 
                     type="date"
                     value={selectedDate}
                     onChange={(e) => { setSelectedDate(e.target.value); setCurrentPage(1); }}
-                    className="bg-transparent border-none text-xs text-gray-900 focus:ring-0 p-0 outline-none cursor-pointer"
+                    className="bg-transparent border-none text-xs font-medium text-slate-700 focus:ring-0 p-0 outline-none cursor-pointer"
                   />
                   {selectedDate && (
-                    <button onClick={() => { setSelectedDate(''); setCurrentPage(1); }} className="p-0.5 hover:bg-gray-200 rounded-full">
-                      <X className="w-3 h-3 text-gray-400" />
+                    <button onClick={() => { setSelectedDate(''); setCurrentPage(1); }} className="p-0.5 hover:bg-slate-200 rounded-full">
+                      <X className="w-3 h-3 text-slate-400" />
                     </button>
                   )}
                 </div>
 
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                   <input
                     type="text"
                     value={search}
                     onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
-                    placeholder="Search ID or Name..."
-                    className="pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 shadow-sm bg-gray-50 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-56 transition"
+                    placeholder="Search ID or patient..."
+                    className="pl-9 pr-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 w-48 transition"
                   />
                 </div>
               </>
             )}
             
-            <button onClick={signOut} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 shadow-sm bg-white text-sm font-semibold text-red-500 hover:bg-red-50 hover:border-red-200 transition">
-              <LogOut className="w-4 h-4" />
+            <button onClick={signOut} className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-red-200 bg-white text-xs font-semibold text-red-600 hover:bg-red-50/60 transition">
+              <LogOut className="w-3.5 h-3.5" />
               Logout
             </button>
           </div>
@@ -371,34 +371,34 @@ export default function Dashboard() {
         ) : (
           <>
             {/* Clickable Stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
               <StatCard 
-                icon={<CalendarCheck className="w-5 h-5 text-sky-600" />} 
-                iconBg="bg-sky-50" 
+                icon={<CalendarCheck className="w-4 h-4 text-blue-600" />} 
+                iconBg="bg-blue-50" 
                 value={stats.total} 
-                label={selectedDate ? `Appointments on ${selectedDate}` : "Total Appointments"} 
+                label={selectedDate ? `Booked on ${selectedDate}` : "Total Bookings"} 
                 isActive={statusFilter === 'all'}
                 onClick={() => handleStatusFilterClick('all')}
               />
               <StatCard 
-                icon={<Clock className="w-5 h-5 text-amber-600" />} 
+                icon={<Clock className="w-4 h-4 text-amber-600" />} 
                 iconBg="bg-amber-50" 
                 value={stats.pending} 
-                label="Pending Tests" 
+                label="Pending Requests" 
                 isActive={statusFilter === 'pending'}
                 onClick={() => handleStatusFilterClick('pending')}
               />
               <StatCard 
-                icon={<CheckCheck className="w-5 h-5 text-emerald-600" />} 
+                icon={<CheckCheck className="w-4 h-4 text-emerald-600" />} 
                 iconBg="bg-emerald-50" 
                 value={stats.completed} 
-                label="Completed" 
+                label="Completed Tests" 
                 isActive={statusFilter === 'completed'}
                 onClick={() => handleStatusFilterClick('completed')}
               />
               <StatCard 
-                icon={<XCircle className="w-5 h-5 text-red-600" />} 
-                iconBg="bg-red-50" 
+                icon={<XCircle className="w-4 h-4 text-rose-600" />} 
+                iconBg="bg-rose-50" 
                 value={stats.cancelled} 
                 label="Cancelled" 
                 isActive={statusFilter === 'cancelled'}
@@ -408,87 +408,91 @@ export default function Dashboard() {
 
             {/* Bulk Actions */}
             {selectedIds.size > 0 && (
-              <div className="bg-blue-50 border border-blue-200 shadow-md rounded-xl px-5 py-3 mb-5 flex flex-wrap items-center justify-between gap-3 animate-[slideDown_0.25s_ease]">
-                <span className="text-sm font-semibold text-blue-700">{selectedIds.size} Selected</span>
-                <div className="flex flex-wrap gap-2">
-                  <button onClick={() => bulkUpdateStatus('Completed')} className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-emerald-700 border border-emerald-200 shadow-sm rounded-lg text-xs font-semibold hover:bg-emerald-100 transition"><CheckCircle2 className="w-3.5 h-3.5" /> Mark Done</button>
-                  <button onClick={() => bulkUpdateStatus('Cancelled')} className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-red-600 border border-red-200 shadow-sm rounded-lg text-xs font-semibold hover:bg-red-100 transition"><XCircle className="w-3.5 h-3.5" /> Cancel Selected</button>
-                  <button onClick={bulkDelete} className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-red-700 border border-red-200 shadow-sm rounded-lg text-xs font-semibold hover:bg-red-100 transition"><Trash2 className="w-3.5 h-3.5" /> Delete</button>
-                  <button onClick={exportToPDF} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white border border-blue-700 shadow-sm rounded-lg text-xs font-semibold hover:bg-blue-700 transition"><FileDown className="w-3.5 h-3.5" /> Export PDF</button>
+              <div className="bg-slate-950 border border-slate-900 shadow-xl rounded-xl px-4 py-2.5 mb-6 flex items-center justify-between gap-3 animate-[slideDown_0.2s_ease] text-white">
+                <span className="text-xs font-semibold tracking-wide text-slate-300">{selectedIds.size} records selected</span>
+                <div className="flex gap-2">
+                  <button onClick={() => bulkUpdateStatus('Completed')} className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-medium transition"><CheckCircle2 className="w-3.5 h-3.5" /> Complete</button>
+                  <button onClick={() => bulkUpdateStatus('Cancelled')} className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition"><XCircle className="w-3.5 h-3.5" /> Cancel</button>
+                  <button onClick={bulkDelete} className="flex items-center gap-1 px-2.5 py-1.5 bg-red-950/40 border border-red-900 hover:bg-red-900 text-red-200 rounded-lg text-xs font-medium transition"><Trash2 className="w-3.5 h-3.5" /> Delete</button>
+                  <button onClick={exportToPDF} className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition"><FileDown className="w-3.5 h-3.5" /> Export Report</button>
                 </div>
               </div>
             )}
 
-            {/* Table Card */}
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-[0_4px_20px_-5px_rgba(0,0,0,0.1)] overflow-hidden">
-              <div className="flex items-center gap-2 px-6 py-3 border-b border-gray-100 bg-gray-50/50">
-                <input type="checkbox" checked={isAllPageSelected} onChange={e => toggleSelectAll(e.target.checked)} className="w-4 h-4 accent-blue-600 cursor-pointer rounded border-gray-300 shadow-sm" />
-                <label className="text-xs font-medium text-gray-500 cursor-pointer select-none">Select all on this page</label>
-                
-                {statusFilter !== 'all' && (
-                  <span className="ml-4 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100 flex items-center gap-1">
-                    Filter: {statusFilter}
-                    <button onClick={() => setStatusFilter('all')} className="hover:text-blue-900 ml-1 font-bold">×</button>
-                  </span>
-                )}
+            {/* Premium Table Component Layout */}
+            <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
+              <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b border-slate-100 bg-slate-50/70">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center h-5">
+                    <input type="checkbox" checked={isAllPageSelected} onChange={e => toggleSelectAll(e.target.checked)} className="w-4 h-4 border-slate-300 rounded text-blue-600 focus:ring-blue-500/20 cursor-pointer" />
+                  </div>
+                  <label className="text-xs font-semibold text-slate-500 select-none">Select Page Records</label>
+                  
+                  {statusFilter !== 'all' && (
+                    <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-100 flex items-center gap-1 ml-2 capitalize">
+                      {statusFilter}
+                      <button onClick={() => setStatusFilter('all')} className="hover:text-blue-900 ml-0.5 font-bold">×</button>
+                    </span>
+                  )}
+                </div>
 
-                <div className="ml-auto flex items-center gap-2">
-                  <button onClick={fetchAll} title="Refresh data" className={`flex items-center justify-center p-1.5 text-gray-500 border border-gray-200 bg-white shadow-sm rounded-lg hover:text-blue-600 hover:border-blue-200 transition-all ${loading ? 'opacity-50' : ''}`} disabled={loading}>
+                <div className="flex items-center gap-2">
+                  <button onClick={fetchAll} title="Refresh data" className={`flex items-center justify-center p-2 text-slate-500 border border-slate-200 bg-white rounded-xl hover:bg-slate-50 transition ${loading ? 'opacity-50' : ''}`} disabled={loading}>
                     <RotateCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
                   </button>
 
-                  <div className="relative flex items-center gap-2">
+                  <div className="relative">
                     {!showDatePicker ? (
-                      <button onClick={() => setShowDatePicker(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-600 border border-gray-200 bg-white shadow-sm rounded-lg hover:text-blue-600 hover:border-blue-200 transition">
-                        <CalendarCheck className="w-3.5 h-3.5" /> Bulk Action (Range)
+                      <button onClick={() => setShowDatePicker(true)} className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-600 border border-slate-200 bg-white rounded-xl hover:bg-slate-50 transition">
+                        <CalendarCheck className="w-3.5 h-3.5 text-slate-400" /> Range Report
                       </button>
                     ) : (
-                      <div className="flex items-center gap-2 bg-white border border-blue-200 p-1.5 rounded-lg shadow-md">
-                        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="text-xs border-none bg-gray-50 rounded-md focus:ring-0 text-gray-700 p-1 shadow-inner" />
-                        <span className="text-[10px] text-gray-400 font-bold">TO</span>
-                        <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="text-xs border-none bg-gray-50 rounded-md focus:ring-0 text-gray-700 p-1 shadow-inner" />
+                      <div className="flex items-center gap-2 bg-white border border-slate-200 p-1 rounded-xl shadow-sm z-10">
+                        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="text-xs border-none bg-slate-50 rounded-lg focus:ring-0 text-slate-700 p-1.5" />
+                        <span className="text-[10px] text-slate-400 font-bold">TO</span>
+                        <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="text-xs border-none bg-slate-50 rounded-lg focus:ring-0 text-slate-700 p-1.5" />
                         {startDate && endDate && (
-                          <div className="flex items-center border-l ml-1 pl-1 gap-1">
-                            <button onClick={exportByRange} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition"><FileDown className="w-3.5 h-3.5" /></button>
-                            <button onClick={deleteByRange} className="p-1.5 text-red-500 hover:bg-red-50 rounded-md transition"><Trash2 className="w-3.5 h-3.5" /></button>
+                          <div className="flex items-center border-l border-slate-200 pl-1 gap-0.5">
+                            <button onClick={exportByRange} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"><FileDown className="w-3.5 h-3.5" /></button>
+                            <button onClick={deleteByRange} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-3.5 h-3.5" /></button>
                           </div>
                         )}
-                        <button onClick={() => { setShowDatePicker(false); setStartDate(''); setEndDate(''); }} className="p-1.5 text-gray-400 hover:text-gray-600 border-l ml-1"><Check className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => { setShowDatePicker(false); setStartDate(''); setEndDate(''); }} className="p-1.5 text-slate-400 hover:text-slate-600 border-l border-slate-200 ml-1"><Check className="w-3.5 h-3.5" /></button>
                       </div>
                     )}
                   </div>
-                  <button onClick={exportToPDF} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-600 border border-gray-200 bg-white shadow-sm rounded-lg hover:text-blue-600 hover:border-blue-200 transition">
-                    <FileDown className="w-3.5 h-3.5" /> Export All PDF
+                  <button onClick={exportToPDF} className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-600 border border-slate-200 bg-white rounded-xl hover:bg-slate-50 transition">
+                    <FileDown className="w-3.5 h-3.5 text-slate-400" /> Export All PDF
                   </button>
                 </div>
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[1250px]">
+                <table className="w-full min-w-[1200px] table-fixed">
                   <thead>
-                    <tr className="border-b-2 border-slate-100">
-                      <th className="w-10 px-4 py-3"></th>
-                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Booking ID</th>
-                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Patient</th>
-                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Prescription</th>
-                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Contact & WhatsApp</th>
-                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Test / Schedule</th>
-                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Address</th>
-                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Remarks by lab</th>
-                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Status</th>
-                      <th className="px-4 py-3 text-right text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Actions</th>
+                    <tr className="border-b border-slate-100 bg-slate-50/40 text-slate-400">
+                      <th className="w-12 px-6 py-3"></th>
+                      <th className="w-32 px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Booking ID</th>
+                      <th className="w-56 px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Patient Details</th>
+                      <th className="w-32 px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Prescription</th>
+                      <th className="w-48 px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Contact Profile</th>
+                      <th className="w-56 px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Diagnostics / Schedule</th>
+                      <th className="w-40 px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Fulfillment Address</th>
+                      <th className="w-48 px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Internal Remarks</th>
+                      <th className="w-32 px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Status</th>
+                      <th className="w-36 pr-6 pl-4 py-3.5 text-right text-[11px] font-bold uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
                     {loading ? (
-                      <tr><td colSpan={10} className="py-16 text-center"><RotateCw className="w-6 h-6 animate-spin mx-auto text-blue-500" /></td></tr>
+                      <tr><td colSpan={10} className="py-24 text-center"><RotateCw className="w-6 h-6 animate-spin mx-auto text-blue-500" /></td></tr>
                     ) : paginated.length === 0 ? (
                       <tr>
-                        <td colSpan={10} className="py-20 text-center text-gray-400">
-                          <div className="flex flex-col items-center gap-2">
-                            <Search className="w-10 h-10 opacity-10 mb-2" />
-                            <p className="text-sm font-medium">No appointment found.</p>
-                            <p className="text-xs">{selectedDate ? `Nothing scheduled for ${selectedDate}` : "Try adjusting your filters or search query."}</p>
+                        <td colSpan={10} className="py-24 text-center text-slate-400">
+                          <div className="flex flex-col items-center gap-2 max-w-sm mx-auto">
+                            <Search className="w-8 h-8 text-slate-300 mb-1" />
+                            <p className="text-sm font-semibold text-slate-800">No matching appointments</p>
+                            <p className="text-xs text-slate-400">{selectedDate ? `No scheduled workflows found on ${selectedDate}` : "Try updating your parameters or filters."}</p>
                           </div>
                         </td>
                       </tr>
@@ -510,10 +514,13 @@ export default function Dashboard() {
                 </table>
               </div>
 
-              <div className="flex items-center justify-center gap-4 px-6 py-4 border-t border-gray-100 bg-gray-50/30">
-                <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 bg-white shadow-sm rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition"><ChevronLeft className="w-4 h-4" /> Prev</button>
-                <span className="text-sm font-medium text-gray-600">Page {currentPage} of {totalPages}</span>
-                <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 bg-white shadow-sm rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition">Next <ChevronRight className="w-4 h-4" /></button>
+              <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+                <p className="text-xs font-medium text-slate-500">Showing rows {Math.min(filtered.length, (currentPage - 1) * RECORDS_PER_PAGE + 1)}-{Math.min(filtered.length, currentPage * RECORDS_PER_PAGE)} of {filtered.length}</p>
+                <div className="flex items-center gap-2">
+                  <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="flex items-center gap-1 px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"><ChevronLeft className="w-4 h-4" /> Prev</button>
+                  <span className="text-xs font-bold text-slate-700 px-2">Page {currentPage} of {totalPages}</span>
+                  <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="flex items-center gap-1 px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition">Next <ChevronRight className="w-4 h-4" /></button>
+                </div>
               </div>
             </div>
           </>
@@ -522,58 +529,58 @@ export default function Dashboard() {
 
       {/* DYNAMIC VIEW ADDRESS PORTAL WINDOW */}
       {selectedAddressItem && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-[fadeIn_0.15s_ease-out]">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-xl max-w-md w-full overflow-hidden animate-[scaleUp_0.15s_ease-out]">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-slate-50">
-              <div className="flex items-center gap-2 text-blue-700">
-                <MapPin className="w-4 h-4" />
-                <h3 className="font-bold text-gray-900 text-sm">Patient Collection Address</h3>
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-[fadeIn_0.1s_ease-out]">
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-xl max-w-md w-full overflow-hidden animate-[scaleUp_0.1s_ease-out]">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-2 text-slate-800">
+                <MapPin className="w-4 h-4 text-blue-500" />
+                <h3 className="font-bold text-sm">Logistics Address Details</h3>
               </div>
               <button 
                 onClick={() => setSelectedAddressItem(null)}
-                className="p-1 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition"
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
             
-            <div className="p-6 space-y-4">
+            <div className="p-5 space-y-4">
               <div>
-                <span className="text-[10px] uppercase font-bold tracking-wider text-blue-600 block mb-0.5">Patient Name</span>
-                <p className="text-sm font-semibold text-gray-800">{selectedAddressItem.name}</p>
+                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-0.5">Patient Account</span>
+                <p className="text-sm font-semibold text-slate-900">{selectedAddressItem.name}</p>
               </div>
               <div>
-                <span className="text-[10px] uppercase font-bold tracking-wider text-blue-600 block mb-0.5">Booking ID</span>
+                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-0.5">ID Mapping</span>
                 <p className="text-xs font-mono font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded inline-block">{selectedAddressItem.booking_id}</p>
               </div>
               
-              <hr className="border-gray-100" />
+              <hr className="border-slate-100" />
 
               <div>
-                <span className="text-[10px] uppercase font-bold tracking-wider text-blue-600 block mb-1">Full Address</span>
-                <p className="text-sm text-gray-700 leading-relaxed bg-gray-50 p-3 rounded-xl border border-gray-200 font-medium">
-                  {selectedAddressItem.address_line || selectedAddressItem.address || 'No address profile mapping stored.'}
+                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-1">Destination Address</span>
+                <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100 font-medium">
+                  {selectedAddressItem.address_line || selectedAddressItem.address || 'No location schema configuration detected.'}
                 </p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-blue-600 block mb-0.5">Pincode</span>
-                  <p className="text-sm font-semibold text-gray-800">{selectedAddressItem.pincode || 'N/A'}</p>
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-0.5">Postal Zip Code</span>
+                  <p className="text-xs font-semibold text-slate-900">{selectedAddressItem.pincode || 'N/A'}</p>
                 </div>
                 <div>
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-blue-600 block mb-0.5">Landmark</span>
-                  <p className="text-sm font-semibold text-gray-800">{selectedAddressItem.landmark || 'None Provided'}</p>
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-0.5">Identified Landmark</span>
+                  <p className="text-xs font-semibold text-slate-900">{selectedAddressItem.landmark || 'None Provided'}</p>
                 </div>
               </div>
             </div>
 
-            <div className="px-6 py-3.5 bg-gray-50/50 border-t border-gray-100 flex justify-end">
+            <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex justify-end">
               <button 
                 onClick={() => setSelectedAddressItem(null)}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-xs shadow-md shadow-blue-600/10 transition"
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-medium rounded-xl text-xs transition"
               >
-                Close View
+                Dismiss Modal
               </button>
             </div>
           </div>
@@ -582,65 +589,65 @@ export default function Dashboard() {
 
       {/* DYNAMIC VIEW INVESTIGATIONS PORTAL WINDOW */}
       {selectedTestItem && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-[fadeIn_0.15s_ease-out]">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-xl max-w-md w-full overflow-hidden animate-[scaleUp_0.15s_ease-out]">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-indigo-50/50">
-              <div className="flex items-center gap-2 text-indigo-700">
-                <Beaker className="w-4 h-4" />
-                <h3 className="font-bold text-gray-900 text-sm">Prescribed Investigations</h3>
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-[fadeIn_0.1s_ease-out]">
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-xl max-w-md w-full overflow-hidden animate-[scaleUp_0.1s_ease-out]">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-2 text-slate-800">
+                <Beaker className="w-4 h-4 text-blue-500" />
+                <h3 className="font-bold text-sm">Selected Test Panels</h3>
               </div>
               <button 
                 onClick={() => setSelectedTestItem(null)}
-                className="p-1 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition"
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
             
-            <div className="p-6 space-y-4">
+            <div className="p-5 space-y-4">
               <div className="flex justify-between items-start gap-4">
                 <div>
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-600 block mb-0.5">Patient Name</span>
-                  <p className="text-sm font-semibold text-gray-800">{selectedTestItem.name}</p>
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-0.5">Patient Profile</span>
+                  <p className="text-sm font-semibold text-slate-900">{selectedTestItem.name}</p>
                 </div>
                 <div className="text-right">
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-600 block mb-0.5">Booking ID</span>
-                  <p className="text-xs font-mono font-bold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded inline-block border border-indigo-100">{selectedTestItem.booking_id}</p>
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-0.5">Booking ID</span>
+                  <p className="text-xs font-mono font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded inline-block border border-blue-100">{selectedTestItem.booking_id}</p>
                 </div>
               </div>
               
-              <hr className="border-gray-100" />
+              <hr className="border-slate-100" />
 
               <div>
-                <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-600 block mb-2">
-                  Selected Test Profiles ({parsedTests.length})
+                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-2">
+                  Clinical Protocols ({parsedTests.length})
                 </span>
-                <div className="max-h-60 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
                   {parsedTests.length > 0 ? (
                     parsedTests.map((testName, idx) => (
                       <div 
                         key={idx} 
-                        className="flex items-center gap-2.5 px-3 py-2 bg-slate-50 border border-gray-200/80 rounded-xl transition hover:bg-slate-100/70"
+                        className="flex items-center gap-2.5 px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl"
                       >
-                        <div className="w-5 h-5 rounded-md bg-indigo-50 border border-indigo-100 flex items-center justify-center text-[10px] font-bold text-indigo-600 shadow-sm">
+                        <div className="w-5 h-5 rounded-md bg-white border border-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-500 shadow-sm">
                           {idx + 1}
                         </div>
-                        <p className="text-xs font-semibold text-gray-700 truncate">{testName}</p>
+                        <p className="text-xs font-semibold text-slate-700 truncate">{testName}</p>
                       </div>
                     ))
                   ) : (
-                    <p className="text-xs text-gray-400 italic">No investigations specified mapping found.</p>
+                    <p className="text-xs text-slate-400 italic">No direct lab code definitions assigned.</p>
                   )}
                 </div>
               </div>
             </div>
 
-            <div className="px-6 py-3.5 bg-gray-50/50 border-t border-gray-100 flex justify-end">
+            <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex justify-end">
               <button 
                 onClick={() => setSelectedTestItem(null)}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-xs shadow-md shadow-indigo-600/10 transition"
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-medium rounded-xl text-xs transition"
               >
-                Dismiss View
+                Close View
               </button>
             </div>
           </div>
@@ -655,16 +662,16 @@ function StatCard({ icon, iconBg, value, label, isActive, onClick }: { icon: Rea
   return (
     <button 
       onClick={onClick}
-      className={`w-full text-left bg-white rounded-2xl border px-5 py-4 flex items-center gap-4 transition-all duration-200 focus:outline-none ${
+      className={`w-full text-left bg-white rounded-2xl border p-4 flex items-center gap-3.5 transition-all focus:outline-none ${
         isActive 
-          ? 'border-blue-500 shadow-md shadow-blue-500/5 ring-1 ring-blue-500 scale-[1.01]' 
-          : 'border-gray-200 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 hover:border-gray-300'
+          ? 'border-blue-500 shadow-sm shadow-blue-500/5 ring-1 ring-blue-500' 
+          : 'border-slate-200 hover:border-slate-300'
       }`}
     >
-      <div className={`w-12 h-12 rounded-xl ${iconBg} shadow-sm flex items-center justify-center flex-shrink-0`}>{icon}</div>
+      <div className={`w-9 h-9 rounded-xl ${iconBg} flex items-center justify-center flex-shrink-0`}>{icon}</div>
       <div>
-        <p className="text-2xl font-bold text-gray-900">{value}</p>
-        <p className="text-xs text-gray-500 mt-0.5 font-medium">{label}</p>
+        <p className="text-xl font-bold tracking-tight text-slate-900">{value}</p>
+        <p className="text-[11px] font-medium text-slate-400 mt-0.5 truncate">{label}</p>
       </div>
     </button>
   );
@@ -691,122 +698,126 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
   }, [item.test]);
 
   return (
-    <tr className={`border-b border-gray-50 hover:bg-slate-50/50 transition-colors ${selected ? 'bg-blue-50/40' : ''}`}>
-      <td className="px-4 py-4 text-center">
-        <input type="checkbox" checked={selected} onChange={onToggle} className="w-4 h-4 accent-blue-600 cursor-pointer rounded border-gray-300" />
+    <tr className={`hover:bg-slate-50/50 transition-colors ${selected ? 'bg-blue-50/20' : ''}`}>
+      <td className="px-6 py-3.5 text-center">
+        <input type="checkbox" checked={selected} onChange={onToggle} className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/10 cursor-pointer" />
       </td>
-      <td className="px-4 py-4">
-        <span className="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-lg font-mono font-bold text-xs border border-indigo-100 shadow-sm">{item.booking_id}</span>
+      <td className="px-4 py-3.5 whitespace-nowrap">
+        <span className="font-mono text-xs font-bold text-slate-900 tracking-tight">{item.booking_id}</span>
       </td>
-      <td className="px-4 py-4">
-        <p className="font-semibold text-gray-900 text-sm">{item.name}</p>
-        <p className="text-xs text-gray-400 mt-0.5">{item.age ?? 'N/A'}Y &bull; {item.gender || 'N/A'}</p>
+      <td className="px-4 py-3.5">
+        <div className="max-w-[200px]">
+          <p className="font-semibold text-slate-900 text-xs truncate" title={item.name}>{item.name}</p>
+          <p className="text-[11px] font-medium text-slate-400 mt-0.5">{item.age ?? 'N/A'}Y &bull; {item.gender || 'N/A'}</p>
+        </div>
       </td>
-      <td className="px-4 py-4">
+      <td className="px-4 py-3.5 whitespace-nowrap">
         {item.prescription_url ? ( 
-          <a href={item.prescription_url.startsWith('http') ? item.prescription_url : supabase.storage.from('prescriptions').getPublicUrl(item.prescription_url).data.publicUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 shadow-sm hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-medium transition">
-            <FileText className="w-3.5 h-3.5" /> View
+          <a href={item.prescription_url.startsWith('http') ? item.prescription_url : supabase.storage.from('prescriptions').getPublicUrl(item.prescription_url).data.publicUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-2 py-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-600 transition">
+            <FileText className="w-3 h-3 text-slate-400" /> View Rx
           </a> 
         ) : (
-          <span className="text-xs text-gray-400 italic">No Upload</span>
+          <span className="text-[11px] text-slate-400 font-medium italic">None Attached</span>
         )}
       </td>
-      <td className="px-4 py-4">
-        <a href={`tel:${item.mobile}`} className="flex items-center gap-1.5 text-gray-700 text-xs hover:text-blue-600 transition font-medium">
-          <Phone className="w-3 h-3" /> {item.mobile}
-        </a>
-        
-        <div className="flex items-center gap-2 mt-1.5">
-          <select 
-            defaultValue="" 
-            onChange={e => { onWhatsApp(item.mobile, e.target.value, item); e.target.value = ''; }} 
-            className="text-[11px] px-1.5 py-1 rounded-md border border-gray-200 bg-white shadow-sm text-gray-600 max-w-[90px] cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
-          >
-            <option value="">Templates</option>
-            <option value="welcome">Welcome</option>
-            <option value="report">Reports</option>
-            <option value="reminder">Reminder</option>
-          </select>
-          
-          <button 
-            onClick={() => onWhatsApp(item.mobile, 'default', item)} 
-            className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 transition"
-          >
-            <MessageCircle className="w-3.5 h-3.5" /> Chat
-          </button>
+      <td className="px-4 py-3.5">
+        <div className="space-y-1">
+          <a href={`tel:${item.mobile}`} className="inline-flex items-center gap-1 text-[11px] text-slate-600 font-bold hover:text-blue-600 transition">
+            <Phone className="w-2.5 h-2.5 text-slate-400" /> {item.mobile}
+          </a>
+          <div className="flex items-center gap-1.5">
+            <select 
+              defaultValue="" 
+              onChange={e => { onWhatsApp(item.mobile, e.target.value, item); e.target.value = ''; }} 
+              className="text-[10px] font-medium px-1 py-0.5 rounded-md border border-slate-200 bg-white text-slate-500 max-w-[76px] cursor-pointer focus:outline-none"
+            >
+              <option value="">Alerts</option>
+              <option value="welcome">Welcome</option>
+              <option value="report">Ready</option>
+              <option value="reminder">Remind</option>
+            </select>
+            <button 
+              onClick={() => onWhatsApp(item.mobile, 'default', item)} 
+              className="inline-flex items-center text-[10px] font-bold text-emerald-600 hover:text-emerald-700 transition"
+            >
+              <MessageCircle className="w-3 h-3 mr-0.5" /> Chat
+            </button>
+          </div>
         </div>
       </td>
       
-      <td className="px-4 py-4">
-        <button
-          type="button"
-          onClick={() => onViewTests(item)}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100/80 text-indigo-700 border border-indigo-200 shadow-sm rounded-lg text-xs font-semibold transition active:scale-[0.97]"
-        >
-          <Beaker className="w-3.5 h-3.5 text-indigo-600" /> 
-          View Investigations {totalTestCount > 1 ? `(${totalTestCount})` : ''}
-        </button>
-        <p className="text-xs text-gray-400 mt-1 font-medium">{item.appointment_date} @ {item.time || 'N/A'}</p>
+      <td className="px-4 py-3.5">
+        <div>
+          <button
+            type="button"
+            onClick={() => onViewTests(item)}
+            className="text-left group inline-flex items-center text-[11px] font-bold text-blue-600 hover:text-blue-700 transition"
+          >
+            <Beaker className="w-3 h-3 text-blue-500 mr-1 flex-shrink-0" /> 
+            <span className="truncate max-w-[150px]">Investigations {totalTestCount > 0 ? `(${totalTestCount})` : ''}</span>
+          </button>
+          <p className="text-[10px] font-semibold text-slate-400 mt-0.5 tracking-tight">{item.appointment_date} &bull; {item.time || 'N/A'}</p>
+        </div>
       </td>
       
-      <td className="px-4 py-4">
+      <td className="px-4 py-3.5 whitespace-nowrap">
         {isHomeCollection ? (
           <button
             type="button"
             onClick={() => onViewAddress(item)}
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 shadow-sm rounded-lg text-xs font-semibold transition active:scale-[0.97]"
+            className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-100 rounded-lg text-[11px] font-semibold transition"
           >
-            <MapPin className="w-3.5 h-3.5 text-blue-600" /> Fetch Address
+            <MapPin className="w-3 h-3" /> Address
           </button>
         ) : (
-          <span className="text-xs text-gray-400 font-medium bg-gray-100 px-2 py-1 rounded border border-gray-200/60 shadow-sm select-none">
-            Walk-in Patient
+          <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200/60 px-1.5 py-0.5 rounded-md tracking-wide uppercase">
+            Walk-in
           </span>
         )}
       </td>
 
-      <td className="px-4 py-4 min-w-[180px]">
-        <div className="relative group">
+      <td className="px-4 py-3.5">
+        <div className="relative group max-w-[160px]">
           <textarea 
             value={localRemarks} 
             onChange={(e) => setLocalRemarks(e.target.value)} 
             onBlur={handleRemarksBlur} 
-            placeholder="Add remarks..." 
+            placeholder="Add log entry..." 
             rows={1} 
-            className="w-full text-[11px] p-2 bg-gray-50/50 border border-gray-200 shadow-inner rounded-lg focus:bg-white focus:border-blue-200 focus:ring-0 outline-none resize-none transition-all" 
+            className="w-full text-[11px] font-medium p-1 bg-transparent border-b border-transparent hover:border-slate-200 focus:bg-slate-50 focus:border-slate-200 focus:p-1.5 rounded outline-none resize-none transition-all custom-scrollbar" 
           />
-          <Edit3 className="absolute right-2 top-2 w-3 h-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+          <Edit3 className="absolute right-1 top-1 w-2.5 h-2.5 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
         </div>
       </td>
-      <td className="px-4 py-4">
-        <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border shadow-sm ${
-          isCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
-          isCancelled ? 'bg-red-50 text-red-700 border-red-200' : 
-          'bg-orange-50 text-orange-700 border-orange-200'
+      <td className="px-4 py-3.5 whitespace-nowrap">
+        <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide uppercase border ${
+          isCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 
+          isCancelled ? 'bg-rose-50 text-rose-700 border-rose-100' : 
+          'bg-amber-50 text-amber-700 border-amber-100'
         }`}>
           {item.status || 'Pending'}
         </span>
       </td>
-      <td className="px-4 py-4 text-right">
-        <div className="flex items-center justify-end gap-1.5">
+      <td className="pr-6 pl-4 py-3.5 text-right whitespace-nowrap">
+        <div className="flex items-center justify-end gap-1">
           <button 
             onClick={() => onUpdateStatus(item.id, 'Completed')} 
             title="Mark Completed" 
-            className="w-8 h-8 rounded-lg bg-white border border-gray-200 shadow-sm text-emerald-600 hover:bg-emerald-50 hover:border-emerald-300 flex items-center justify-center transition"
+            className="w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-emerald-600 hover:border-emerald-200 flex items-center justify-center transition shadow-sm"
           >
             <Check className="w-3.5 h-3.5" />
           </button>
           <button 
             onClick={() => onUpdateStatus(item.id, 'Cancelled')} 
-            title="Cancel Appointment" 
-            className="w-8 h-8 rounded-lg bg-white border border-gray-200 shadow-sm text-red-500 hover:bg-red-50 hover:border-red-300 flex items-center justify-center transition"
+            title="Cancel Workflow" 
+            className="w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-rose-600 hover:border-rose-200 flex items-center justify-center transition shadow-sm"
           >
             <X className="w-3.5 h-3.5" />
           </button>
           <button 
             onClick={() => onDelete(item.id)} 
-            title="Delete" 
-            className="w-8 h-8 rounded-lg bg-white border border-gray-200 shadow-sm text-gray-400 hover:bg-red-50 hover:text-red-500 hover:border-red-200 flex items-center justify-center transition"
+            title="Trash Record" 
+            className="w-7 h-7 rounded-lg border border-transparent bg-transparent text-slate-400 hover:text-rose-600 flex items-center justify-center transition"
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
