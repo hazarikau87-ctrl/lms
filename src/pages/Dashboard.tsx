@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   FlaskConical, LogOut, Search, CalendarCheck, Clock, CheckCheck,
   Phone, FileText, Check, Trash2, ChevronLeft, ChevronRight,
-  MessageCircle, Building2, FileDown, CheckCircle2, RotateCw, Edit3, X, XCircle, Settings as SettingsIcon, LayoutDashboard
+  MessageCircle, Building2, FileDown, CheckCircle2, RotateCw, Edit3, X, XCircle, Settings as SettingsIcon, LayoutDashboard, MapPin
 } from 'lucide-react';
 import { supabase, Appointment, Lab } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -25,6 +25,7 @@ interface AppointmentRowProps {
   onUpdateRemarks: (id: number, remarks: string) => Promise<void>;
   onDelete: (id: number) => Promise<void>;
   onWhatsApp: (phone: string, type: string, item: any) => void;
+  onViewAddress: (item: any) => void; // Explicitly map modal dispatch context layer
 }
 
 export default function Dashboard() {
@@ -45,6 +46,9 @@ export default function Dashboard() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // Address Modal State Target Window
+  const [selectedAddressItem, setSelectedAddressItem] = useState<any | null>(null);
 
   const fetchAll = useCallback(async () => {
     if (!user?.id) return;
@@ -454,7 +458,7 @@ export default function Dashboard() {
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[1100px]">
+                <table className="w-full min-w-[1250px]">
                   <thead>
                     <tr className="border-b-2 border-slate-100">
                       <th className="w-10 px-4 py-3"></th>
@@ -463,6 +467,8 @@ export default function Dashboard() {
                       <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Prescription</th>
                       <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Contact & WhatsApp</th>
                       <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Test / Schedule</th>
+                      {/* PLACED EXACTLY BETWEEN TEST/SCHEDULE AND REMARKS BY LAB */}
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Address</th>
                       <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Remarks by lab</th>
                       <th className="px-4 py-3 text-left text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Status</th>
                       <th className="px-4 py-3 text-right text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Actions</th>
@@ -470,10 +476,10 @@ export default function Dashboard() {
                   </thead>
                   <tbody>
                     {loading ? (
-                      <tr><td colSpan={9} className="py-16 text-center"><RotateCw className="w-6 h-6 animate-spin mx-auto text-blue-500" /></td></tr>
+                      <tr><td colSpan={10} className="py-16 text-center"><RotateCw className="w-6 h-6 animate-spin mx-auto text-blue-500" /></td></tr>
                     ) : paginated.length === 0 ? (
                       <tr>
-                        <td colSpan={9} className="py-20 text-center text-gray-400">
+                        <td colSpan={10} className="py-20 text-center text-gray-400">
                           <div className="flex flex-col items-center gap-2">
                             <Search className="w-10 h-10 opacity-10 mb-2" />
                             <p className="text-sm font-medium">No appointment found.</p>
@@ -482,7 +488,17 @@ export default function Dashboard() {
                         </td>
                       </tr>
                     ) : paginated.map(item => (
-                      <AppointmentRow key={item.id} item={item} selected={selectedIds.has(item.id)} onToggle={() => toggleRow(item.id)} onUpdateStatus={updateStatus} onUpdateRemarks={updateRemarks} onDelete={deleteBooking} onWhatsApp={sendWhatsApp} />
+                      <AppointmentRow 
+                        key={item.id} 
+                        item={item} 
+                        selected={selectedIds.has(item.id)} 
+                        onToggle={() => toggleRow(item.id)} 
+                        onUpdateStatus={updateStatus} 
+                        onUpdateRemarks={updateRemarks} 
+                        onDelete={deleteBooking} 
+                        onWhatsApp={sendWhatsApp} 
+                        onViewAddress={setSelectedAddressItem}
+                      />
                     ))}
                   </tbody>
                 </table>
@@ -497,11 +513,71 @@ export default function Dashboard() {
           </>
         )}
       </div>
+
+      {/* DYNAMIC VIEW ADDRESS PORTAL WINDOW */}
+      {selectedAddressItem && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-[fadeIn_0.15s_ease-out]">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-xl max-w-md w-full overflow-hidden animate-[scaleUp_0.15s_ease-out]">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-2 text-blue-700">
+                <MapPin className="w-4 h-4" />
+                <h3 className="font-bold text-gray-900 text-sm">Patient Collection Address</h3>
+              </div>
+              <button 
+                onClick={() => setSelectedAddressItem(null)}
+                className="p-1 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div>
+                <span className="text-[10px] uppercase font-bold tracking-wider text-blue-600 block mb-0.5">Patient Name</span>
+                <p className="text-sm font-semibold text-gray-800">{selectedAddressItem.name}</p>
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold tracking-wider text-blue-600 block mb-0.5">Booking ID</span>
+                <p className="text-xs font-mono font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded inline-block">{selectedAddressItem.booking_id}</p>
+              </div>
+              
+              <hr className="border-gray-100" />
+
+              <div>
+                <span className="text-[10px] uppercase font-bold tracking-wider text-blue-600 block mb-1">Full Address</span>
+                <p className="text-sm text-gray-700 leading-relaxed bg-gray-50 p-3 rounded-xl border border-gray-200 font-medium">
+                  {selectedAddressItem.addressLine || selectedAddressItem.address || 'No address profile mapping stored.'}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-blue-600 block mb-0.5">Pincode</span>
+                  <p className="text-sm font-semibold text-gray-800">{selectedAddressItem.pincode || 'N/A'}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-blue-600 block mb-0.5">Landmark</span>
+                  <p className="text-sm font-semibold text-gray-800">{selectedAddressItem.landmark || 'None Provided'}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-3.5 bg-gray-50/50 border-t border-gray-100 flex justify-end">
+              <button 
+                onClick={() => setSelectedAddressItem(null)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-xs shadow-md shadow-blue-600/10 transition"
+              >
+                Close View
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-// Interactive Sub-components
+// Sub-components
 function StatCard({ icon, iconBg, value, label, isActive, onClick }: { icon: React.ReactNode; iconBg: string; value: number; label: string; isActive?: boolean; onClick?: () => void }) {
   return (
     <button 
@@ -521,7 +597,7 @@ function StatCard({ icon, iconBg, value, label, isActive, onClick }: { icon: Rea
   );
 }
 
-function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRemarks, onDelete, onWhatsApp }: AppointmentRowProps) {
+function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRemarks, onDelete, onWhatsApp, onViewAddress }: AppointmentRowProps) {
   const isCompleted = item.status === 'Completed';
   const isCancelled = item.status === 'Cancelled';
   const [localRemarks, setLocalRemarks] = useState(item.remarks || '');
@@ -533,6 +609,9 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
       onUpdateRemarks(item.id, localRemarks); 
     } 
   };
+
+  // Safe checks across variations of schema configurations
+  const isHomeCollection = item.bookingType === 'home' || item.booking_type === 'home';
 
   return (
     <tr className={`border-b border-gray-50 hover:bg-slate-50/50 transition-colors ${selected ? 'bg-blue-50/40' : ''}`}>
@@ -584,6 +663,24 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
         <p className="font-semibold text-gray-900 text-sm">{item.test}</p>
         <p className="text-xs text-gray-400 mt-0.5 font-medium">{item.appointment_date} @ {item.time || 'N/A'}</p>
       </td>
+      
+      {/* PLACED EXACTLY BETWEEN TEST/SCHEDULE AND REMARKS BY LAB */}
+      <td className="px-4 py-4">
+        {isHomeCollection ? (
+          <button
+            type="button"
+            onClick={() => onViewAddress(item)}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 shadow-sm rounded-lg text-xs font-semibold transition active:scale-[0.97]"
+          >
+            <MapPin className="w-3.5 h-3.5 text-blue-600" /> Fetch Address
+          </button>
+        ) : (
+          <span className="text-xs text-gray-400 font-medium bg-gray-100 px-2 py-1 rounded border border-gray-200/60 shadow-sm select-none">
+            Walk-in Patient
+          </span>
+        )}
+      </td>
+
       <td className="px-4 py-4 min-w-[180px]">
         <div className="relative group">
           <textarea 
