@@ -6,7 +6,6 @@ import {
 } from 'lucide-react';
 import { supabase, Appointment, Lab } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-// Import your settings component relative to your pages structure
 import Settings from './settings';
 
 const RECORDS_PER_PAGE = 10;
@@ -18,15 +17,15 @@ const WA_TEMPLATES: Record<string, string> = {
 };
 
 interface AppointmentRowProps {
-  item: Appointment & { [key: string]: any }; // safely allows dynamically handled data structures
+  item: Appointment & { [key: string]: any };
   selected: boolean;
   onToggle: () => void;
   onUpdateStatus: (id: number, status: string) => Promise<void>;
   onUpdateRemarks: (id: number, remarks: string) => Promise<void>;
   onDelete: (id: number) => Promise<void>;
   onWhatsApp: (phone: string, type: string, item: any) => void;
-  onViewAddress: (item: any) => void; 
-  onViewTests: (item: any) => void; // Dispatches target element context window to the dynamic test modal
+  onViewAddress: (item: any) => void;
+  onViewTests: (item: any) => void;
 }
 
 export default function Dashboard() {
@@ -48,8 +47,10 @@ export default function Dashboard() {
   const [endDate, setEndDate] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  // Modal State Control Windows
+  // Address Modal State Target Window
   const [selectedAddressItem, setSelectedAddressItem] = useState<any | null>(null);
+  
+  // Investigations Modal State Window
   const [selectedTestItem, setSelectedTestItem] = useState<any | null>(null);
 
   const fetchAll = useCallback(async () => {
@@ -268,7 +269,7 @@ export default function Dashboard() {
     generatePDF(toExport);
   };
 
-  // Helper parser handles separating multiple comma-joined tests cleanly inside the modal layout 
+  // String parser logic mapped safely against the target instance state hook
   const parsedTests = useMemo(() => {
     if (!selectedTestItem?.test) return [];
     return selectedTestItem.test.split(',').map((t: string) => t.trim()).filter(Boolean);
@@ -286,10 +287,9 @@ export default function Dashboard() {
                 <FlaskConical className="w-5 h-5 text-white" />
               </div>
               <div>
-                  <h1 className="text-lg font-bold text-gray-900" style={{ fontFamily: 'Poppins, sans-serif' }}> LabOps Scheduler</h1>
-                    <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">
-                       Powered by Zebnox </p>
-                </div>
+                <h1 className="text-lg font-bold text-gray-900" style={{ fontFamily: 'Poppins, sans-serif' }}> LabOps Scheduler</h1>
+                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Powered by Zebnox</p>
+              </div>
             </div>
 
             <div className="w-px h-9 bg-gray-200 hidden sm:block" />
@@ -309,7 +309,6 @@ export default function Dashboard() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* View Switching Navigation Button */}
             {currentView === 'dashboard' ? (
               <button 
                 onClick={() => setCurrentView('settings')} 
@@ -582,11 +581,11 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* DYNAMIC INVESTIGATION LISTS PORTAL MODAL */}
+      {/* DYNAMIC VIEW INVESTIGATIONS PORTAL WINDOW */}
       {selectedTestItem && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-[fadeIn_0.15s_ease-out]">
           <div className="bg-white rounded-2xl border border-gray-100 shadow-xl max-w-md w-full overflow-hidden animate-[scaleUp_0.15s_ease-out]">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-slate-50">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-indigo-50/50">
               <div className="flex items-center gap-2 text-indigo-700">
                 <Beaker className="w-4 h-4" />
                 <h3 className="font-bold text-gray-900 text-sm">Prescribed Investigations</h3>
@@ -687,7 +686,6 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
 
   const isHomeCollection = item.bookingType === 'home' || item.booking_type === 'home';
 
-  // Count how many tests are in the string to display on the action badge trigger
   const totalTestCount = useMemo(() => {
     if (!item.test) return 0;
     return item.test.split(',').map((t: string) => t.trim()).filter(Boolean).length;
@@ -740,7 +738,6 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
         </div>
       </td>
       
-      {/* TEST / SCHEDULE PACKED MODAL PORTAL LINK CONTAINER */}
       <td className="px-4 py-4">
         <button
           type="button"
