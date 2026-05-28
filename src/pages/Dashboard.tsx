@@ -269,7 +269,6 @@ export default function Dashboard() {
     generatePDF(toExport);
   };
 
-  // String parser logic mapped safely against the target instance state hook
   const parsedTests = useMemo(() => {
     if (!selectedTestItem?.test) return [];
     return selectedTestItem.test.split(',').map((t: string) => t.trim()).filter(Boolean);
