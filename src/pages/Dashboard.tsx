@@ -529,8 +529,14 @@ export default function Dashboard() {
 
       {/* DYNAMIC VIEW ADDRESS PORTAL WINDOW */}
       {selectedAddressItem && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-[fadeIn_0.1s_ease-out]">
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-xl max-w-md w-full overflow-hidden animate-[scaleUp_0.1s_ease-out]">
+        <div 
+          onClick={() => setSelectedAddressItem(null)}
+          className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-[fadeIn_0.1s_ease-out]"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl border border-slate-100 shadow-xl max-w-md w-full overflow-hidden animate-[scaleUp_0.1s_ease-out]"
+          >
             <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-2 text-slate-800">
                 <MapPin className="w-4 h-4 text-blue-500" />
@@ -589,8 +595,14 @@ export default function Dashboard() {
 
       {/* DYNAMIC VIEW INVESTIGATIONS PORTAL WINDOW */}
       {selectedTestItem && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-[fadeIn_0.1s_ease-out]">
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-xl max-w-md w-full overflow-hidden animate-[scaleUp_0.1s_ease-out]">
+        <div 
+          onClick={() => setSelectedTestItem(null)}
+          className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-[fadeIn_0.1s_ease-out]"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl border border-slate-100 shadow-xl max-w-md w-full overflow-hidden animate-[scaleUp_0.1s_ease-out]"
+          >
             <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-2 text-slate-800">
                 <Beaker className="w-4 h-4 text-blue-500" />
@@ -677,6 +689,7 @@ function StatCard({ icon, iconBg, value, label, isActive, onClick }: { icon: Rea
   );
 }
 
+// Table Row component
 function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRemarks, onDelete, onWhatsApp, onViewAddress, onViewTests }: AppointmentRowProps) {
   const isCompleted = item.status === 'Completed';
   const isCancelled = item.status === 'Cancelled';
