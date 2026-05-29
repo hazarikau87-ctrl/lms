@@ -250,7 +250,7 @@ export default function Dashboard() {
     doc.setFillColor(26, 115, 232); doc.rect(0, 0, 210, 42, 'F');
     doc.setTextColor(255, 255, 255); doc.setFontSize(20); doc.setFont('helvetica', 'bold'); doc.text(labName.toUpperCase(), 14, 22);
     doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.text('Generated via LabOps Scheduler by Zebnox', 14, 31);
-    doc.setFontSize(9); doc.text(`Exported on: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`, 14, 38);
+    doc.setFontSize(9); text(`Exported on: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`, 14, 38);
     const rows = dataToExport.map(item => [item.booking_id, { content: `${item.name}\n${item.age ?? 'N/A'}Y / ${item.gender || ''}\n${item.mobile || 'N/A'}`, styles: { fontStyle: 'bold' as const } }, item.test, `${item.appointment_date}\n${item.time || 'N/A'}`, item.remarks || '-', { content: (item.status || 'Pending').toUpperCase(), styles: { textColor: item.status === 'Completed' ? [46, 125, 50] as [number, number, number] : item.status === 'Cancelled' ? [185, 28, 28] as [number, number, number] : [194, 65, 12] as [number, number, number], fontStyle: 'bold' as const } } ]);
     autoTable(doc, { startY: 50, head: [['ID', 'Patient Details', 'Test', 'Schedule', 'Remarks', 'Status']], body: rows, theme: 'striped', headStyles: { fillColor: [26, 115, 232] as [number, number, number] }, styles: { fontSize: 9, valign: 'middle' } });
     doc.save(`${labName}_Report.pdf`);
@@ -274,11 +274,11 @@ export default function Dashboard() {
   }, [selectedTestItem]);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 selection:bg-blue-500 selection:text-white antialiased">
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="h-screen flex flex-col bg-slate-50 text-slate-900 selection:bg-blue-500 selection:text-white antialiased overflow-hidden">
+      <div className="max-w-[1600px] w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-4 flex flex-col flex-1 min-h-0">
 
-        {/* Header - STICKY SPECIFICATION ENGAGED */}
-        <div className="sticky top-4 z-40 bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200/80 shadow-sm px-6 py-4 mb-8 flex flex-wrap items-center justify-between gap-4">
+        {/* Header - STICKY AND PANED */}
+        <div className="sticky top-0 z-40 bg-white border border-slate-200/80 shadow-sm px-6 py-4 mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl flex-shrink-0">
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-sm shadow-blue-600/10 flex-shrink-0">
@@ -343,11 +343,11 @@ export default function Dashboard() {
         </div>
 
         {currentView === 'settings' ? (
-          <div className="animate-[fadeIn_0.2s_ease]"><Settings /></div>
+          <div className="animate-[fadeIn_0.2s_ease] overflow-y-auto flex-1"><Settings /></div>
         ) : (
           <>
-            {/* Clickable Stats with professional Reminders integration */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            {/* Clickable Pinned Metric Grid */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6 flex-shrink-0">
               <StatCard 
                 icon={<CalendarCheck className="w-4 h-4 text-blue-600" />} 
                 iconBg="bg-blue-50" 
@@ -384,7 +384,7 @@ export default function Dashboard() {
 
             {/* Bulk Actions Menu */}
             {selectedIds.size > 0 && (
-              <div className="bg-slate-950 border border-slate-900 shadow-xl rounded-xl px-4 py-2.5 mb-6 flex items-center justify-between gap-3 animate-[slideDown_0.2s_ease] text-white">
+              <div className="bg-slate-950 border border-slate-900 shadow-xl rounded-xl px-4 py-2.5 mb-6 flex items-center justify-between gap-3 animate-[slideDown_0.2s_ease] text-white flex-shrink-0">
                 <span className="text-xs font-semibold tracking-wide text-slate-300">{selectedIds.size} records selected</span>
                 <div className="flex gap-2">
                   <button onClick={() => bulkUpdateStatus('Completed')} className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-medium transition"><CheckCircle2 className="w-3.5 h-3.5" /> Complete</button>
@@ -395,9 +395,9 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Premium Table Component Layout */}
-            <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
-              <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b border-slate-100 bg-slate-50/70">
+            {/* Premium Panned Data Grid Layout */}
+            <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden flex flex-col flex-1 min-h-0">
+              <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b border-slate-100 bg-slate-50/70 flex-shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="flex items-center h-5">
                     <input type="checkbox" checked={isAllPageSelected} onChange={e => toggleSelectAll(e.target.checked)} className="w-4 h-4 border-slate-300 rounded text-blue-600 focus:ring-blue-500/20 cursor-pointer" />
@@ -443,10 +443,11 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <div className="overflow-x-auto">
+              {/* ONLY BOOKING PARTS SCROLLABLE AREA */}
+              <div className="overflow-x-auto overflow-y-auto flex-1 custom-scrollbar min-h-0">
                 <table className="w-full min-w-[1200px] table-fixed">
-                  <thead>
-                    <tr className="border-b border-slate-100 bg-slate-50/40 text-slate-400">
+                  <thead className="sticky top-0 bg-slate-50 z-10 shadow-[0_1px_0_0_rgba(226,232,240,1)]">
+                    <tr className="text-slate-400">
                       <th className="w-12 px-6 py-3"></th>
                       <th className="w-32 px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Booking ID</th>
                       <th className="w-56 px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Patient Details</th>
@@ -492,7 +493,7 @@ export default function Dashboard() {
                 </table>
               </div>
 
-              <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+              <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex-shrink-0">
                 <p className="text-xs font-medium text-slate-500">Showing rows {Math.min(filtered.length, (currentPage - 1) * RECORDS_PER_PAGE + 1)}-{Math.min(filtered.length, currentPage * RECORDS_PER_PAGE)} of {filtered.length}</p>
                 <div className="flex items-center gap-2">
                   <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="flex items-center gap-1 px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"><ChevronLeft className="w-4 h-4" /> Prev</button>
@@ -505,7 +506,7 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Dynamic View Address Modal */}
+      {/* Modals remain un-impacted and absolute relative to overlay portal structures */}
       {selectedAddressItem && (
         <div onClick={() => setSelectedAddressItem(null)} className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-[fadeIn_0.1s_ease-out]">
           <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl border border-slate-100 shadow-xl max-w-md w-full overflow-hidden animate-[scaleUp_0.1s_ease-out]">
@@ -550,7 +551,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Dynamic View Investigations Modal */}
       {selectedTestItem && (
         <div onClick={() => setSelectedTestItem(null)} className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-[fadeIn_0.1s_ease-out]">
           <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl border border-slate-100 shadow-xl max-w-md w-full overflow-hidden animate-[scaleUp_0.1s_ease-out]">
@@ -596,7 +596,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Mount Reschedule Drawer */}
       <RescheduleDrawer 
         appointment={editingAppointment}
         labId={lab?.id}
