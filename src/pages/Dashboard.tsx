@@ -7,7 +7,6 @@ import {
 import { supabase, Appointment, Lab } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import Settings from './settings';
-// 1. IMPORT YOUR NEW RESCHEDULE DRAWER COMPONENT
 import RescheduleDrawer from './RescheduleDrawer';
 
 const RECORDS_PER_PAGE = 10;
@@ -28,7 +27,6 @@ interface AppointmentRowProps {
   onWhatsApp: (phone: string, type: string, item: any) => void;
   onViewAddress: (item: any) => void;
   onViewTests: (item: any) => void;
-  // 2. PROP HANDLER EXTENSION FOR CLICKING BOOKING ID
   onSelectReschedule: (item: any) => void;
   isInsideReminderWindow: boolean;
 }
@@ -56,7 +54,7 @@ export default function Dashboard() {
   const [selectedAddressItem, setSelectedAddressItem] = useState<any | null>(null);
   const [selectedTestItem, setSelectedTestItem] = useState<any | null>(null);
 
-  // 3. TRACK ACTIVE APPOINTMENT ASSIGNED FOR RESCHEDULING
+  // Track active appointment assigned for rescheduling
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
 
   const fetchAll = useCallback(async () => {
@@ -93,7 +91,6 @@ export default function Dashboard() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // Evaluates if a record is within the critical prompt reminder window (2.5 to 3.5 hours before test execution)
   const checkReminderEligibility = useCallback((item: Appointment) => {
     if (item.status === 'Completed' || item.status === 'Cancelled') return false;
     
@@ -102,7 +99,6 @@ export default function Dashboard() {
     if (!item.time) return false;
 
     try {
-      // Parse scheduled test window time (Expected format: "HH:MM")
       const [hours, minutes] = item.time.split(':').map(Number);
       const apptTime = new Date();
       apptTime.setHours(hours, minutes, 0, 0);
@@ -111,7 +107,6 @@ export default function Dashboard() {
       const diffInMs = apptTime.getTime() - now.getTime();
       const diffInHours = diffInMs / (1000 * 60 * 60);
 
-      // Matches appointments starting in roughly 2.5 to 3.5 hours
       return diffInHours >= 2.5 && diffInHours <= 3.5;
     } catch (e) {
       return false;
@@ -282,8 +277,8 @@ export default function Dashboard() {
     <div className="min-h-screen bg-slate-50 text-slate-900 selection:bg-blue-500 selection:text-white antialiased">
       <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
-        {/* Header */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm px-6 py-4 mb-8 flex flex-wrap items-center justify-between gap-4">
+        {/* Header - STICKY SPECIFICATION ENGAGED */}
+        <div className="sticky top-4 z-40 bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200/80 shadow-sm px-6 py-4 mb-8 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-sm shadow-blue-600/10 flex-shrink-0">
@@ -489,7 +484,6 @@ export default function Dashboard() {
                         onWhatsApp={sendWhatsApp} 
                         onViewAddress={setSelectedAddressItem}
                         onViewTests={setSelectedTestItem}
-                        // 4. BIND SELECTION MUTATION ROUTE TO INDIVIDUAL ROWS
                         onSelectReschedule={setEditingAppointment}
                         isInsideReminderWindow={checkReminderEligibility(item)}
                       />
@@ -511,7 +505,7 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* DYNAMIC VIEW ADDRESS PORTAL WINDOW */}
+      {/* Dynamic View Address Modal */}
       {selectedAddressItem && (
         <div onClick={() => setSelectedAddressItem(null)} className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-[fadeIn_0.1s_ease-out]">
           <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl border border-slate-100 shadow-xl max-w-md w-full overflow-hidden animate-[scaleUp_0.1s_ease-out]">
@@ -556,7 +550,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* DYNAMIC VIEW INVESTIGATIONS PORTAL WINDOW */}
+      {/* Dynamic View Investigations Modal */}
       {selectedTestItem && (
         <div onClick={() => setSelectedTestItem(null)} className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-[fadeIn_0.1s_ease-out]">
           <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl border border-slate-100 shadow-xl max-w-md w-full overflow-hidden animate-[scaleUp_0.1s_ease-out]">
@@ -602,7 +596,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* 5. MOUNT THE RESCHEDULEDRAWER WITH CLEAN REBIND CALLBACK STATE INTERSECTION */}
+      {/* Mount Reschedule Drawer */}
       <RescheduleDrawer 
         appointment={editingAppointment}
         labId={lab?.id}
@@ -669,7 +663,6 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
         <input type="checkbox" checked={selected} onChange={onToggle} className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/10 cursor-pointer" />
       </td>
       
-      {/* 6. CONVERT THE BOOKING ID INTO A INTERACTIVE BUTTON TO LAUNCH RESCHEDULING */}
       <td className="px-4 py-3.5 whitespace-nowrap">
         <button 
           type="button"
