@@ -165,16 +165,12 @@ export default function Dashboard() {
 
   const updateRemarks = async (id: number, remarks: string) => {
     if (!lab?.id) return;
-    try {
-      await supabase
-        .from('appointments')
-        .update({ remarks })
-        .eq('id', id)
-        .eq('lab_id', lab.id);
-      setAppointments(prev => prev.map(a => a.id === id ? { ...a, remarks } : a));
-    } catch (err) {
-      console.error("Error updating remarks:", err);
-    }
+    await supabase
+      .from('appointments')
+      .update({ remarks })
+      .eq('id', id)
+      .eq('lab_id', lab.id);
+    setAppointments(prev => prev.map(a => a.id === id ? { ...a, remarks } : a));
   };
 
   const deleteBooking = async (id: number) => {
@@ -693,15 +689,33 @@ function StatCard({ icon, iconBg, value, label, isActive, onClick }: { icon: Rea
 function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRemarks, onDelete, onWhatsApp, onViewAddress, onViewTests }: AppointmentRowProps) {
   const isCompleted = item.status === 'Completed';
   const isCancelled = item.status === 'Cancelled';
+  
   const [localRemarks, setLocalRemarks] = useState(item.remarks || '');
   const [isFocused, setIsFocused] = useState(false);
   
+  // Status tracking states for the saving feedback micro-interactions
+  const [isSaving, setIsSaving] = useState(false);
+  const [showSavedCheck, setShowSavedCheck] = useState(false);
+  
   useEffect(() => { setLocalRemarks(item.remarks || ''); }, [item.remarks]);
   
-  const handleRemarksBlur = () => { 
+  const handleRemarksBlur = async () => { 
     setIsFocused(false);
     if (localRemarks !== (item.remarks || '')) { 
-      onUpdateRemarks(item.id, localRemarks); 
+      try {
+        setIsSaving(true);
+        await onUpdateRemarks(item.id, localRemarks);
+        setIsSaving(false);
+        setShowSavedCheck(true);
+        
+        // Hide the save verification badge after 2 seconds
+        setTimeout(() => {
+          setShowSavedCheck(false);
+        }, 2000);
+      } catch (err) {
+        setIsSaving(false);
+        console.error("Failed to commit log update:", err);
+      }
     } 
   };
 
@@ -791,7 +805,7 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
         )}
       </td>
 
-      {/* AUTO-EXPANDING PREMIUM INLINE EDITOR CELL */}
+      {/* AUTO-EXPANDING PREMIUM INLINE EDITOR CELL WITH LOG-SAVED CHECKMARK ALERTS */}
       <td className="px-4 py-3.5">
         <div className="relative group max-w-[170px]">
           <textarea 
@@ -801,14 +815,29 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
             onBlur={handleRemarksBlur} 
             placeholder="Add log entry..." 
             rows={isFocused ? 3 : 1} 
+            disabled={isSaving}
             className={`w-full text-[11px] font-medium p-1 bg-transparent border-b outline-none resize-none transition-all custom-scrollbar ${
               isFocused 
-                ? 'bg-slate-50 border-blue-400 shadow-sm p-2 rounded-xl h-20 absolute left-0 top-1/2 -translate-y-1/2 w-64 z-20 ring-4 ring-blue-500/5' 
+                ? 'bg-white border-blue-400 shadow-lg p-2 rounded-xl h-20 absolute left-0 top-1/2 -translate-y-1/2 w-64 z-20 ring-4 ring-blue-500/5' 
                 : 'border-transparent hover:border-slate-200 cursor-pointer truncate'
             }`} 
           />
+          
+          {/* Status Indicators Layer */}
           {!isFocused && (
-            <Edit3 className="absolute right-1 top-1/2 -translate-y-1/2 w-2.5 h-2.5 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+            <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none select-none">
+              {isSaving && (
+                <RotateCw className="w-3 h-3 text-blue-500 animate-spin" />
+              )}
+              {showSavedCheck && (
+                <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-200/60 font-bold text-[9px] uppercase tracking-wider animate-[fadeIn_0.15s_ease-out]">
+                  <Check className="w-2.5 h-2.5 stroke-[3]" /> Saved
+                </div>
+              )}
+              {!isSaving && !showSavedCheck && (
+                <Edit3 className="w-2.5 h-2.5 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+              )}
+            </div>
           )}
         </div>
       </td>
