@@ -694,10 +694,12 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
   const isCompleted = item.status === 'Completed';
   const isCancelled = item.status === 'Cancelled';
   const [localRemarks, setLocalRemarks] = useState(item.remarks || '');
+  const [isFocused, setIsFocused] = useState(false);
   
   useEffect(() => { setLocalRemarks(item.remarks || ''); }, [item.remarks]);
   
   const handleRemarksBlur = () => { 
+    setIsFocused(false);
     if (localRemarks !== (item.remarks || '')) { 
       onUpdateRemarks(item.id, localRemarks); 
     } 
@@ -789,19 +791,28 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
         )}
       </td>
 
+      {/* AUTO-EXPANDING PREMIUM INLINE EDITOR CELL */}
       <td className="px-4 py-3.5">
-        <div className="relative group max-w-[160px]">
+        <div className="relative group max-w-[170px]">
           <textarea 
             value={localRemarks} 
             onChange={(e) => setLocalRemarks(e.target.value)} 
+            onFocus={() => setIsFocused(true)}
             onBlur={handleRemarksBlur} 
             placeholder="Add log entry..." 
-            rows={1} 
-            className="w-full text-[11px] font-medium p-1 bg-transparent border-b border-transparent hover:border-slate-200 focus:bg-slate-50 focus:border-slate-200 focus:p-1.5 rounded outline-none resize-none transition-all custom-scrollbar" 
+            rows={isFocused ? 3 : 1} 
+            className={`w-full text-[11px] font-medium p-1 bg-transparent border-b outline-none resize-none transition-all custom-scrollbar ${
+              isFocused 
+                ? 'bg-slate-50 border-blue-400 shadow-sm p-2 rounded-xl h-20 absolute left-0 top-1/2 -translate-y-1/2 w-64 z-20 ring-4 ring-blue-500/5' 
+                : 'border-transparent hover:border-slate-200 cursor-pointer truncate'
+            }`} 
           />
-          <Edit3 className="absolute right-1 top-1 w-2.5 h-2.5 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+          {!isFocused && (
+            <Edit3 className="absolute right-1 top-1/2 -translate-y-1/2 w-2.5 h-2.5 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+          )}
         </div>
       </td>
+
       <td className="px-4 py-3.5 whitespace-nowrap">
         <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide uppercase border ${
           isCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 
