@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   FlaskConical, LogOut, Search, CalendarCheck, Clock, CheckCheck,
   Phone, FileText, Check, Trash2, ChevronLeft, ChevronRight,
-  MessageCircle, Building2, FileDown, CheckCircle2, RotateCw, Edit3, X, XCircle, Settings as SettingsIcon, LayoutDashboard, MapPin, Beaker
+  MessageCircle, Building2, FileDown, CheckCircle2, RotateCw, Edit3, X, XCircle, Settings as SettingsIcon, LayoutDashboard, MapPin, Beaker, BellRing
 } from 'lucide-react';
 import { supabase, Appointment, Lab } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -26,6 +26,7 @@ interface AppointmentRowProps {
   onWhatsApp: (phone: string, type: string, item: any) => void;
   onViewAddress: (item: any) => void;
   onViewTests: (item: any) => void;
+  isInsideReminderWindow: boolean;
 }
 
 export default function Dashboard() {
@@ -47,10 +48,8 @@ export default function Dashboard() {
   const [endDate, setEndDate] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  // Address Modal State Target Window
+  // Address & Investigations Modals
   const [selectedAddressItem, setSelectedAddressItem] = useState<any | null>(null);
-  
-  // Investigations Modal State Window
   const [selectedTestItem, setSelectedTestItem] = useState<any | null>(null);
 
   const fetchAll = useCallback(async () => {
@@ -87,6 +86,31 @@ export default function Dashboard() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  // Evaluates if a record is within the critical prompt reminder window (2.5 to 3.5 hours before test execution)
+  const checkReminderEligibility = useCallback((item: Appointment) => {
+    if (item.status === 'Completed' || item.status === 'Cancelled') return false;
+    
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (item.appointment_date !== todayStr) return false;
+    if (!item.time) return false;
+
+    try {
+      // Parse scheduled test window time (Expected format: "HH:MM")
+      const [hours, minutes] = item.time.split(':').map(Number);
+      const apptTime = new Date();
+      apptTime.setHours(hours, minutes, 0, 0);
+
+      const now = new Date();
+      const diffInMs = apptTime.getTime() - now.getTime();
+      const diffInHours = diffInMs / (1000 * 60 * 60);
+
+      // Matches appointments starting in roughly 2.5 to 3.5 hours
+      return diffInHours >= 2.5 && diffInHours <= 3.5;
+    } catch (e) {
+      return false;
+    }
+  }, []);
+
   const stats = useMemo(() => {
     let baseList = appointments;
     if (selectedDate) {
@@ -96,9 +120,9 @@ export default function Dashboard() {
       total: baseList.length,
       pending: baseList.filter(a => a.status !== 'Completed' && a.status !== 'Cancelled').length,
       completed: baseList.filter(a => a.status === 'Completed').length,
-      cancelled: baseList.filter(a => a.status === 'Cancelled').length,
+      reminders: baseList.filter(a => checkReminderEligibility(a)).length,
     };
-  }, [appointments, selectedDate]);
+  }, [appointments, selectedDate, checkReminderEligibility]);
 
   const filtered = useMemo(() => {
     let result = appointments;
@@ -111,8 +135,8 @@ export default function Dashboard() {
       result = result.filter(a => a.status !== 'Completed' && a.status !== 'Cancelled');
     } else if (statusFilter === 'completed') {
       result = result.filter(a => a.status === 'Completed');
-    } else if (statusFilter === 'cancelled') {
-      result = result.filter(a => a.status === 'Cancelled');
+    } else if (statusFilter === 'reminders') {
+      result = result.filter(a => checkReminderEligibility(a));
     }
 
     const q = search.trim().toUpperCase();
@@ -122,7 +146,7 @@ export default function Dashboard() {
       );
     }
     return result;
-  }, [appointments, search, selectedDate, statusFilter]);
+  }, [appointments, search, selectedDate, statusFilter, checkReminderEligibility]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / RECORDS_PER_PAGE));
   const paginated = filtered.slice((currentPage - 1) * RECORDS_PER_PAGE, currentPage * RECORDS_PER_PAGE);
@@ -151,12 +175,7 @@ export default function Dashboard() {
   const updateStatus = async (id: number, status: string) => {
     if (!lab?.id) return;
     try {
-      await supabase
-        .from('appointments')
-        .update({ status })
-        .eq('id', id)
-        .eq('lab_id', lab.id);
-      
+      await supabase.from('appointments').update({ status }).eq('id', id).eq('lab_id', lab.id);
       setAppointments(prev => prev.map(a => a.id === id ? { ...a, status } : a));
     } catch (err) {
       console.error("Error updating status:", err);
@@ -165,11 +184,7 @@ export default function Dashboard() {
 
   const updateRemarks = async (id: number, remarks: string) => {
     if (!lab?.id) return;
-    await supabase
-      .from('appointments')
-      .update({ remarks })
-      .eq('id', id)
-      .eq('lab_id', lab.id);
+    await supabase.from('appointments').update({ remarks }).eq('id', id).eq('lab_id', lab.id);
     setAppointments(prev => prev.map(a => a.id === id ? { ...a, remarks } : a));
   };
 
@@ -185,39 +200,25 @@ export default function Dashboard() {
 
   const bulkUpdateStatus = async (status: string) => {
     if (!confirm(`Update ${selectedIds.size} item(s) to ${status}?`) || !lab?.id) return;
-    await supabase
-      .from('appointments')
-      .update({ status })
-      .in('id', Array.from(selectedIds))
-      .eq('lab_id', lab.id);
+    await supabase.from('appointments').update({ status }).in('id', Array.from(selectedIds)).eq('lab_id', lab.id);
     clearSelection();
     fetchAll();
   };
 
   const bulkDelete = async () => {
     if (!confirm(`Move ${selectedIds.size} record(s) to trash?`) || !lab?.id) return;
-    await supabase
-      .from('appointments')
-      .update({ is_deleted: true, deleted_at: new Date().toISOString() })
-      .in('id', Array.from(selectedIds))
-      .eq('lab_id', lab.id);
+    await supabase.from('appointments').update({ is_deleted: true, deleted_at: new Date().toISOString() }).in('id', Array.from(selectedIds)).eq('lab_id', lab.id);
     clearSelection();
     fetchAll();
   };
 
   const deleteByRange = async () => {
     if (!startDate || !endDate || !lab?.id) return alert("Please select both dates.");
-    const toDelete = appointments.filter(a => 
-      a.appointment_date >= startDate && a.appointment_date <= endDate
-    );
+    const toDelete = appointments.filter(a => a.appointment_date >= startDate && a.appointment_date <= endDate);
     if (toDelete.length === 0) return alert("No records found in this range.");
     if (!confirm(`Move all ${toDelete.length} records from ${startDate} to ${endDate} to trash?`)) return;
     const idsToDelete = toDelete.map(a => a.id);
-    await supabase
-      .from('appointments')
-      .update({ is_deleted: true, deleted_at: new Date().toISOString() })
-      .in('id', idsToDelete)
-      .eq('lab_id', lab.id);
+    await supabase.from('appointments').update({ is_deleted: true, deleted_at: new Date().toISOString() }).in('id', idsToDelete).eq('lab_id', lab.id);
     setStartDate(''); setEndDate(''); setShowDatePicker(false);
     fetchAll();
   };
@@ -305,20 +306,12 @@ export default function Dashboard() {
 
           <div className="flex items-center gap-3">
             {currentView === 'dashboard' ? (
-              <button 
-                onClick={() => setCurrentView('settings')} 
-                className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
-              >
-                <SettingsIcon className="w-3.5 h-3.5" />
-                Settings
+              <button onClick={() => setCurrentView('settings')} className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 transition">
+                <SettingsIcon className="w-3.5 h-3.5" /> Settings
               </button>
             ) : (
-              <button 
-                onClick={() => setCurrentView('dashboard')} 
-                className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
-              >
-                <LayoutDashboard className="w-3.5 h-3.5" />
-                Dashboard
+              <button onClick={() => setCurrentView('dashboard')} className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 transition">
+                <LayoutDashboard className="w-3.5 h-3.5" /> Dashboard
               </button>
             )}
 
@@ -326,12 +319,7 @@ export default function Dashboard() {
               <>
                 <div className="relative flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-all">
                   <CalendarCheck className="w-3.5 h-3.5 text-slate-400" />
-                  <input 
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => { setSelectedDate(e.target.value); setCurrentPage(1); }}
-                    className="bg-transparent border-none text-xs font-medium text-slate-700 focus:ring-0 p-0 outline-none cursor-pointer"
-                  />
+                  <input type="date" value={selectedDate} onChange={(e) => { setSelectedDate(e.target.value); setCurrentPage(1); }} className="bg-transparent border-none text-xs font-medium text-slate-700 focus:ring-0 p-0 outline-none cursor-pointer" />
                   {selectedDate && (
                     <button onClick={() => { setSelectedDate(''); setCurrentPage(1); }} className="p-0.5 hover:bg-slate-200 rounded-full">
                       <X className="w-3 h-3 text-slate-400" />
@@ -341,32 +329,22 @@ export default function Dashboard() {
 
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                  <input
-                    type="text"
-                    value={search}
-                    onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
-                    placeholder="Search ID or patient..."
-                    className="pl-9 pr-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 w-48 transition"
-                  />
+                  <input type="text" value={search} onChange={e => { setSearch(e.target.value); setCurrentPage(1); }} placeholder="Search ID or patient..." className="pl-9 pr-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 w-48 transition" />
                 </div>
               </>
             )}
             
             <button onClick={signOut} className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-red-200 bg-white text-xs font-semibold text-red-600 hover:bg-red-50/60 transition">
-              <LogOut className="w-3.5 h-3.5" />
-              Logout
+              <LogOut className="w-3.5 h-3.5" /> Logout
             </button>
           </div>
         </div>
 
-        {/* View Layout Renderer */}
         {currentView === 'settings' ? (
-          <div className="animate-[fadeIn_0.2s_ease]">
-            <Settings />
-          </div>
+          <div className="animate-[fadeIn_0.2s_ease]"><Settings /></div>
         ) : (
           <>
-            {/* Clickable Stats */}
+            {/* Clickable Stats with professional Reminders integration */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
               <StatCard 
                 icon={<CalendarCheck className="w-4 h-4 text-blue-600" />} 
@@ -393,16 +371,16 @@ export default function Dashboard() {
                 onClick={() => handleStatusFilterClick('completed')}
               />
               <StatCard 
-                icon={<XCircle className="w-4 h-4 text-rose-600" />} 
-                iconBg="bg-rose-50" 
-                value={stats.cancelled} 
-                label="Cancelled" 
-                isActive={statusFilter === 'cancelled'}
-                onClick={() => handleStatusFilterClick('cancelled')}
+                icon={<BellRing className={`w-4 h-4 ${stats.reminders > 0 ? 'text-orange-600 animate-[pulse_2s_infinite]' : 'text-slate-400'}`} />} 
+                iconBg={stats.reminders > 0 ? 'bg-orange-50' : 'bg-slate-100'} 
+                value={stats.reminders} 
+                label="Due for Reminder (2.5h)" 
+                isActive={statusFilter === 'reminders'}
+                onClick={() => handleStatusFilterClick('reminders')}
               />
             </div>
 
-            {/* Bulk Actions */}
+            {/* Bulk Actions Menu */}
             {selectedIds.size > 0 && (
               <div className="bg-slate-950 border border-slate-900 shadow-xl rounded-xl px-4 py-2.5 mb-6 flex items-center justify-between gap-3 animate-[slideDown_0.2s_ease] text-white">
                 <span className="text-xs font-semibold tracking-wide text-slate-300">{selectedIds.size} records selected</span>
@@ -426,7 +404,7 @@ export default function Dashboard() {
                   
                   {statusFilter !== 'all' && (
                     <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-100 flex items-center gap-1 ml-2 capitalize">
-                      {statusFilter}
+                      {statusFilter === 'reminders' ? 'Due for Reminder' : statusFilter}
                       <button onClick={() => setStatusFilter('all')} className="hover:text-blue-900 ml-0.5 font-bold">×</button>
                     </span>
                   )}
@@ -488,7 +466,7 @@ export default function Dashboard() {
                           <div className="flex flex-col items-center gap-2 max-w-sm mx-auto">
                             <Search className="w-8 h-8 text-slate-300 mb-1" />
                             <p className="text-sm font-semibold text-slate-800">No matching appointments</p>
-                            <p className="text-xs text-slate-400">{selectedDate ? `No scheduled workflows found on ${selectedDate}` : "Try updating your parameters or filters."}</p>
+                            <p className="text-xs text-slate-400">Try updating your parameters or filters.</p>
                           </div>
                         </td>
                       </tr>
@@ -504,6 +482,7 @@ export default function Dashboard() {
                         onWhatsApp={sendWhatsApp} 
                         onViewAddress={setSelectedAddressItem}
                         onViewTests={setSelectedTestItem}
+                        isInsideReminderWindow={checkReminderEligibility(item)}
                       />
                     ))}
                   </tbody>
@@ -525,27 +504,15 @@ export default function Dashboard() {
 
       {/* DYNAMIC VIEW ADDRESS PORTAL WINDOW */}
       {selectedAddressItem && (
-        <div 
-          onClick={() => setSelectedAddressItem(null)}
-          className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-[fadeIn_0.1s_ease-out]"
-        >
-          <div 
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl border border-slate-100 shadow-xl max-w-md w-full overflow-hidden animate-[scaleUp_0.1s_ease-out]"
-          >
+        <div onClick={() => setSelectedAddressItem(null)} className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-[fadeIn_0.1s_ease-out]">
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl border border-slate-100 shadow-xl max-w-md w-full overflow-hidden animate-[scaleUp_0.1s_ease-out]">
             <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-2 text-slate-800">
                 <MapPin className="w-4 h-4 text-blue-500" />
                 <h3 className="font-bold text-sm">Logistics Address Details</h3>
               </div>
-              <button 
-                onClick={() => setSelectedAddressItem(null)}
-                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <button onClick={() => setSelectedAddressItem(null)} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition"><X className="w-4 h-4" /></button>
             </div>
-            
             <div className="p-5 space-y-4">
               <div>
                 <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-0.5">Patient Account</span>
@@ -555,16 +522,13 @@ export default function Dashboard() {
                 <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-0.5">ID Mapping</span>
                 <p className="text-xs font-mono font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded inline-block">{selectedAddressItem.booking_id}</p>
               </div>
-              
               <hr className="border-slate-100" />
-
               <div>
                 <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-1">Destination Address</span>
                 <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100 font-medium">
                   {selectedAddressItem.address_line || selectedAddressItem.address || 'No location schema configuration detected.'}
                 </p>
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-0.5">Postal Zip Code</span>
@@ -576,14 +540,8 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
-
             <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex justify-end">
-              <button 
-                onClick={() => setSelectedAddressItem(null)}
-                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-medium rounded-xl text-xs transition"
-              >
-                Dismiss Modal
-              </button>
+              <button onClick={() => setSelectedAddressItem(null)} className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-medium rounded-xl text-xs transition">Dismiss Modal</button>
             </div>
           </div>
         </div>
@@ -591,27 +549,15 @@ export default function Dashboard() {
 
       {/* DYNAMIC VIEW INVESTIGATIONS PORTAL WINDOW */}
       {selectedTestItem && (
-        <div 
-          onClick={() => setSelectedTestItem(null)}
-          className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-[fadeIn_0.1s_ease-out]"
-        >
-          <div 
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl border border-slate-100 shadow-xl max-w-md w-full overflow-hidden animate-[scaleUp_0.1s_ease-out]"
-          >
+        <div onClick={() => setSelectedTestItem(null)} className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-[fadeIn_0.1s_ease-out]">
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl border border-slate-100 shadow-xl max-w-md w-full overflow-hidden animate-[scaleUp_0.1s_ease-out]">
             <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-2 text-slate-800">
                 <Beaker className="w-4 h-4 text-blue-500" />
                 <h3 className="font-bold text-sm">Selected Test Panels</h3>
               </div>
-              <button 
-                onClick={() => setSelectedTestItem(null)}
-                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <button onClick={() => setSelectedTestItem(null)} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition"><X className="w-4 h-4" /></button>
             </div>
-            
             <div className="p-5 space-y-4">
               <div className="flex justify-between items-start gap-4">
                 <div>
@@ -623,23 +569,14 @@ export default function Dashboard() {
                   <p className="text-xs font-mono font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded inline-block border border-blue-100">{selectedTestItem.booking_id}</p>
                 </div>
               </div>
-              
               <hr className="border-slate-100" />
-
               <div>
-                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-2">
-                  Clinical Protocols ({parsedTests.length})
-                </span>
+                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-2">Clinical Protocols ({parsedTests.length})</span>
                 <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
                   {parsedTests.length > 0 ? (
                     parsedTests.map((testName, idx) => (
-                      <div 
-                        key={idx} 
-                        className="flex items-center gap-2.5 px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl"
-                      >
-                        <div className="w-5 h-5 rounded-md bg-white border border-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-500 shadow-sm">
-                          {idx + 1}
-                        </div>
+                      <div key={idx} className="flex items-center gap-2.5 px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl">
+                        <div className="w-5 h-5 rounded-md bg-white border border-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-500 shadow-sm">{idx + 1}</div>
                         <p className="text-xs font-semibold text-slate-700 truncate">{testName}</p>
                       </div>
                     ))
@@ -649,14 +586,8 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
-
             <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex justify-end">
-              <button 
-                onClick={() => setSelectedTestItem(null)}
-                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-medium rounded-xl text-xs transition"
-              >
-                Close View
-              </button>
+              <button onClick={() => setSelectedTestItem(null)} className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-medium rounded-xl text-xs transition">Close View</button>
             </div>
           </div>
         </div>
@@ -665,17 +596,9 @@ export default function Dashboard() {
   );
 }
 
-// Sub-components
 function StatCard({ icon, iconBg, value, label, isActive, onClick }: { icon: React.ReactNode; iconBg: string; value: number; label: string; isActive?: boolean; onClick?: () => void }) {
   return (
-    <button 
-      onClick={onClick}
-      className={`w-full text-left bg-white rounded-2xl border p-4 flex items-center gap-3.5 transition-all focus:outline-none ${
-        isActive 
-          ? 'border-blue-500 shadow-sm shadow-blue-500/5 ring-1 ring-blue-500' 
-          : 'border-slate-200 hover:border-slate-300'
-      }`}
-    >
+    <button onClick={onClick} className={`w-full text-left bg-white rounded-2xl border p-4 flex items-center gap-3.5 transition-all focus:outline-none ${isActive ? 'border-blue-500 shadow-sm shadow-blue-500/5 ring-1 ring-blue-500' : 'border-slate-200 hover:border-slate-300'}`}>
       <div className={`w-9 h-9 rounded-xl ${iconBg} flex items-center justify-center flex-shrink-0`}>{icon}</div>
       <div>
         <p className="text-xl font-bold tracking-tight text-slate-900">{value}</p>
@@ -685,15 +608,12 @@ function StatCard({ icon, iconBg, value, label, isActive, onClick }: { icon: Rea
   );
 }
 
-// Table Row component
-function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRemarks, onDelete, onWhatsApp, onViewAddress, onViewTests }: AppointmentRowProps) {
+function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRemarks, onDelete, onWhatsApp, onViewAddress, onViewTests, isInsideReminderWindow }: AppointmentRowProps) {
   const isCompleted = item.status === 'Completed';
   const isCancelled = item.status === 'Cancelled';
   
   const [localRemarks, setLocalRemarks] = useState(item.remarks || '');
   const [isFocused, setIsFocused] = useState(false);
-  
-  // Status tracking states for the saving feedback micro-interactions
   const [isSaving, setIsSaving] = useState(false);
   const [showSavedCheck, setShowSavedCheck] = useState(false);
   
@@ -707,11 +627,7 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
         await onUpdateRemarks(item.id, localRemarks);
         setIsSaving(false);
         setShowSavedCheck(true);
-        
-        // Hide the save verification badge after 2 seconds
-        setTimeout(() => {
-          setShowSavedCheck(false);
-        }, 2000);
+        setTimeout(() => setShowSavedCheck(false), 2000);
       } catch (err) {
         setIsSaving(false);
         console.error("Failed to commit log update:", err);
@@ -755,20 +671,13 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
             <Phone className="w-2.5 h-2.5 text-slate-400" /> {item.mobile}
           </a>
           <div className="flex items-center gap-1.5">
-            <select 
-              defaultValue="" 
-              onChange={e => { onWhatsApp(item.mobile, e.target.value, item); e.target.value = ''; }} 
-              className="text-[10px] font-medium px-1 py-0.5 rounded-md border border-slate-200 bg-white text-slate-500 max-w-[76px] cursor-pointer focus:outline-none"
-            >
+            <select defaultValue="" onChange={e => { onWhatsApp(item.mobile, e.target.value, item); e.target.value = ''; }} className="text-[10px] font-medium px-1 py-0.5 rounded-md border border-slate-200 bg-white text-slate-500 max-w-[76px] cursor-pointer focus:outline-none">
               <option value="">Alerts</option>
               <option value="welcome">Welcome</option>
               <option value="report">Ready</option>
               <option value="reminder">Remind</option>
             </select>
-            <button 
-              onClick={() => onWhatsApp(item.mobile, 'default', item)} 
-              className="inline-flex items-center text-[10px] font-bold text-emerald-600 hover:text-emerald-700 transition"
-            >
+            <button onClick={() => onWhatsApp(item.mobile, 'default', item)} className="inline-flex items-center text-[10px] font-bold text-emerald-600 hover:text-emerald-700 transition">
               <MessageCircle className="w-3 h-3 mr-0.5" /> Chat
             </button>
           </div>
@@ -777,103 +686,59 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
       
       <td className="px-4 py-3.5">
         <div>
-          <button
-            type="button"
-            onClick={() => onViewTests(item)}
-            className="text-left group inline-flex items-center text-[11px] font-bold text-blue-600 hover:text-blue-700 transition"
-          >
+          <button type="button" onClick={() => onViewTests(item)} className="text-left group inline-flex items-center text-[11px] font-bold text-blue-600 hover:text-blue-700 transition">
             <Beaker className="w-3 h-3 text-blue-500 mr-1 flex-shrink-0" /> 
             <span className="truncate max-w-[150px]">Investigations {totalTestCount > 0 ? `(${totalTestCount})` : ''}</span>
           </button>
-          <p className="text-[10px] font-semibold text-slate-400 mt-0.5 tracking-tight">{item.appointment_date} &bull; {item.time || 'N/A'}</p>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <p className="text-[10px] font-semibold text-slate-400 tracking-tight">{item.appointment_date} &bull; {item.time || 'N/A'}</p>
+            {isInsideReminderWindow && (
+              <span className="flex h-2 w-2 relative" title="Due for pre-test reminder execution">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+              </span>
+            )}
+          </div>
         </div>
       </td>
       
       <td className="px-4 py-3.5 whitespace-nowrap">
         {isHomeCollection ? (
-          <button
-            type="button"
-            onClick={() => onViewAddress(item)}
-            className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-100 rounded-lg text-[11px] font-semibold transition"
-          >
+          <button type="button" onClick={() => onViewAddress(item)} className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-100 rounded-lg text-[11px] font-semibold transition">
             <MapPin className="w-3 h-3" /> Address
           </button>
         ) : (
-          <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200/60 px-1.5 py-0.5 rounded-md tracking-wide uppercase">
-            Walk-in
-          </span>
+          <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200/60 px-1.5 py-0.5 rounded-md tracking-wide uppercase">Walk-in</span>
         )}
       </td>
 
-      {/* AUTO-EXPANDING PREMIUM INLINE EDITOR CELL WITH LOG-SAVED CHECKMARK ALERTS */}
       <td className="px-4 py-3.5">
         <div className="relative group max-w-[170px]">
-          <textarea 
-            value={localRemarks} 
-            onChange={(e) => setLocalRemarks(e.target.value)} 
-            onFocus={() => setIsFocused(true)}
-            onBlur={handleRemarksBlur} 
-            placeholder="Add log entry..." 
-            rows={isFocused ? 3 : 1} 
-            disabled={isSaving}
-            className={`w-full text-[11px] font-medium p-1 bg-transparent border-b outline-none resize-none transition-all custom-scrollbar ${
-              isFocused 
-                ? 'bg-white border-blue-400 shadow-lg p-2 rounded-xl h-20 absolute left-0 top-1/2 -translate-y-1/2 w-64 z-20 ring-4 ring-blue-500/5' 
-                : 'border-transparent hover:border-slate-200 cursor-pointer truncate'
-            }`} 
-          />
-          
-          {/* Status Indicators Layer */}
+          <textarea value={localRemarks} onChange={(e) => setLocalRemarks(e.target.value)} onFocus={() => setIsFocused(true)} onBlur={handleRemarksBlur} placeholder="Add log entry..." rows={isFocused ? 3 : 1} disabled={isSaving} className={`w-full text-[11px] font-medium p-1 bg-transparent border-b outline-none resize-none transition-all custom-scrollbar ${isFocused ? 'bg-white border-blue-400 shadow-lg p-2 rounded-xl h-20 absolute left-0 top-1/2 -translate-y-1/2 w-64 z-20 ring-4 ring-blue-500/5' : 'border-transparent hover:border-slate-200 cursor-pointer truncate'}`} />
           {!isFocused && (
             <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none select-none">
-              {isSaving && (
-                <RotateCw className="w-3 h-3 text-blue-500 animate-spin" />
-              )}
+              {isSaving && <RotateCw className="w-3 h-3 text-blue-500 animate-spin" />}
               {showSavedCheck && (
                 <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-200/60 font-bold text-[9px] uppercase tracking-wider animate-[fadeIn_0.15s_ease-out]">
                   <Check className="w-2.5 h-2.5 stroke-[3]" /> Saved
                 </div>
               )}
-              {!isSaving && !showSavedCheck && (
-                <Edit3 className="w-2.5 h-2.5 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
-              )}
+              {!isSaving && !showSavedCheck && <Edit3 className="w-2.5 h-2.5 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />}
             </div>
           )}
         </div>
       </td>
 
       <td className="px-4 py-3.5 whitespace-nowrap">
-        <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide uppercase border ${
-          isCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 
-          isCancelled ? 'bg-rose-50 text-rose-700 border-rose-100' : 
-          'bg-amber-50 text-amber-700 border-amber-100'
-        }`}>
+        <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide uppercase border ${isCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : isCancelled ? 'bg-rose-50 text-rose-700 border-rose-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
           {item.status || 'Pending'}
         </span>
       </td>
       <td className="pr-6 pl-4 py-3.5 text-right whitespace-nowrap">
         <div className="flex items-center justify-end gap-1">
-          <button 
-            onClick={() => onUpdateStatus(item.id, 'Completed')} 
-            title="Mark Completed" 
-            className="w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-emerald-600 hover:border-emerald-200 flex items-center justify-center transition shadow-sm"
-          >
-            <Check className="w-3.5 h-3.5" />
-          </button>
-          <button 
-            onClick={() => onUpdateStatus(item.id, 'Cancelled')} 
-            title="Cancel Workflow" 
-            className="w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-rose-600 hover:border-rose-200 flex items-center justify-center transition shadow-sm"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-          <button 
-            onClick={() => onDelete(item.id)} 
-            title="Trash Record" 
-            className="w-7 h-7 rounded-lg border border-transparent bg-transparent text-slate-400 hover:text-rose-600 flex items-center justify-center transition"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          <button onClick={() => onUpdateStatus(item.id, 'Completed')} title="Mark Completed" className="w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-emerald-600 hover:border-emerald-200 flex items-center justify-center transition shadow-sm"><Check className="w-3.5 h-3.5" /></button>
+          <button onClick={() => onUpdateStatus(item.id, 'Cancelled')} title="Cancel Workflow" className="w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-rose-600 hover:border-rose-200 flex items-center justify-center transition shadow-sm"><X className="w-3.5 h-3.5" /></button>
+          <button onClick={() => onDelete(item.id)} title="Trash Record" className="w-7 h-7 rounded-lg border border-transparent bg-transparent text-slate-400 hover:text-rose-600 flex items-center justify-center transition"><Trash2 className="w-3.5 h-3.5" /></button>
         </div>
       </td>
     </tr>
