@@ -387,19 +387,6 @@ export default function Dashboard() {
               />
             </div>
 
-            {/* Bulk Actions Menu */}
-            {selectedIds.size > 0 && (
-              <div className="bg-slate-950 border border-slate-900 shadow-xl rounded-xl px-4 py-2.5 mb-6 flex items-center justify-between gap-3 animate-[slideDown_0.2s_ease] text-white">
-                <span className="text-xs font-semibold tracking-wide text-slate-300">{selectedIds.size} records selected</span>
-                <div className="flex gap-2">
-                  <button onClick={() => bulkUpdateStatus('Completed')} className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-medium transition"><CheckCircle2 className="w-3.5 h-3.5" /> Complete</button>
-                  <button onClick={() => bulkUpdateStatus('Cancelled')} className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition"><XCircle className="w-3.5 h-3.5" /> Cancel</button>
-                  <button onClick={bulkDelete} className="flex items-center gap-1 px-2.5 py-1.5 bg-red-950/40 border border-red-900 hover:bg-red-900 text-red-200 rounded-lg text-xs font-medium transition"><Trash2 className="w-3.5 h-3.5" /> Delete</button>
-                  <button onClick={exportToPDF} className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition"><FileDown className="w-3.5 h-3.5" /> Export Report</button>
-                </div>
-              </div>
-            )}
-
             {/* Premium Table Component Layout */}
             <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
               <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b border-slate-100 bg-slate-50/70">
