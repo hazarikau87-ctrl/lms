@@ -9,6 +9,8 @@ import { useAuth } from '../contexts/AuthContext';
 import Settings from './settings';
 // 1. IMPORT YOUR NEW RESCHEDULE DRAWER COMPONENT
 import RescheduleDrawer from './RescheduleDrawer';
+// 2. IMPORT FLOATING INTERACTIVE ACTION BAR SUITE
+import ActionBar from './ActionBar';
 
 const RECORDS_PER_PAGE = 10;
 
@@ -599,6 +601,16 @@ export default function Dashboard() {
             appt.id === editingAppointment?.id ? { ...appt, ...updatedFields } : appt
           ));
         }}
+      />
+
+      {/* 6. FLOATING DYNAMIC SYSTEM ACTION BAR WITH EXCEL INTEGRATION */}
+      <ActionBar 
+        selectedIds={selectedIds}
+        appointments={appointments}
+        labName={lab?.lab_name}
+        onClearSelection={clearSelection}
+        onBulkUpdateStatus={bulkUpdateStatus}
+        onBulkDelete={bulkDelete}
       />
     </div>
   );
