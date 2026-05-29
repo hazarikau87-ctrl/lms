@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   FlaskConical, LogOut, Search, CalendarCheck, Clock, CheckCheck,
   Phone, FileText, Check, Trash2, ChevronLeft, ChevronRight,
-  MessageCircle, Building2, FileDown, CheckCircle2, RotateCw, Edit3, X, XCircle, Settings as SettingsIcon, LayoutDashboard, MapPin, Beaker, BellRing
+  MessageCircle, Building2, FileDown, CheckCircle2, RotateCw, Edit3, X, XCircle, Settings as SettingsIcon, LayoutDashboard, MapPin, Beaker, BellRing, Save, User
 } from 'lucide-react';
 import { supabase, Appointment, Lab } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -26,6 +26,7 @@ interface AppointmentRowProps {
   onWhatsApp: (phone: string, type: string, item: any) => void;
   onViewAddress: (item: any) => void;
   onViewTests: (item: any) => void;
+  onEditBooking: (item: any) => void;
   isInsideReminderWindow: boolean;
 }
 
@@ -51,6 +52,13 @@ export default function Dashboard() {
   // Address & Investigations Modals
   const [selectedAddressItem, setSelectedAddressItem] = useState<any | null>(null);
   const [selectedTestItem, setSelectedTestItem] = useState<any | null>(null);
+
+  // Enterprise Side-Drawer Edit Workflow States
+  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
+  const [editFormDate, setEditFormDate] = useState('');
+  const [editFormTime, setEditFormTime] = useState('');
+  const [editFormMobile, setEditFormMobile] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const fetchAll = useCallback(async () => {
     if (!user?.id) return;
@@ -95,7 +103,6 @@ export default function Dashboard() {
     if (!item.time) return false;
 
     try {
-      // Parse scheduled test window time (Expected format: "HH:MM")
       const [hours, minutes] = item.time.split(':').map(Number);
       const apptTime = new Date();
       apptTime.setHours(hours, minutes, 0, 0);
@@ -104,7 +111,6 @@ export default function Dashboard() {
       const diffInMs = apptTime.getTime() - now.getTime();
       const diffInHours = diffInMs / (1000 * 60 * 60);
 
-      // Matches appointments starting in roughly 2.5 to 3.5 hours
       return diffInHours >= 2.5 && diffInHours <= 3.5;
     } catch (e) {
       return false;
@@ -186,6 +192,47 @@ export default function Dashboard() {
     if (!lab?.id) return;
     await supabase.from('appointments').update({ remarks }).eq('id', id).eq('lab_id', lab.id);
     setAppointments(prev => prev.map(a => a.id === id ? { ...a, remarks } : a));
+  };
+
+  const handleOpenEditDrawer = (item: Appointment) => {
+    setEditingAppointment(item);
+    setEditFormDate(item.appointment_date || '');
+    setEditFormTime(item.time || '');
+    setEditFormMobile(item.mobile || '');
+  };
+
+  const handleCommitBookingEdits = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAppointment || !lab?.id) return;
+
+    setIsSavingEdit(true);
+    try {
+      const updates = {
+        appointment_date: editFormDate,
+        time: editFormTime,
+        mobile: editFormMobile
+      };
+
+      const { error } = await supabase
+        .from('appointments')
+        .update(updates)
+        .eq('id', editingAppointment.id)
+        .eq('lab_id', lab.id);
+
+      if (error) throw error;
+
+      // Optimistic Local Array Mutator Patching
+      setAppointments(prev => prev.map(a => 
+        a.id === editingAppointment.id ? { ...a, ...updates } : a
+      ));
+      
+      setEditingAppointment(null);
+    } catch (err) {
+      console.error("Critical scheduling edit failure:", err);
+      alert("Failed to commit rescheduling changes. Please try again.");
+    } finally {
+      setIsSavingEdit(false);
+    }
   };
 
   const deleteBooking = async (id: number) => {
@@ -344,7 +391,7 @@ export default function Dashboard() {
           <div className="animate-[fadeIn_0.2s_ease]"><Settings /></div>
         ) : (
           <>
-            {/* Clickable Stats with professional Reminders integration */}
+            {/* Clickable Stats Layout */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
               <StatCard 
                 icon={<CalendarCheck className="w-4 h-4 text-blue-600" />} 
@@ -482,6 +529,7 @@ export default function Dashboard() {
                         onWhatsApp={sendWhatsApp} 
                         onViewAddress={setSelectedAddressItem}
                         onViewTests={setSelectedTestItem}
+                        onEditBooking={handleOpenEditDrawer}
                         isInsideReminderWindow={checkReminderEligibility(item)}
                       />
                     ))}
@@ -501,6 +549,130 @@ export default function Dashboard() {
           </>
         )}
       </div>
+
+      {/* ENTERPRISE RIGHT SLIDE-OVER EDIT DRAWERS SHEET PANEL */}
+      {editingAppointment && (
+        <div 
+          onClick={() => setEditingAppointment(null)}
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] z-50 flex justify-end animate-[fadeIn_0.15s_ease-out]"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white w-full max-w-md h-full shadow-2xl flex flex-col border-l border-slate-200 animate-[slideLeft_0.2s_ease-out]"
+          >
+            {/* Drawer Header */}
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 bg-blue-50 border border-blue-200/60 text-blue-600 rounded-lg flex items-center justify-center">
+                  <Edit3 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-900">Manage Appointment</h3>
+                  <p className="text-[10px] font-mono text-slate-400 mt-0.5">ID: {editingAppointment.booking_id}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setEditingAppointment(null)}
+                className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-400 hover:text-slate-600 hover:shadow-sm transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Form Sheet Content */}
+            <form onSubmit={handleCommitBookingEdits} className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
+              
+              {/* Patient Core Summary Card */}
+              <div className="p-4 rounded-xl border border-slate-200/70 bg-slate-50/50 flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 flex-shrink-0">
+                  <User className="w-4 h-4" />
+                </div>
+                <div className="space-y-0.5">
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Patient Overview</p>
+                  <p className="text-sm font-bold text-slate-900">{editingAppointment.name}</p>
+                  <p className="text-xs font-semibold text-slate-500">
+                    {editingAppointment.age ?? 'N/A'} Y &bull; {editingAppointment.gender || 'N/A'}
+                  </p>
+                  <div className="pt-2">
+                    <span className="inline-block bg-white border border-slate-200 px-2 py-0.5 rounded text-[11px] font-medium text-slate-600">
+                      {editingAppointment.test}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <hr className="border-slate-100" />
+
+              {/* Editable Fields Group */}
+              <div className="space-y-4">
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Rescheduling & Timeline Parameters</h4>
+                
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500">Appointment Execution Date</label>
+                  <input 
+                    type="date"
+                    required
+                    value={editFormDate}
+                    onChange={(e) => setEditFormDate(e.target.value)}
+                    className="w-full text-xs font-medium px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500">Scheduled Time Coordinates (HH:MM)</label>
+                  <input 
+                    type="time"
+                    required
+                    value={editFormTime}
+                    onChange={(e) => setEditFormTime(e.target.value)}
+                    className="w-full text-xs font-medium px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition"
+                  />
+                </div>
+
+                <hr className="border-slate-100 my-2" />
+                
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Notification Dispatch Profiles</h4>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500">Primary Contact Target Mobile</label>
+                  <input 
+                    type="tel"
+                    required
+                    value={editFormMobile}
+                    onChange={(e) => setEditFormMobile(e.target.value)}
+                    placeholder="Enter mobile target string..."
+                    className="w-full text-xs font-mono font-bold tracking-wide px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition"
+                  />
+                </div>
+              </div>
+            </form>
+
+            {/* Fixed Drawer Action Sticky Footer */}
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center gap-3 justify-end">
+              <button 
+                type="button"
+                disabled={isSavingEdit}
+                onClick={() => setEditingAppointment(null)}
+                className="px-4 py-2 border border-slate-200 bg-white text-slate-600 font-semibold rounded-xl text-xs hover:bg-slate-50 transition disabled:opacity-50"
+              >
+                Discard
+              </button>
+              <button 
+                onClick={handleCommitBookingEdits}
+                disabled={isSavingEdit}
+                className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-xs shadow-sm shadow-blue-600/10 transition disabled:opacity-50"
+              >
+                {isSavingEdit ? (
+                  <RotateCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Save className="w-3.5 h-3.5" />
+                )}
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* DYNAMIC VIEW ADDRESS PORTAL WINDOW */}
       {selectedAddressItem && (
@@ -608,7 +780,7 @@ function StatCard({ icon, iconBg, value, label, isActive, onClick }: { icon: Rea
   );
 }
 
-function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRemarks, onDelete, onWhatsApp, onViewAddress, onViewTests, isInsideReminderWindow }: AppointmentRowProps) {
+function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRemarks, onDelete, onWhatsApp, onViewAddress, onViewTests, onEditBooking, isInsideReminderWindow }: AppointmentRowProps) {
   const isCompleted = item.status === 'Completed';
   const isCancelled = item.status === 'Cancelled';
   
@@ -648,7 +820,15 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
         <input type="checkbox" checked={selected} onChange={onToggle} className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/10 cursor-pointer" />
       </td>
       <td className="px-4 py-3.5 whitespace-nowrap">
-        <span className="font-mono text-xs font-bold text-slate-900 tracking-tight">{item.booking_id}</span>
+        {/* Clickable Blue Link Trigger to open Side-Drawer Sheet without crowding layout */}
+        <button
+          type="button"
+          onClick={() => onEditBooking(item)}
+          className="font-mono text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline tracking-tight focus:outline-none"
+          title="Click to manage or reschedule appointment details"
+        >
+          {item.booking_id}
+        </button>
       </td>
       <td className="px-4 py-3.5">
         <div className="max-w-[200px]">
