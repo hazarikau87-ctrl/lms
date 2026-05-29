@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   FlaskConical, LogOut, Search, CalendarCheck, Clock, CheckCheck,
   Phone, FileText, Check, Trash2, ChevronLeft, ChevronRight,
-  MessageCircle, Building2, FileDown, CheckCircle2, RotateCw, Edit3, X, XCircle, Settings as SettingsIcon, LayoutDashboard, MapPin, Beaker, BellRing, Save, User
+  MessageCircle, Building2, FileDown, CheckCircle2, RotateCw, Edit3, X, XCircle, Settings as SettingsIcon, LayoutDashboard, MapPin, Beaker, Save, User, Sun, Sunrise, Sunset
 } from 'lucide-react';
 import { supabase, Appointment, Lab } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -16,6 +16,13 @@ const WA_TEMPLATES: Record<string, string> = {
   reminder: 'Reminder: [NAME], you have an appointment on ([DATE]) at [TIME]. Please remember to fast if required.',
 };
 
+// Curated business-hours time slot matrices grouped by period intent
+const TIME_SLOTS_PRESET = {
+  morning: ['06:00', '07:00', '08:00', '09:00', '10:00', '11:00'],
+  afternoon: ['12:00', '13:00', '14:00', '15:00', '16:00', '17:00'],
+  evening: ['18:00', '19:00', '20:00', '21:00']
+};
+
 interface AppointmentRowProps {
   item: Appointment & { [key: string]: any };
   selected: boolean;
@@ -27,7 +34,6 @@ interface AppointmentRowProps {
   onViewAddress: (item: any) => void;
   onViewTests: (item: any) => void;
   onEditBooking: (item: any) => void;
-  isInsideReminderWindow: boolean;
 }
 
 export default function Dashboard() {
@@ -49,15 +55,15 @@ export default function Dashboard() {
   const [endDate, setEndDate] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  // Address & Investigations Modals
+  // Modals state targets
   const [selectedAddressItem, setSelectedAddressItem] = useState<any | null>(null);
   const [selectedTestItem, setSelectedTestItem] = useState<any | null>(null);
 
-  // Enterprise Side-Drawer Edit Workflow States
+  // Side-Drawer Slide-over workflow states
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [editFormDate, setEditFormDate] = useState('');
   const [editFormTime, setEditFormTime] = useState('');
-  const [editFormMobile, setEditFormMobile] = useState('');
+  const [editFormWhatsApp, setEditFormWhatsApp] = useState('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const fetchAll = useCallback(async () => {
@@ -94,29 +100,6 @@ export default function Dashboard() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // Evaluates if a record is within the critical prompt reminder window (2.5 to 3.5 hours before test execution)
-  const checkReminderEligibility = useCallback((item: Appointment) => {
-    if (item.status === 'Completed' || item.status === 'Cancelled') return false;
-    
-    const todayStr = new Date().toISOString().split('T')[0];
-    if (item.appointment_date !== todayStr) return false;
-    if (!item.time) return false;
-
-    try {
-      const [hours, minutes] = item.time.split(':').map(Number);
-      const apptTime = new Date();
-      apptTime.setHours(hours, minutes, 0, 0);
-
-      const now = new Date();
-      const diffInMs = apptTime.getTime() - now.getTime();
-      const diffInHours = diffInMs / (1000 * 60 * 60);
-
-      return diffInHours >= 2.5 && diffInHours <= 3.5;
-    } catch (e) {
-      return false;
-    }
-  }, []);
-
   const stats = useMemo(() => {
     let baseList = appointments;
     if (selectedDate) {
@@ -126,9 +109,9 @@ export default function Dashboard() {
       total: baseList.length,
       pending: baseList.filter(a => a.status !== 'Completed' && a.status !== 'Cancelled').length,
       completed: baseList.filter(a => a.status === 'Completed').length,
-      reminders: baseList.filter(a => checkReminderEligibility(a)).length,
+      cancelled: baseList.filter(a => a.status === 'Cancelled').length,
     };
-  }, [appointments, selectedDate, checkReminderEligibility]);
+  }, [appointments, selectedDate]);
 
   const filtered = useMemo(() => {
     let result = appointments;
@@ -141,8 +124,8 @@ export default function Dashboard() {
       result = result.filter(a => a.status !== 'Completed' && a.status !== 'Cancelled');
     } else if (statusFilter === 'completed') {
       result = result.filter(a => a.status === 'Completed');
-    } else if (statusFilter === 'reminders') {
-      result = result.filter(a => checkReminderEligibility(a));
+    } else if (statusFilter === 'cancelled') {
+      result = result.filter(a => a.status === 'Cancelled');
     }
 
     const q = search.trim().toUpperCase();
@@ -152,7 +135,7 @@ export default function Dashboard() {
       );
     }
     return result;
-  }, [appointments, search, selectedDate, statusFilter, checkReminderEligibility]);
+  }, [appointments, search, selectedDate, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / RECORDS_PER_PAGE));
   const paginated = filtered.slice((currentPage - 1) * RECORDS_PER_PAGE, currentPage * RECORDS_PER_PAGE);
@@ -190,15 +173,19 @@ export default function Dashboard() {
 
   const updateRemarks = async (id: number, remarks: string) => {
     if (!lab?.id) return;
-    await supabase.from('appointments').update({ remarks }).eq('id', id).eq('lab_id', lab.id);
-    setAppointments(prev => prev.map(a => a.id === id ? { ...a, remarks } : a));
+    try {
+      await supabase.from('appointments').update({ remarks }).eq('id', id).eq('lab_id', lab.id);
+      setAppointments(prev => prev.map(a => a.id === id ? { ...a, remarks } : a));
+    } catch (err) {
+      console.error("Error updating remarks:", err);
+    }
   };
 
-  const handleOpenEditDrawer = (item: Appointment) => {
+  const handleOpenEditDrawer = (item: Appointment & { whatsapp?: string }) => {
     setEditingAppointment(item);
     setEditFormDate(item.appointment_date || '');
-    setEditFormTime(item.time || '');
-    setEditFormMobile(item.mobile || '');
+    setEditFormTime(item.time || '08:00');
+    setEditFormWhatsApp(item.whatsapp || item.mobile || '');
   };
 
   const handleCommitBookingEdits = async (e: React.FormEvent) => {
@@ -210,7 +197,7 @@ export default function Dashboard() {
       const updates = {
         appointment_date: editFormDate,
         time: editFormTime,
-        mobile: editFormMobile
+        whatsapp: editFormWhatsApp
       };
 
       const { error } = await supabase
@@ -221,15 +208,15 @@ export default function Dashboard() {
 
       if (error) throw error;
 
-      // Optimistic Local Array Mutator Patching
+      // Inline UI patch mapping updates dynamically
       setAppointments(prev => prev.map(a => 
         a.id === editingAppointment.id ? { ...a, ...updates } : a
       ));
       
       setEditingAppointment(null);
     } catch (err) {
-      console.error("Critical scheduling edit failure:", err);
-      alert("Failed to commit rescheduling changes. Please try again.");
+      console.error("Critical rescheduling edit failure:", err);
+      alert("Failed to commit scheduling edits. Please try again.");
     } finally {
       setIsSavingEdit(false);
     }
@@ -237,11 +224,7 @@ export default function Dashboard() {
 
   const deleteBooking = async (id: number) => {
     if (!confirm('Move this record to trash?') || !lab?.id) return;
-    await supabase
-      .from('appointments')
-      .update({ is_deleted: true, deleted_at: new Date().toISOString() })
-      .eq('id', id)
-      .eq('lab_id', lab.id);
+    await supabase.from('appointments').update({ is_deleted: true, deleted_at: new Date().toISOString() }).eq('id', id).eq('lab_id', lab.id);
     fetchAll();
   };
 
@@ -391,40 +374,12 @@ export default function Dashboard() {
           <div className="animate-[fadeIn_0.2s_ease]"><Settings /></div>
         ) : (
           <>
-            {/* Clickable Stats Layout */}
+            {/* Clickable Stats */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-              <StatCard 
-                icon={<CalendarCheck className="w-4 h-4 text-blue-600" />} 
-                iconBg="bg-blue-50" 
-                value={stats.total} 
-                label={selectedDate ? `Booked on ${selectedDate}` : "Total Bookings"} 
-                isActive={statusFilter === 'all'}
-                onClick={() => handleStatusFilterClick('all')}
-              />
-              <StatCard 
-                icon={<Clock className="w-4 h-4 text-amber-600" />} 
-                iconBg="bg-amber-50" 
-                value={stats.pending} 
-                label="Pending Requests" 
-                isActive={statusFilter === 'pending'}
-                onClick={() => handleStatusFilterClick('pending')}
-              />
-              <StatCard 
-                icon={<CheckCheck className="w-4 h-4 text-emerald-600" />} 
-                iconBg="bg-emerald-50" 
-                value={stats.completed} 
-                label="Completed Tests" 
-                isActive={statusFilter === 'completed'}
-                onClick={() => handleStatusFilterClick('completed')}
-              />
-              <StatCard 
-                icon={<BellRing className={`w-4 h-4 ${stats.reminders > 0 ? 'text-orange-600 animate-[pulse_2s_infinite]' : 'text-slate-400'}`} />} 
-                iconBg={stats.reminders > 0 ? 'bg-orange-50' : 'bg-slate-100'} 
-                value={stats.reminders} 
-                label="Due for Reminder (2.5h)" 
-                isActive={statusFilter === 'reminders'}
-                onClick={() => handleStatusFilterClick('reminders')}
-              />
+              <StatCard icon={<CalendarCheck className="w-4 h-4 text-blue-600" />} iconBg="bg-blue-50" value={stats.total} label={selectedDate ? `Booked on ${selectedDate}` : "Total Bookings"} isActive={statusFilter === 'all'} onClick={() => handleStatusFilterClick('all')} />
+              <StatCard icon={<Clock className="w-4 h-4 text-amber-600" />} iconBg="bg-amber-50" value={stats.pending} label="Pending Requests" isActive={statusFilter === 'pending'} onClick={() => handleStatusFilterClick('pending')} />
+              <StatCard icon={<CheckCheck className="w-4 h-4 text-emerald-600" />} iconBg="bg-emerald-50" value={stats.completed} label="Completed Tests" isActive={statusFilter === 'completed'} onClick={() => handleStatusFilterClick('completed')} />
+              <StatCard icon={<XCircle className="w-4 h-4 text-rose-600" />} iconBg="bg-rose-50" value={stats.cancelled} label="Cancelled" isActive={statusFilter === 'cancelled'} onClick={() => handleStatusFilterClick('cancelled')} />
             </div>
 
             {/* Bulk Actions Menu */}
@@ -451,7 +406,7 @@ export default function Dashboard() {
                   
                   {statusFilter !== 'all' && (
                     <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-100 flex items-center gap-1 ml-2 capitalize">
-                      {statusFilter === 'reminders' ? 'Due for Reminder' : statusFilter}
+                      {statusFilter}
                       <button onClick={() => setStatusFilter('all')} className="hover:text-blue-900 ml-0.5 font-bold">×</button>
                     </span>
                   )}
@@ -530,7 +485,6 @@ export default function Dashboard() {
                         onViewAddress={setSelectedAddressItem}
                         onViewTests={setSelectedTestItem}
                         onEditBooking={handleOpenEditDrawer}
-                        isInsideReminderWindow={checkReminderEligibility(item)}
                       />
                     ))}
                   </tbody>
@@ -550,7 +504,7 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* ENTERPRISE RIGHT SLIDE-OVER EDIT DRAWERS SHEET PANEL */}
+      {/* PREMIUM RIGHT SLIDE-OVER EDIT DRAWERS SHEET PANEL */}
       {editingAppointment && (
         <div 
           onClick={() => setEditingAppointment(null)}
@@ -580,7 +534,7 @@ export default function Dashboard() {
             </div>
 
             {/* Form Sheet Content */}
-            <form onSubmit={handleCommitBookingEdits} className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
+            <form onSubmit={handleCommitBookingEdits} className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
               
               {/* Patient Core Summary Card */}
               <div className="p-4 rounded-xl border border-slate-200/70 bg-slate-50/50 flex items-start gap-3">
@@ -601,12 +555,8 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <hr className="border-slate-100" />
-
-              {/* Editable Fields Group */}
-              <div className="space-y-4">
-                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Rescheduling & Timeline Parameters</h4>
-                
+              {/* Action Fields */}
+              <div className="space-y-5">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500">Appointment Execution Date</label>
                   <input 
@@ -618,29 +568,61 @@ export default function Dashboard() {
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500">Scheduled Time Coordinates (HH:MM)</label>
-                  <input 
-                    type="time"
-                    required
-                    value={editFormTime}
-                    onChange={(e) => setEditFormTime(e.target.value)}
-                    className="w-full text-xs font-medium px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition"
-                  />
+                {/* PREMIUM GRID-BASED TIME TIMELINE PRESETS PICKER */}
+                <div className="space-y-3">
+                  <label className="text-xs font-bold text-slate-500 block">Reschedule Booking Time Coordinates</label>
+                  
+                  {/* Morning Block */}
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                      <Sunrise className="w-3 h-3 text-amber-500" /> Morning slots
+                    </span>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {TIME_SLOTS_PRESET.morning.map(slot => (
+                        <button key={slot} type="button" onClick={() => setEditFormTime(slot)} className={`py-2 text-xs font-mono font-bold rounded-xl transition border ${editFormTime === slot ? 'bg-blue-600 border-blue-600 text-white shadow-sm' : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200/80'}`}>{slot}</button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Afternoon Block */}
+                  <div className="space-y-1.5 pt-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                      <Sun className="w-3 h-3 text-orange-500" /> Afternoon slots
+                    </span>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {TIME_SLOTS_PRESET.afternoon.map(slot => (
+                        <button key={slot} type="button" onClick={() => setEditFormTime(slot)} className={`py-2 text-xs font-mono font-bold rounded-xl transition border ${editFormTime === slot ? 'bg-blue-600 border-blue-600 text-white shadow-sm' : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200/80'}`}>{slot}</button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Evening Block */}
+                  <div className="space-y-1.5 pt-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                      <Sunset className="w-3 h-3 text-indigo-500" /> Evening slots
+                    </span>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {TIME_SLOTS_PRESET.evening.map(slot => (
+                        <button key={slot} type="button" onClick={() => setEditFormTime(slot)} className={`py-2 text-xs font-mono font-bold rounded-xl transition border ${editFormTime === slot ? 'bg-blue-600 border-blue-600 text-white shadow-sm' : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200/80'}`}>{slot}</button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
 
-                <hr className="border-slate-100 my-2" />
-                
-                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Notification Dispatch Profiles</h4>
+                <hr className="border-slate-100 my-1" />
 
+                {/* TARGETED WHATSAPP INTERACTION ROUTE */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500">Primary Contact Target Mobile</label>
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-bold text-slate-500">Dedicated WhatsApp Contact Target</label>
+                    <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-100 px-1.5 py-0.5 rounded font-medium">Alert Destination Override</span>
+                  </div>
                   <input 
                     type="tel"
                     required
-                    value={editFormMobile}
-                    onChange={(e) => setEditFormMobile(e.target.value)}
-                    placeholder="Enter mobile target string..."
+                    value={editFormWhatsApp}
+                    onChange={(e) => setEditFormWhatsApp(e.target.value)}
+                    placeholder="Enter patient country code + whatsapp number..."
                     className="w-full text-xs font-mono font-bold tracking-wide px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition"
                   />
                 </div>
@@ -780,30 +762,16 @@ function StatCard({ icon, iconBg, value, label, isActive, onClick }: { icon: Rea
   );
 }
 
-function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRemarks, onDelete, onWhatsApp, onViewAddress, onViewTests, onEditBooking, isInsideReminderWindow }: AppointmentRowProps) {
+function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRemarks, onDelete, onWhatsApp, onViewAddress, onViewTests, onEditBooking }: AppointmentRowProps) {
   const isCompleted = item.status === 'Completed';
   const isCancelled = item.status === 'Cancelled';
-  
   const [localRemarks, setLocalRemarks] = useState(item.remarks || '');
-  const [isFocused, setIsFocused] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [showSavedCheck, setShowSavedCheck] = useState(false);
   
   useEffect(() => { setLocalRemarks(item.remarks || ''); }, [item.remarks]);
   
-  const handleRemarksBlur = async () => { 
-    setIsFocused(false);
+  const handleRemarksBlur = () => { 
     if (localRemarks !== (item.remarks || '')) { 
-      try {
-        setIsSaving(true);
-        await onUpdateRemarks(item.id, localRemarks);
-        setIsSaving(false);
-        setShowSavedCheck(true);
-        setTimeout(() => setShowSavedCheck(false), 2000);
-      } catch (err) {
-        setIsSaving(false);
-        console.error("Failed to commit log update:", err);
-      }
+      onUpdateRemarks(item.id, localRemarks); 
     } 
   };
 
@@ -820,11 +788,10 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
         <input type="checkbox" checked={selected} onChange={onToggle} className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/10 cursor-pointer" />
       </td>
       <td className="px-4 py-3.5 whitespace-nowrap">
-        {/* Clickable Blue Link Trigger to open Side-Drawer Sheet without crowding layout */}
         <button
           type="button"
           onClick={() => onEditBooking(item)}
-          className="font-mono text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline tracking-tight focus:outline-none"
+          className="font-mono text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline tracking-tight focus:outline-none text-left"
           title="Click to manage or reschedule appointment details"
         >
           {item.booking_id}
@@ -870,15 +837,7 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
             <Beaker className="w-3 h-3 text-blue-500 mr-1 flex-shrink-0" /> 
             <span className="truncate max-w-[150px]">Investigations {totalTestCount > 0 ? `(${totalTestCount})` : ''}</span>
           </button>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <p className="text-[10px] font-semibold text-slate-400 tracking-tight">{item.appointment_date} &bull; {item.time || 'N/A'}</p>
-            {isInsideReminderWindow && (
-              <span className="flex h-2 w-2 relative" title="Due for pre-test reminder execution">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
-              </span>
-            )}
-          </div>
+          <p className="text-[10px] font-semibold text-slate-400 mt-0.5 tracking-tight">{item.appointment_date} &bull; {item.time || 'N/A'}</p>
         </div>
       </td>
       
@@ -893,22 +852,11 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
       </td>
 
       <td className="px-4 py-3.5">
-        <div className="relative group max-w-[170px]">
-          <textarea value={localRemarks} onChange={(e) => setLocalRemarks(e.target.value)} onFocus={() => setIsFocused(true)} onBlur={handleRemarksBlur} placeholder="Add log entry..." rows={isFocused ? 3 : 1} disabled={isSaving} className={`w-full text-[11px] font-medium p-1 bg-transparent border-b outline-none resize-none transition-all custom-scrollbar ${isFocused ? 'bg-white border-blue-400 shadow-lg p-2 rounded-xl h-20 absolute left-0 top-1/2 -translate-y-1/2 w-64 z-20 ring-4 ring-blue-500/5' : 'border-transparent hover:border-slate-200 cursor-pointer truncate'}`} />
-          {!isFocused && (
-            <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none select-none">
-              {isSaving && <RotateCw className="w-3 h-3 text-blue-500 animate-spin" />}
-              {showSavedCheck && (
-                <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-200/60 font-bold text-[9px] uppercase tracking-wider animate-[fadeIn_0.15s_ease-out]">
-                  <Check className="w-2.5 h-2.5 stroke-[3]" /> Saved
-                </div>
-              )}
-              {!isSaving && !showSavedCheck && <Edit3 className="w-2.5 h-2.5 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />}
-            </div>
-          )}
+        <div className="relative group max-w-[160px]">
+          <textarea value={localRemarks} onChange={(e) => setLocalRemarks(e.target.value)} onBlur={handleRemarksBlur} placeholder="Add log entry..." rows={1} className="w-full text-[11px] font-medium p-1 bg-transparent border-b border-transparent hover:border-slate-200 focus:bg-slate-50 focus:border-slate-200 focus:p-1.5 rounded outline-none resize-none transition-all custom-scrollbar" />
+          <Edit3 className="absolute right-1 top-1 w-2.5 h-2.5 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
         </div>
       </td>
-
       <td className="px-4 py-3.5 whitespace-nowrap">
         <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide uppercase border ${isCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : isCancelled ? 'bg-rose-50 text-rose-700 border-rose-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
           {item.status || 'Pending'}
