@@ -7,6 +7,8 @@ import {
 import { supabase, Appointment, Lab } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import Settings from './settings';
+// 1. IMPORT YOUR NEW RESCHEDULE DRAWER COMPONENT
+import RescheduleDrawer from './RescheduleDrawer';
 
 const RECORDS_PER_PAGE = 10;
 
@@ -26,6 +28,8 @@ interface AppointmentRowProps {
   onWhatsApp: (phone: string, type: string, item: any) => void;
   onViewAddress: (item: any) => void;
   onViewTests: (item: any) => void;
+  // 2. PROP HANDLER EXTENSION FOR CLICKING BOOKING ID
+  onSelectReschedule: (item: any) => void;
   isInsideReminderWindow: boolean;
 }
 
@@ -51,6 +55,9 @@ export default function Dashboard() {
   // Address & Investigations Modals
   const [selectedAddressItem, setSelectedAddressItem] = useState<any | null>(null);
   const [selectedTestItem, setSelectedTestItem] = useState<any | null>(null);
+
+  // 3. TRACK ACTIVE APPOINTMENT ASSIGNED FOR RESCHEDULING
+  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
 
   const fetchAll = useCallback(async () => {
     if (!user?.id) return;
@@ -482,6 +489,8 @@ export default function Dashboard() {
                         onWhatsApp={sendWhatsApp} 
                         onViewAddress={setSelectedAddressItem}
                         onViewTests={setSelectedTestItem}
+                        // 4. BIND SELECTION MUTATION ROUTE TO INDIVIDUAL ROWS
+                        onSelectReschedule={setEditingAppointment}
                         isInsideReminderWindow={checkReminderEligibility(item)}
                       />
                     ))}
@@ -592,6 +601,18 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* 5. MOUNT THE RESCHEDULEDRAWER WITH CLEAN REBIND CALLBACK STATE INTERSECTION */}
+      <RescheduleDrawer 
+        appointment={editingAppointment}
+        labId={lab?.id}
+        onClose={() => setEditingAppointment(null)}
+        onSuccess={(updatedFields) => {
+          setAppointments(prev => prev.map(appt => 
+            appt.id === editingAppointment?.id ? { ...appt, ...updatedFields } : appt
+          ));
+        }}
+      />
     </div>
   );
 }
@@ -608,7 +629,7 @@ function StatCard({ icon, iconBg, value, label, isActive, onClick }: { icon: Rea
   );
 }
 
-function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRemarks, onDelete, onWhatsApp, onViewAddress, onViewTests, isInsideReminderWindow }: AppointmentRowProps) {
+function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRemarks, onDelete, onWhatsApp, onViewAddress, onViewTests, onSelectReschedule, isInsideReminderWindow }: AppointmentRowProps) {
   const isCompleted = item.status === 'Completed';
   const isCancelled = item.status === 'Cancelled';
   
@@ -647,9 +668,18 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
       <td className="px-6 py-3.5 text-center">
         <input type="checkbox" checked={selected} onChange={onToggle} className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/10 cursor-pointer" />
       </td>
+      
+      {/* 6. CONVERT THE BOOKING ID INTO A INTERACTIVE BUTTON TO LAUNCH RESCHEDULING */}
       <td className="px-4 py-3.5 whitespace-nowrap">
-        <span className="font-mono text-xs font-bold text-slate-900 tracking-tight">{item.booking_id}</span>
+        <button 
+          type="button"
+          onClick={() => onSelectReschedule(item)}
+          className="font-mono text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline bg-blue-50/60 hover:bg-blue-50 border border-blue-100/80 px-2 py-1 rounded-lg shadow-2xs transition-all text-left"
+        >
+          {item.booking_id}
+        </button>
       </td>
+
       <td className="px-4 py-3.5">
         <div className="max-w-[200px]">
           <p className="font-semibold text-slate-900 text-xs truncate" title={item.name}>{item.name}</p>
