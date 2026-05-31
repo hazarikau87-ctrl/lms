@@ -1,17 +1,10 @@
 // components/ExpandedRowPanel.tsx
 import React from 'react';
-import { FileText, Phone, MessageCircle, MapPin, Edit3, RotateCw, Check } from 'lucide-react';
+import { FileText, Phone, MessageCircle, MapPin } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface ExpandedRowPanelProps {
   item: any;
-  localRemarks: string;
-  setLocalRemarks: (val: string) => void;
-  isFocused: boolean;
-  setIsFocused: (val: boolean) => void;
-  isSaving: boolean;
-  showSavedCheck: boolean;
-  handleRemarksBlur: () => void;
   onWhatsApp: (phone: string, type: string, item: any) => void;
   onViewAddress: (item: any) => void;
   isHomeCollection: boolean;
@@ -19,20 +12,13 @@ interface ExpandedRowPanelProps {
 
 export default function ExpandedRowPanel({
   item,
-  localRemarks,
-  setLocalRemarks,
-  isFocused,
-  setIsFocused,
-  isSaving,
-  showSavedCheck,
-  handleRemarksBlur,
   onWhatsApp,
   onViewAddress,
   isHomeCollection
 }: ExpandedRowPanelProps) {
   return (
     <td colSpan={6} className="px-8 py-4 bg-slate-50/60 border-t border-b border-slate-100">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 text-xs text-slate-600">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs text-slate-600">
         
         {/* Box 1: Prescription Data */}
         <div className="bg-white p-3 rounded-xl border border-slate-200/60 shadow-2xs">
@@ -82,29 +68,6 @@ export default function ExpandedRowPanel({
           ) : (
             <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200/60 px-2 py-1 rounded-md tracking-wide uppercase inline-block">Walk-in Appointment</span>
           )}
-        </div>
-
-        {/* Box 4: Log Tracking Entries */}
-        <div className="bg-white p-3 rounded-xl border border-slate-200/60 shadow-2xs relative group">
-          <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-1">Internal Remarks & Logs</span>
-          <textarea 
-            value={localRemarks} 
-            onChange={(e) => setLocalRemarks(e.target.value)} 
-            onFocus={() => setIsFocused(true)} 
-            onBlur={handleRemarksBlur} 
-            placeholder="Add log entry..." 
-            rows={2} 
-            disabled={isSaving} 
-            className="w-full text-xs font-medium p-1.5 bg-slate-50 border border-slate-200 focus:border-blue-400 focus:bg-white rounded-lg outline-none resize-none transition-all"
-          />
-          <div className="absolute right-4 top-2 flex items-center gap-1 pointer-events-none select-none">
-            {isSaving && <RotateCw className="w-3 h-3 text-blue-500 animate-spin" />}
-            {showSavedCheck && (
-              <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-200/60 font-bold text-[9px] uppercase tracking-wider">
-                <Check className="w-2.5 h-2.5 stroke-[3]" /> Saved
-              </div>
-            )}
-          </div>
         </div>
 
       </div>
