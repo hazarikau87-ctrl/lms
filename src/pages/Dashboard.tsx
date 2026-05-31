@@ -1,14 +1,16 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   FlaskConical, LogOut, Search, CalendarCheck, Clock, CheckCheck,
-  RotateCw, ChevronLeft, ChevronRight, Building2, FileDown, Trash2, X, Settings as SettingsIcon, LayoutDashboard, MapPin, Beaker, BellRing, Check
+  Phone, FileText, Check, Trash2, ChevronLeft, ChevronRight,
+  MessageCircle, Building2, FileDown, CheckCircle2, RotateCw, Edit3, X, XCircle, Settings as SettingsIcon, LayoutDashboard, MapPin, Beaker, BellRing
 } from 'lucide-react';
 import { supabase, Appointment, Lab } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import Settings from './settings';
+// 1. IMPORT YOUR NEW RESCHEDULE DRAWER COMPONENT
 import RescheduleDrawer from './RescheduleDrawer';
+// 2. IMPORT FLOATING INTERACTIVE ACTION BAR SUITE
 import ActionBar from './ActionBar';
-import BookingTable from './BookingTable';
 
 const RECORDS_PER_PAGE = 10;
 
@@ -17,6 +19,21 @@ const WA_TEMPLATES: Record<string, string> = {
   report: 'Hello [NAME], your lab reports for [TEST] are now ready. Please visit our portal to download.',
   reminder: 'Reminder: [NAME], you have an appointment on ([DATE]) at [TIME]. Please remember to fast if required.',
 };
+
+interface AppointmentRowProps {
+  item: Appointment & { [key: string]: any };
+  selected: boolean;
+  onToggle: () => void;
+  onUpdateStatus: (id: number, status: string) => Promise<void>;
+  onUpdateRemarks: (id: number, remarks: string) => Promise<void>;
+  onDelete: (id: number) => Promise<void>;
+  onWhatsApp: (phone: string, type: string, item: any) => void;
+  onViewAddress: (item: any) => void;
+  onViewTests: (item: any) => void;
+  // 2. PROP HANDLER EXTENSION FOR CLICKING BOOKING ID
+  onSelectReschedule: (item: any) => void;
+  isInsideReminderWindow: boolean;
+}
 
 export default function Dashboard() {
   const { user, signOut } = useAuth();
@@ -38,10 +55,10 @@ export default function Dashboard() {
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   // Address & Investigations Modals
-  const [selectedAddressItem, setSelectedAddressItem] = useState<Appointment | null>(null);
-  const [selectedTestItem, setSelectedTestItem] = useState<Appointment | null>(null);
+  const [selectedAddressItem, setSelectedAddressItem] = useState<any | null>(null);
+  const [selectedTestItem, setSelectedTestItem] = useState<any | null>(null);
 
-  // TRACK ACTIVE APPOINTMENT ASSIGNED FOR RESCHEDULING
+  // 3. TRACK ACTIVE APPOINTMENT ASSIGNED FOR RESCHEDULING
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
 
   const fetchAll = useCallback(async () => {
@@ -78,17 +95,16 @@ export default function Dashboard() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // Local Timezone Safe date generation
+  // Evaluates if a record is within the critical prompt reminder window (2.5 to 3.5 hours before test execution)
   const checkReminderEligibility = useCallback((item: Appointment) => {
     if (item.status === 'Completed' || item.status === 'Cancelled') return false;
     
-    const today = new Date();
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-    
+    const todayStr = new Date().toISOString().split('T')[0];
     if (item.appointment_date !== todayStr) return false;
     if (!item.time) return false;
 
     try {
+      // Parse scheduled test window time (Expected format: "HH:MM")
       const [hours, minutes] = item.time.split(':').map(Number);
       const apptTime = new Date();
       apptTime.setHours(hours, minutes, 0, 0);
@@ -97,6 +113,7 @@ export default function Dashboard() {
       const diffInMs = apptTime.getTime() - now.getTime();
       const diffInHours = diffInMs / (1000 * 60 * 60);
 
+      // Matches appointments starting in roughly 2.5 to 3.5 hours
       return diffInHours >= 2.5 && diffInHours <= 3.5;
     } catch (e) {
       return false;
@@ -161,7 +178,6 @@ export default function Dashboard() {
 
   const handleStatusFilterClick = (type: string) => {
     setCurrentPage(1);
-    clearSelection();
     setStatusFilter(prev => prev === type ? 'all' : type);
   };
 
@@ -177,48 +193,32 @@ export default function Dashboard() {
 
   const updateRemarks = async (id: number, remarks: string) => {
     if (!lab?.id) return;
-    try {
-      await supabase.from('appointments').update({ remarks }).eq('id', id).eq('lab_id', lab.id);
-      setAppointments(prev => prev.map(a => a.id === id ? { ...a, remarks } : a));
-    } catch (err) {
-      console.error("Error updating remarks:", err);
-    }
+    await supabase.from('appointments').update({ remarks }).eq('id', id).eq('lab_id', lab.id);
+    setAppointments(prev => prev.map(a => a.id === id ? { ...a, remarks } : a));
   };
 
   const deleteBooking = async (id: number) => {
     if (!confirm('Move this record to trash?') || !lab?.id) return;
-    try {
-      await supabase
-        .from('appointments')
-        .update({ is_deleted: true, deleted_at: new Date().toISOString() })
-        .eq('id', id)
-        .eq('lab_id', lab.id);
-      fetchAll();
-    } catch (err) {
-      console.error("Error deleting booking:", err);
-    }
+    await supabase
+      .from('appointments')
+      .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('lab_id', lab.id);
+    fetchAll();
   };
 
   const bulkUpdateStatus = async (status: string) => {
     if (!confirm(`Update ${selectedIds.size} item(s) to ${status}?`) || !lab?.id) return;
-    try {
-      await supabase.from('appointments').update({ status }).in('id', Array.from(selectedIds)).eq('lab_id', lab.id);
-      clearSelection();
-      fetchAll();
-    } catch (err) {
-      console.error("Bulk update failure:", err);
-    }
+    await supabase.from('appointments').update({ status }).in('id', Array.from(selectedIds)).eq('lab_id', lab.id);
+    clearSelection();
+    fetchAll();
   };
 
   const bulkDelete = async () => {
     if (!confirm(`Move ${selectedIds.size} record(s) to trash?`) || !lab?.id) return;
-    try {
-      await supabase.from('appointments').update({ is_deleted: true, deleted_at: new Date().toISOString() }).in('id', Array.from(selectedIds)).eq('lab_id', lab.id);
-      clearSelection();
-      fetchAll();
-    } catch (err) {
-      console.error("Bulk delete failure:", err);
-    }
+    await supabase.from('appointments').update({ is_deleted: true, deleted_at: new Date().toISOString() }).in('id', Array.from(selectedIds)).eq('lab_id', lab.id);
+    clearSelection();
+    fetchAll();
   };
 
   const deleteByRange = async () => {
@@ -226,15 +226,10 @@ export default function Dashboard() {
     const toDelete = appointments.filter(a => a.appointment_date >= startDate && a.appointment_date <= endDate);
     if (toDelete.length === 0) return alert("No records found in this range.");
     if (!confirm(`Move all ${toDelete.length} records from ${startDate} to ${endDate} to trash?`)) return;
-    
-    try {
-      const idsToDelete = toDelete.map(a => a.id);
-      await supabase.from('appointments').update({ is_deleted: true, deleted_at: new Date().toISOString() }).in('id', idsToDelete).eq('lab_id', lab.id);
-      setStartDate(''); setEndDate(''); setShowDatePicker(false);
-      fetchAll();
-    } catch (err) {
-      console.error("Range deletion error:", err);
-    }
+    const idsToDelete = toDelete.map(a => a.id);
+    await supabase.from('appointments').update({ is_deleted: true, deleted_at: new Date().toISOString() }).in('id', idsToDelete).eq('lab_id', lab.id);
+    setStartDate(''); setEndDate(''); setShowDatePicker(false);
+    fetchAll();
   };
 
   const sendWhatsApp = (phone: string, type: string, item: any) => {
@@ -358,6 +353,7 @@ export default function Dashboard() {
           <div className="animate-[fadeIn_0.2s_ease]"><Settings /></div>
         ) : (
           <>
+            {/* Clickable Stats with professional Reminders integration */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
               <StatCard 
                 icon={<CalendarCheck className="w-4 h-4 text-blue-600" />} 
@@ -393,6 +389,7 @@ export default function Dashboard() {
               />
             </div>
 
+            {/* Premium Table Component Layout */}
             <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
               <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b border-slate-100 bg-slate-50/70">
                 <div className="flex items-center gap-3">
@@ -440,20 +437,55 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <BookingTable 
-                loading={loading}
-                paginated={paginated}
-                selectedIds={selectedIds}
-                toggleRow={toggleRow}
-                onUpdateStatus={updateStatus}
-                onUpdateRemarks={updateRemarks}
-                onDelete={deleteBooking}
-                onWhatsApp={sendWhatsApp}
-                onViewAddress={setSelectedAddressItem}
-                onViewTests={setSelectedTestItem}
-                onSelectReschedule={setEditingAppointment}
-                checkReminderEligibility={checkReminderEligibility}
-              />
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1200px] table-fixed">
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50/40 text-slate-400">
+                      <th className="w-12 px-6 py-3"></th>
+                      <th className="w-32 px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Booking ID</th>
+                      <th className="w-56 px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Patient Details</th>
+                      <th className="w-32 px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Prescription</th>
+                      <th className="w-48 px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Contact Profile</th>
+                      <th className="w-56 px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Diagnostics / Schedule</th>
+                      <th className="w-40 px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Fulfillment Address</th>
+                      <th className="w-48 px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Internal Remarks</th>
+                      <th className="w-32 px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Status</th>
+                      <th className="w-36 pr-6 pl-4 py-3.5 text-right text-[11px] font-bold uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
+                    {loading ? (
+                      <tr><td colSpan={10} className="py-24 text-center"><RotateCw className="w-6 h-6 animate-spin mx-auto text-blue-500" /></td></tr>
+                    ) : paginated.length === 0 ? (
+                      <tr>
+                        <td colSpan={10} className="py-24 text-center text-slate-400">
+                          <div className="flex flex-col items-center gap-2 max-w-sm mx-auto">
+                            <Search className="w-8 h-8 text-slate-300 mb-1" />
+                            <p className="text-sm font-semibold text-slate-800">No matching appointments</p>
+                            <p className="text-xs text-slate-400">Try updating your parameters or filters.</p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : paginated.map(item => (
+                      <AppointmentRow 
+                        key={item.id} 
+                        item={item} 
+                        selected={selectedIds.has(item.id)} 
+                        onToggle={() => toggleRow(item.id)} 
+                        onUpdateStatus={updateStatus} 
+                        onUpdateRemarks={updateRemarks} 
+                        onDelete={deleteBooking} 
+                        onWhatsApp={sendWhatsApp} 
+                        onViewAddress={setSelectedAddressItem}
+                        onViewTests={setSelectedTestItem}
+                        // 4. BIND SELECTION MUTATION ROUTE TO INDIVIDUAL ROWS
+                        onSelectReschedule={setEditingAppointment}
+                        isInsideReminderWindow={checkReminderEligibility(item)}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
               <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
                 <p className="text-xs font-medium text-slate-500">Showing rows {Math.min(filtered.length, (currentPage - 1) * RECORDS_PER_PAGE + 1)}-{Math.min(filtered.length, currentPage * RECORDS_PER_PAGE)} of {filtered.length}</p>
@@ -492,8 +524,18 @@ export default function Dashboard() {
               <div>
                 <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-1">Destination Address</span>
                 <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100 font-medium">
-                  {selectedAddressItem.address || 'No location schema configuration detected.'}
+                  {selectedAddressItem.address_line || selectedAddressItem.address || 'No location schema configuration detected.'}
                 </p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-0.5">Postal Zip Code</span>
+                  <p className="text-xs font-semibold text-slate-900">{selectedAddressItem.pincode || 'N/A'}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-0.5">Identified Landmark</span>
+                  <p className="text-xs font-semibold text-slate-900">{selectedAddressItem.landmark || 'None Provided'}</p>
+                </div>
               </div>
             </div>
             <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex justify-end">
@@ -549,6 +591,7 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* 5. MOUNT THE RESCHEDULEDRAWER WITH CLEAN REBIND CALLBACK STATE INTERSECTION */}
       <RescheduleDrawer 
         appointment={editingAppointment}
         labId={lab?.id}
@@ -560,6 +603,7 @@ export default function Dashboard() {
         }}
       />
 
+      {/* 6. FLOATING DYNAMIC SYSTEM ACTION BAR WITH EXCEL INTEGRATION */}
       <ActionBar 
         selectedIds={selectedIds}
         appointments={appointments}
@@ -581,5 +625,151 @@ function StatCard({ icon, iconBg, value, label, isActive, onClick }: { icon: Rea
         <p className="text-[11px] font-medium text-slate-400 mt-0.5 truncate">{label}</p>
       </div>
     </button>
+  );
+}
+
+function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRemarks, onDelete, onWhatsApp, onViewAddress, onViewTests, onSelectReschedule, isInsideReminderWindow }: AppointmentRowProps) {
+  const isCompleted = item.status === 'Completed';
+  const isCancelled = item.status === 'Cancelled';
+  
+  const [localRemarks, setLocalRemarks] = useState(item.remarks || '');
+  const [isFocused, setIsFocused] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [showSavedCheck, setShowSavedCheck] = useState(false);
+  
+  useEffect(() => { setLocalRemarks(item.remarks || ''); }, [item.remarks]);
+  
+  const handleRemarksBlur = async () => { 
+    setIsFocused(false);
+    if (localRemarks !== (item.remarks || '')) { 
+      try {
+        setIsSaving(true);
+        await onUpdateRemarks(item.id, localRemarks);
+        setIsSaving(false);
+        setShowSavedCheck(true);
+        setTimeout(() => setShowSavedCheck(false), 2000);
+      } catch (err) {
+        setIsSaving(false);
+        console.error("Failed to commit log update:", err);
+      }
+    } 
+  };
+
+  const isHomeCollection = item.bookingType === 'home' || item.booking_type === 'home';
+
+  const totalTestCount = useMemo(() => {
+    if (!item.test) return 0;
+    return item.test.split(',').map((t: string) => t.trim()).filter(Boolean).length;
+  }, [item.test]);
+
+  return (
+    <tr className={`hover:bg-slate-50/50 transition-colors ${selected ? 'bg-blue-50/20' : ''}`}>
+      <td className="px-6 py-3.5 text-center">
+        <input type="checkbox" checked={selected} onChange={onToggle} className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/10 cursor-pointer" />
+      </td>
+      
+      {/* 6. CONVERT THE BOOKING ID INTO A INTERACTIVE BUTTON TO LAUNCH RESCHEDULING */}
+      <td className="px-4 py-3.5 whitespace-nowrap">
+        <button 
+          type="button"
+          onClick={() => onSelectReschedule(item)}
+          className="font-mono text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline bg-blue-50/60 hover:bg-blue-50 border border-blue-100/80 px-2 py-1 rounded-lg shadow-2xs transition-all text-left"
+        >
+          {item.booking_id}
+        </button>
+      </td>
+
+      <td className="px-4 py-3.5">
+        <div className="max-w-[200px]">
+          <p className="font-semibold text-slate-900 text-xs truncate" title={item.name}>{item.name}</p>
+          <p className="text-[11px] font-medium text-slate-400 mt-0.5">{item.age ?? 'N/A'}Y &bull; {item.gender || 'N/A'}</p>
+        </div>
+      </td>
+      <td className="px-4 py-3.5 whitespace-nowrap">
+        {item.prescription_url ? ( 
+          <a href={item.prescription_url.startsWith('http') ? item.prescription_url : supabase.storage.from('prescriptions').getPublicUrl(item.prescription_url).data.publicUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-2 py-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-600 transition">
+            <FileText className="w-3 h-3 text-slate-400" /> View Rx
+          </a> 
+        ) : (
+          <span className="text-[11px] text-slate-400 font-medium italic">None Attached</span>
+        )}
+      </td>
+      <td className="px-4 py-3.5">
+        <div className="space-y-1">
+          <a href={`tel:${item.mobile}`} className="inline-flex items-center gap-1 text-[11px] text-slate-600 font-bold hover:text-blue-600 transition">
+            <Phone className="w-2.5 h-2.5 text-slate-400" /> {item.mobile}
+          </a>
+          <div className="flex items-center gap-1.5">
+            <select defaultValue="" onChange={e => { onWhatsApp(item.mobile, e.target.value, item); e.target.value = ''; }} className="text-[10px] font-medium px-1 py-0.5 rounded-md border border-slate-200 bg-white text-slate-500 max-w-[76px] cursor-pointer focus:outline-none">
+              <option value="">Alerts</option>
+              <option value="welcome">Welcome</option>
+              <option value="report">Ready</option>
+              <option value="reminder">Remind</option>
+            </select>
+            <button onClick={() => onWhatsApp(item.mobile, 'default', item)} className="inline-flex items-center text-[10px] font-bold text-emerald-600 hover:text-emerald-700 transition">
+              <MessageCircle className="w-3 h-3 mr-0.5" /> Chat
+            </button>
+          </div>
+        </div>
+      </td>
+      
+      <td className="px-4 py-3.5">
+        <div>
+          <button type="button" onClick={() => onViewTests(item)} className="text-left group inline-flex items-center text-[11px] font-bold text-blue-600 hover:text-blue-700 transition">
+            <Beaker className="w-3 h-3 text-blue-500 mr-1 flex-shrink-0" /> 
+            <span className="truncate max-w-[150px]">Investigations {totalTestCount > 0 ? `(${totalTestCount})` : ''}</span>
+          </button>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <p className="text-[10px] font-semibold text-slate-400 tracking-tight">{item.appointment_date} &bull; {item.time || 'N/A'}</p>
+            {isInsideReminderWindow && (
+              <span className="flex h-2 w-2 relative" title="Due for pre-test reminder execution">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+              </span>
+            )}
+          </div>
+        </div>
+      </td>
+      
+      <td className="px-4 py-3.5 whitespace-nowrap">
+        {isHomeCollection ? (
+          <button type="button" onClick={() => onViewAddress(item)} className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-100 rounded-lg text-[11px] font-semibold transition">
+            <MapPin className="w-3 h-3" /> Address
+          </button>
+        ) : (
+          <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200/60 px-1.5 py-0.5 rounded-md tracking-wide uppercase">Walk-in</span>
+        )}
+      </td>
+
+      <td className="px-4 py-3.5">
+        <div className="relative group max-w-[170px]">
+          <textarea value={localRemarks} onChange={(e) => setLocalRemarks(e.target.value)} onFocus={() => setIsFocused(true)} onBlur={handleRemarksBlur} placeholder="Add log entry..." rows={isFocused ? 3 : 1} disabled={isSaving} className={`w-full text-[11px] font-medium p-1 bg-transparent border-b outline-none resize-none transition-all custom-scrollbar ${isFocused ? 'bg-white border-blue-400 shadow-lg p-2 rounded-xl h-20 absolute left-0 top-1/2 -translate-y-1/2 w-64 z-20 ring-4 ring-blue-500/5' : 'border-transparent hover:border-slate-200 cursor-pointer truncate'}`} />
+          {!isFocused && (
+            <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none select-none">
+              {isSaving && <RotateCw className="w-3 h-3 text-blue-500 animate-spin" />}
+              {showSavedCheck && (
+                <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-200/60 font-bold text-[9px] uppercase tracking-wider animate-[fadeIn_0.15s_ease-out]">
+                  <Check className="w-2.5 h-2.5 stroke-[3]" /> Saved
+                </div>
+              )}
+              {!isSaving && !showSavedCheck && <Edit3 className="w-2.5 h-2.5 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />}
+            </div>
+          )}
+        </div>
+      </td>
+
+      <td className="px-4 py-3.5 whitespace-nowrap">
+        <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide uppercase border ${isCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : isCancelled ? 'bg-rose-50 text-rose-700 border-rose-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
+          {item.status || 'Pending'}
+        </span>
+      </td>
+      <td className="pr-6 pl-4 py-3.5 text-right whitespace-nowrap">
+        <div className="flex items-center justify-end gap-1">
+          <button onClick={() => onUpdateStatus(item.id, 'Completed')} title="Mark Completed" className="w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-emerald-600 hover:border-emerald-200 flex items-center justify-center transition shadow-sm"><Check className="w-3.5 h-3.5" /></button>
+          <button onClick={() => onUpdateStatus(item.id, 'Cancelled')} title="Cancel Workflow" className="w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-rose-600 hover:border-rose-200 flex items-center justify-center transition shadow-sm"><X className="w-3.5 h-3.5" /></button>
+          <button onClick={() => onDelete(item.id)} title="Trash Record" className="w-7 h-7 rounded-lg border border-transparent bg-transparent text-slate-400 hover:text-rose-600 flex items-center justify-center transition"><Trash2 className="w-3.5 h-3.5" /></button>
+        </div>
+      </td>
+    </tr>
   );
 }
