@@ -439,16 +439,17 @@ export default function Dashboard() {
                       <th className="px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Booking ID</th>
                       <th className="px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Patient Details</th>
                       <th className="px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Diagnostics / Schedule</th>
+                      <th className="px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider w-64">Internal Remarks & Logs</th>
                       <th className="px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Status</th>
                       <th className="pr-6 pl-4 py-3.5 text-right text-[11px] font-bold uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-slate-700">
                     {loading ? (
-                      <tr><td colSpan={6} className="py-24 text-center"><RotateCw className="w-6 h-6 animate-spin mx-auto text-blue-500" /></td></tr>
+                      <tr><td colSpan={7} className="py-24 text-center"><RotateCw className="w-6 h-6 animate-spin mx-auto text-blue-500" /></td></tr>
                     ) : paginated.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="py-24 text-center text-slate-400">
+                        <td colSpan={7} className="py-24 text-center text-slate-400">
                           <div className="flex flex-col items-center gap-2 max-w-sm mx-auto">
                             <Search className="w-8 h-8 text-slate-300 mb-1" />
                             <p className="text-sm font-semibold text-slate-800">No matching appointments</p>
@@ -701,6 +702,31 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
           </div>
         </td>
 
+        {/* Standalone Internal Remarks and Logs Column */}
+        <td className="px-4 py-3.5">
+          <div className="relative group w-full max-w-[240px]">
+            <textarea 
+              value={localRemarks} 
+              onChange={(e) => setLocalRemarks(e.target.value)} 
+              onFocus={() => setIsFocused(true)} 
+              onBlur={handleRemarksBlur} 
+              placeholder="Add log entry..." 
+              rows={1} 
+              disabled={isSaving} 
+              className="w-full text-[11px] font-medium p-1.5 bg-slate-50 border border-slate-200 focus:border-blue-400 focus:bg-white rounded-lg outline-none resize-none transition-all custom-scrollbar" 
+            />
+            <div className="absolute right-2 top-2.5 flex items-center gap-1 pointer-events-none select-none">
+              {isSaving && <RotateCw className="w-2.5 h-2.5 text-blue-500 animate-spin" />}
+              {showSavedCheck && (
+                <div className="flex items-center gap-0.5 px-1 rounded bg-emerald-50 text-emerald-600 border border-emerald-200/60 font-bold text-[8px] uppercase tracking-wider">
+                  <Check className="w-2 h-2 stroke-[3]" /> Saved
+                </div>
+              )}
+              {!isSaving && !showSavedCheck && <Edit3 className="w-2.5 h-2.5 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />}
+            </div>
+          </div>
+        </td>
+
         <td className="px-4 py-3.5 whitespace-nowrap">
           <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide uppercase border ${isCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : isCancelled ? 'bg-rose-50 text-rose-700 border-rose-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
             {item.status || 'Pending'}
@@ -718,8 +744,8 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
       {/* EXPANDED INNER PANEL ACCORDION */}
       {isExpanded && (
         <tr className="bg-slate-50/50">
-          <td colSpan={6} className="px-8 py-5 border-t border-b border-slate-100">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 text-xs text-slate-600">
+          <td colSpan={7} className="px-8 py-5 border-t border-b border-slate-100">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs text-slate-600">
               
               {/* Prescription */}
               <div className="bg-white p-4 rounded-xl border border-slate-200/70 shadow-2xs">
@@ -764,30 +790,6 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
                 ) : (
                   <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200/60 px-2 py-1 rounded-md tracking-wide uppercase inline-block">Walk-in Appointment</span>
                 )}
-              </div>
-
-              {/* Internal Remarks */}
-              <div className="bg-white p-4 rounded-xl border border-slate-200/70 shadow-2xs relative group">
-                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-1.5">Internal Remarks & Logs</span>
-                <textarea 
-                  value={localRemarks} 
-                  onChange={(e) => setLocalRemarks(e.target.value)} 
-                  onFocus={() => setIsFocused(true)} 
-                  onBlur={handleRemarksBlur} 
-                  placeholder="Add log entry..." 
-                  rows={2} 
-                  disabled={isSaving} 
-                  className="w-full text-xs font-medium p-2 bg-slate-50 border border-slate-200 focus:border-blue-400 focus:bg-white rounded-lg outline-none resize-none transition-all" 
-                />
-                <div className="absolute right-6 top-3 flex items-center gap-1 pointer-events-none select-none">
-                  {isSaving && <RotateCw className="w-3 h-3 text-blue-500 animate-spin" />}
-                  {showSavedCheck && (
-                    <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-200/60 font-bold text-[9px] uppercase tracking-wider">
-                      <Check className="w-2.5 h-2.5 stroke-[3]" /> Saved
-                    </div>
-                  )}
-                  {!isSaving && !showSavedCheck && <Edit3 className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />}
-                </div>
               </div>
 
             </div>
