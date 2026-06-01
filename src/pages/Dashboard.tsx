@@ -2,13 +2,14 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   FlaskConical, LogOut, Search, CalendarCheck, Clock, CheckCheck,
   Phone, FileText, Check, Trash2, ChevronLeft, ChevronRight,
-  MessageCircle, Building2, FileDown, RotateCw, Edit3, X, Settings as SettingsIcon, LayoutDashboard, MapPin, Beaker, BellRing, ChevronDown, ChevronUp, Sliders, User, Shield, Bell, HelpCircle
+  MessageCircle, Building2, FileDown, RotateCw, Edit3, X, Settings as SettingsIcon, LayoutDashboard, MapPin, Beaker, BellRing, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { supabase, Appointment, Lab } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import Settings from './settings';
 import RescheduleDrawer from './RescheduleDrawer';
 import ActionBar from './ActionBar';
+import { SlidoverSettings } from './SlidoverSettings';
 
 const RECORDS_PER_PAGE = 10;
 
@@ -57,9 +58,6 @@ export default function Dashboard() {
 
   // Track active appointment assigned for rescheduling
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
-
-  // Slide-out Navigation Hover Panel State
-  const [isSlidoverOpen, setIsSlidoverOpen] = useState(false);
 
   const fetchAll = useCallback(async () => {
     if (!user?.id) return;
@@ -255,7 +253,7 @@ export default function Dashboard() {
     doc.setTextColor(255, 255, 255); doc.setFontSize(20); doc.setFont('helvetica', 'bold'); doc.text(labName.toUpperCase(), 14, 22);
     doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.text('Generated via LabOps Scheduler by Zebnox', 14, 31);
     doc.setFontSize(9); doc.text(`Exported on: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`, 14, 38);
-    const rows = dataToExport.map(item => [item.booking_id, { content: `${item.name}\n${item.age ?? 'N/A'}Y / ${item.gender || ''}\n${item.mobile || 'N/A'}`, styles: { fontStyle: 'bold' as const } }, item.test, `${item.appointment_date}\n${item.time || 'N/A'}`, item.remarks || '-', { content: (item.status || 'Pending').toUpperCase(), styles: { textColor: item.status === 'Completed' ? [46, 125, 50] as [number, number, number] : item.status === 'Cancelled' ? [185, 28, 28] as [number, number, number] : [194, 65, 12] as [number, number, number], fontStyle: 'bold' as const } } ]);
+    const rows = dataToExport.map(item => [item.booking_id, { content: `${item.name}\n${item.age ?? 'N/A'}Y / ${item.gender || ''}\n${item.mobile || 'N/A'}`, styles: { fontStyle: 'bold' as const } }, item.test, `${item.appointment_date}\n${item.time || 'N/A'}`, item.remarks || '-', { content: (item.status || 'Pending').toUpperCase(), styles: { textColor: item.status === 'Completed' ? [46, 125, 50] as [number, number, number] : item.status === 'Cancelled' ? [185, 28, 28] as [number, number, number] : [194, 65, 12] as [number, number, number], fontStyle: 'bold' as const } }]);
     autoTable(doc, { startY: 50, head: [['ID', 'Patient Details', 'Test', 'Schedule', 'Remarks', 'Status']], body: rows, theme: 'striped', headStyles: { fillColor: [26, 115, 232] as [number, number, number] }, styles: { fontSize: 9, valign: 'middle' } });
     doc.save(`${labName}_Report.pdf`);
   };
@@ -278,303 +276,221 @@ export default function Dashboard() {
   }, [selectedTestItem]);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 selection:bg-blue-500 selection:text-white antialiased">
-      
-      {/* Invisible Hover Trigger Zone on the screen right edge */}
-      <div 
-        className="fixed top-0 right-0 h-screen w-3 z-40 bg-transparent cursor-pointer"
-        onMouseEnter={() => setIsSlidoverOpen(true)}
+    <div className="min-h-screen bg-slate-50 text-slate-900 selection:bg-blue-500 selection:text-white antialiased relative">
+      {/* SlidoverSettings Sidebar */}
+      <SlidoverSettings 
+        currentLab={lab?.lab_name || "City Diagnostic"}
+        currentView={currentView}
+        setCurrentView={setCurrentView}
       />
 
-      {/* Backdrop Layer overlay */}
-      <div 
-        className={`fixed inset-0 bg-slate-900/15 backdrop-blur-xs transition-opacity duration-300 z-40 ${
-          isSlidoverOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-        }`}
-        onClick={() => setIsSlidoverOpen(false)}
-      />
+      {/* Main Content - adjusted margin to accommodate sidebar */}
+      <div className="ml-16 transition-all duration-300">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
-      {/* Slidover Component Drawer Container */}
-      <div 
-        onMouseLeave={() => setIsSlidoverOpen(false)}
-        className={`fixed top-0 right-0 h-screen w-80 bg-white shadow-2xl border-l border-slate-100 transform transition-transform duration-300 ease-out z-50 flex flex-col ${
-          isSlidoverOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}
-      >
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-          <div className="flex items-center gap-2">
-            <SettingsIcon className="w-4 h-4 text-blue-600" />
-            <h2 className="font-semibold text-xs text-slate-800 tracking-tight">Control Center</h2>
-          </div>
-          <button 
-            onClick={() => setIsSlidoverOpen(false)}
-            className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-400 transition-colors"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
+          {/* Header */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm px-6 py-4 mb-8 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-sm shadow-blue-600/10 flex-shrink-0">
+                  <FlaskConical className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-base font-bold tracking-tight text-slate-900">LabOps Scheduler</h1>
+                  <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wider">Powered by Zebnox</p>
+                </div>
+              </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
-          <div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Scope Scope</span>
-            <div className="p-3 bg-blue-50/50 rounded-xl border border-blue-100/60">
-              <p className="text-[10px] text-slate-400 font-medium">Active Configuration Portal</p>
-              <p className="text-xs font-bold text-blue-700 mt-0.5">{lab?.lab_name || 'Partner Lab'}</p>
+              <div className="w-px h-8 bg-slate-200 hidden sm:block" />
+
+              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/60 rounded-full px-3 py-1">
+                <div className="w-5 h-5 rounded-full border border-slate-200 bg-white overflow-hidden flex items-center justify-center flex-shrink-0">
+                  {lab?.logo_url ? (
+                    <img src={lab.logo_url} alt="lab logo" className="w-full h-full object-cover" />
+                  ) : (
+                    <Building2 className="w-3 text-slate-400" />
+                  )}
+                </div>
+                <span className="text-xs font-semibold text-slate-700">
+                  {loading ? 'Loading...' : (lab?.lab_name || 'Partner Lab')}
+                </span>
+              </div>
             </div>
-          </div>
 
-          <div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-3">Live Framework Settings</span>
-            <div className="space-y-3">
-              <label className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 cursor-pointer transition">
-                <span className="text-xs font-semibold text-slate-600">Auto-refresh metrics</span>
-                <input type="checkbox" defaultChecked className="rounded text-blue-600 focus:ring-blue-500/20 h-4 w-4 border-slate-300" />
-              </label>
-              <label className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 cursor-pointer transition">
-                <span className="text-xs font-semibold text-slate-600">Flash on reminder trigger</span>
-                <input type="checkbox" defaultChecked className="rounded text-blue-600 focus:ring-blue-500/20 h-4 w-4 border-slate-300" />
-              </label>
-            </div>
-          </div>
-
-          <div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Extended Components</span>
-            <nav className="space-y-1">
-              <button className="w-full flex items-center gap-3 px-3 py-2 text-xs font-medium text-slate-600 rounded-xl hover:bg-slate-50 hover:text-slate-900 transition group">
-                <Sliders className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 transition" />
-                <span>Advanced Filter Specs</span>
-              </button>
-              <button className="w-full flex items-center gap-3 px-3 py-2 text-xs font-medium text-slate-600 rounded-xl hover:bg-slate-50 hover:text-slate-900 transition group">
-                <Bell className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 transition" />
-                <span>Notification Delay Flags</span>
-              </button>
-              <button className="w-full flex items-center gap-3 px-3 py-2 text-xs font-medium text-slate-600 rounded-xl hover:bg-slate-50 hover:text-slate-900 transition group">
-                <Shield className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 transition" />
-                <span>Privilege Security Matrix</span>
-              </button>
-            </nav>
-          </div>
-        </div>
-
-        <div className="p-4 border-t border-slate-100 bg-slate-50 text-center">
-          <p className="text-[10px] font-medium text-slate-400 flex items-center justify-center gap-1">
-            <HelpCircle className="w-3 h-3" /> LabOps Ecosystem v1.0.4
-          </p>
-        </div>
-      </div>
-
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
-
-        {/* Header */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm px-6 py-4 mb-8 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-sm shadow-blue-600/10 flex-shrink-0">
-                <FlaskConical className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h1 className="text-base font-bold tracking-tight text-slate-900">LabOps Scheduler</h1>
-                <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wider">Powered by Zebnox</p>
-              </div>
-            </div>
-
-            <div className="w-px h-8 bg-slate-200 hidden sm:block" />
-
-            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/60 rounded-full px-3 py-1">
-              <div className="w-5 h-5 rounded-full border border-slate-200 bg-white overflow-hidden flex items-center justify-center flex-shrink-0">
-                {lab?.logo_url ? (
-                  <img src={lab.logo_url} alt="lab logo" className="w-full h-full object-cover" />
-                ) : (
-                  <Building2 className="w-3 text-slate-400" />
-                )}
-              </div>
-              <span className="text-xs font-semibold text-slate-700">
-                {loading ? 'Loading...' : (lab?.lab_name || 'Partner Lab')}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {currentView === 'dashboard' ? (
-              <button onClick={() => setCurrentView('settings')} className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 transition">
-                <SettingsIcon className="w-3.5 h-3.5" /> Settings
-              </button>
-            ) : (
-              <button onClick={() => setCurrentView('dashboard')} className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 transition">
-                <LayoutDashboard className="w-3.5 h-3.5" /> Dashboard
-              </button>
-            )}
-
-            {currentView === 'dashboard' && (
-              <>
-                <div className="relative flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-all">
-                  <CalendarCheck className="w-3.5 h-3.5 text-slate-400" />
-                  <input type="date" value={selectedDate} onChange={(e) => { setSelectedDate(e.target.value); setCurrentPage(1); }} className="bg-transparent border-none text-xs font-medium text-slate-700 focus:ring-0 p-0 outline-none cursor-pointer" />
-                  {selectedDate && (
-                    <button onClick={() => { setSelectedDate(''); setCurrentPage(1); }} className="p-0.5 hover:bg-slate-200 rounded-full">
-                      <X className="w-3 h-3 text-slate-400" />
-                    </button>
-                  )}
-                </div>
-
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                  <input type="text" value={search} onChange={e => { setSearch(e.target.value); setCurrentPage(1); }} placeholder="Search ID or patient..." className="pl-9 pr-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 w-48 transition" />
-                </div>
-              </>
-            )}
-            
-            <button onClick={signOut} className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-red-200 bg-white text-xs font-semibold text-red-600 hover:bg-red-50/60 transition">
-              <LogOut className="w-3.5 h-3.5" /> Logout
-            </button>
-          </div>
-        </div>
-
-        {currentView === 'settings' ? (
-          <div className="animate-[fadeIn_0.2s_ease]"><Settings /></div>
-        ) : (
-          <>
-            {/* Clickable Stats */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-              <StatCard 
-                icon={<CalendarCheck className="w-4 h-4 text-blue-600" />} 
-                iconBg="bg-blue-50" 
-                value={stats.total} 
-                label={selectedDate ? `Booked on ${selectedDate}` : "Total Bookings"} 
-                isActive={statusFilter === 'all'}
-                onClick={() => handleStatusFilterClick('all')}
-              />
-              <StatCard 
-                icon={<Clock className="w-4 h-4 text-amber-600" />} 
-                iconBg="bg-amber-50" 
-                value={stats.pending} 
-                label="Pending Requests" 
-                isActive={statusFilter === 'pending'}
-                onClick={() => handleStatusFilterClick('pending')}
-              />
-              <StatCard 
-                icon={<CheckCheck className="w-4 h-4 text-emerald-600" />} 
-                iconBg="bg-emerald-50" 
-                value={stats.completed} 
-                label="Completed Tests" 
-                isActive={statusFilter === 'completed'}
-                onClick={() => handleStatusFilterClick('completed')}
-              />
-              <StatCard 
-                icon={<BellRing className={`w-4 h-4 ${stats.reminders > 0 ? 'text-orange-600 animate-[pulse_2s_infinite]' : 'text-slate-400'}`} />} 
-                iconBg={stats.reminders > 0 ? 'bg-orange-50' : 'bg-slate-100'} 
-                value={stats.reminders} 
-                label="Due for Reminder (2.5h)" 
-                isActive={statusFilter === 'reminders'}
-                onClick={() => handleStatusFilterClick('reminders')}
-              />
-            </div>
-
-            {/* Premium Table Component Layout */}
-            <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
-              <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b border-slate-100 bg-slate-50/70">
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center h-5">
-                    <input type="checkbox" checked={isAllPageSelected} onChange={e => toggleSelectAll(e.target.checked)} className="w-4 h-4 border-slate-300 rounded text-blue-600 focus:ring-blue-500/20 cursor-pointer" />
-                  </div>
-                  <label className="text-xs font-semibold text-slate-500 select-none">Select Page Records</label>
-                  
-                  {statusFilter !== 'all' && (
-                    <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-100 flex items-center gap-1 ml-2 capitalize">
-                      {statusFilter === 'reminders' ? 'Due for Reminder' : statusFilter}
-                      <button onClick={() => setStatusFilter('all')} className="hover:text-blue-900 ml-0.5 font-bold">×</button>
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button onClick={fetchAll} title="Refresh data" className={`flex items-center justify-center p-2 text-slate-500 border border-slate-200 bg-white rounded-xl hover:bg-slate-50 transition ${loading ? 'opacity-50' : ''}`} disabled={loading}>
-                    <RotateCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-                  </button>
-
-                  <div className="relative">
-                    {!showDatePicker ? (
-                      <button onClick={() => setShowDatePicker(true)} className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-600 border border-slate-200 bg-white rounded-xl hover:bg-slate-50 transition">
-                        <CalendarCheck className="w-3.5 h-3.5 text-slate-400" /> Range Report
+              {/* Settings/Dashboard toggle buttons removed from header since they're now in sidebar */}
+              
+              {currentView === 'dashboard' && (
+                <>
+                  <div className="relative flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-all">
+                    <CalendarCheck className="w-3.5 h-3.5 text-slate-400" />
+                    <input type="date" value={selectedDate} onChange={(e) => { setSelectedDate(e.target.value); setCurrentPage(1); }} className="bg-transparent border-none text-xs font-medium text-slate-700 focus:ring-0 p-0 outline-none cursor-pointer" />
+                    {selectedDate && (
+                      <button onClick={() => { setSelectedDate(''); setCurrentPage(1); }} className="p-0.5 hover:bg-slate-200 rounded-full">
+                        <X className="w-3 h-3 text-slate-400" />
                       </button>
-                    ) : (
-                      <div className="flex items-center gap-2 bg-white border border-slate-200 p-1 rounded-xl shadow-sm z-10">
-                        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="text-xs border-none bg-slate-50 rounded-lg focus:ring-0 text-slate-700 p-1.5" />
-                        <span className="text-[10px] text-slate-400 font-bold">TO</span>
-                        <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="text-xs border-none bg-slate-50 rounded-lg focus:ring-0 text-slate-700 p-1.5" />
-                        {startDate && endDate && (
-                          <div className="flex items-center border-l border-slate-200 pl-1 gap-0.5">
-                            <button onClick={exportByRange} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"><FileDown className="w-3.5 h-3.5" /></button>
-                            <button onClick={deleteByRange} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-3.5 h-3.5" /></button>
-                          </div>
-                        )}
-                        <button onClick={() => { setShowDatePicker(false); setStartDate(''); setEndDate(''); }} className="p-1.5 text-slate-400 hover:text-slate-600 border-l border-slate-200 ml-1"><Check className="w-3.5 h-3.5" /></button>
-                      </div>
                     )}
                   </div>
-                  <button onClick={exportToPDF} className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-600 border border-slate-200 bg-white rounded-xl hover:bg-slate-50 transition">
-                    <FileDown className="w-3.5 h-3.5 text-slate-400" /> Export All PDF
-                  </button>
-                </div>
-              </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-full table-auto">
-                  <thead>
-                    <tr className="border-b border-slate-100 bg-slate-50/40 text-slate-400">
-                      <th className="w-16 px-6 py-3"></th>
-                      <th className="px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Booking ID</th>
-                      <th className="px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Patient Details</th>
-                      <th className="px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Diagnostics / Schedule</th>
-                      <th className="px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider w-64">Internal Remarks & Logs</th>
-                      <th className="px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Status</th>
-                      <th className="pr-6 pl-4 py-3.5 text-right text-[11px] font-bold uppercase tracking-wider">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-slate-700">
-                    {loading ? (
-                      <tr><td colSpan={7} className="py-24 text-center"><RotateCw className="w-6 h-6 animate-spin mx-auto text-blue-500" /></td></tr>
-                    ) : paginated.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="py-24 text-center text-slate-400">
-                          <div className="flex flex-col items-center gap-2 max-w-sm mx-auto">
-                            <Search className="w-8 h-8 text-slate-300 mb-1" />
-                            <p className="text-sm font-semibold text-slate-800">No matching appointments</p>
-                            <p className="text-xs text-slate-400">Try updating your parameters or filters.</p>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : paginated.map(item => (
-                      <AppointmentRow 
-                        key={item.id} 
-                        item={item} 
-                        selected={selectedIds.has(item.id)} 
-                        onToggle={() => toggleRow(item.id)} 
-                        onUpdateStatus={updateStatus} 
-                        onUpdateRemarks={updateRemarks} 
-                        onDelete={deleteBooking} 
-                        onWhatsApp={sendWhatsApp} 
-                        onViewAddress={setSelectedAddressItem}
-                        onViewTests={setSelectedTestItem}
-                        onSelectReschedule={setEditingAppointment}
-                        isInsideReminderWindow={checkReminderEligibility(item)}
-                      />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
-                <p className="text-xs font-medium text-slate-500">Showing rows {Math.min(filtered.length, (currentPage - 1) * RECORDS_PER_PAGE + 1)}-{Math.min(filtered.length, currentPage * RECORDS_PER_PAGE)} of {filtered.length}</p>
-                <div className="flex items-center gap-2">
-                  <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="flex items-center gap-1 px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"><ChevronLeft className="w-4 h-4" /> Prev</button>
-                  <span className="text-xs font-bold text-slate-700 px-2">Page {currentPage} of {totalPages}</span>
-                  <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="flex items-center gap-1 px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition">Next <ChevronRight className="w-4 h-4" /></button>
-                </div>
-              </div>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                    <input type="text" value={search} onChange={e => { setSearch(e.target.value); setCurrentPage(1); }} placeholder="Search ID or patient..." className="pl-9 pr-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 w-48 transition" />
+                  </div>
+                </>
+              )}
+              
+              <button onClick={signOut} className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-red-200 bg-white text-xs font-semibold text-red-600 hover:bg-red-50/60 transition">
+                <LogOut className="w-3.5 h-3.5" /> Logout
+              </button>
             </div>
-          </>
-        )}
+          </div>
+
+          {currentView === 'settings' ? (
+            <div className="animate-[fadeIn_0.2s_ease]"><Settings /></div>
+          ) : (
+            <>
+              {/* Clickable Stats */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <StatCard 
+                  icon={<CalendarCheck className="w-4 h-4 text-blue-600" />} 
+                  iconBg="bg-blue-50" 
+                  value={stats.total} 
+                  label={selectedDate ? `Booked on ${selectedDate}` : "Total Bookings"} 
+                  isActive={statusFilter === 'all'}
+                  onClick={() => handleStatusFilterClick('all')}
+                />
+                <StatCard 
+                  icon={<Clock className="w-4 h-4 text-amber-600" />} 
+                  iconBg="bg-amber-50" 
+                  value={stats.pending} 
+                  label="Pending Requests" 
+                  isActive={statusFilter === 'pending'}
+                  onClick={() => handleStatusFilterClick('pending')}
+                />
+                <StatCard 
+                  icon={<CheckCheck className="w-4 h-4 text-emerald-600" />} 
+                  iconBg="bg-emerald-50" 
+                  value={stats.completed} 
+                  label="Completed Tests" 
+                  isActive={statusFilter === 'completed'}
+                  onClick={() => handleStatusFilterClick('completed')}
+                />
+                <StatCard 
+                  icon={<BellRing className={`w-4 h-4 ${stats.reminders > 0 ? 'text-orange-600 animate-[pulse_2s_infinite]' : 'text-slate-400'}`} />} 
+                  iconBg={stats.reminders > 0 ? 'bg-orange-50' : 'bg-slate-100'} 
+                  value={stats.reminders} 
+                  label="Due for Reminder (2.5h)" 
+                  isActive={statusFilter === 'reminders'}
+                  onClick={() => handleStatusFilterClick('reminders')}
+                />
+              </div>
+
+              {/* Premium Table Component Layout */}
+              <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
+                <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b border-slate-100 bg-slate-50/70">
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center h-5">
+                      <input type="checkbox" checked={isAllPageSelected} onChange={e => toggleSelectAll(e.target.checked)} className="w-4 h-4 border-slate-300 rounded text-blue-600 focus:ring-blue-500/20 cursor-pointer" />
+                    </div>
+                    <label className="text-xs font-semibold text-slate-500 select-none">Select Page Records</label>
+                    
+                    {statusFilter !== 'all' && (
+                      <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-100 flex items-center gap-1 ml-2 capitalize">
+                        {statusFilter === 'reminders' ? 'Due for Reminder' : statusFilter}
+                        <button onClick={() => setStatusFilter('all')} className="hover:text-blue-900 ml-0.5 font-bold">×</button>
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button onClick={fetchAll} title="Refresh data" className={`flex items-center justify-center p-2 text-slate-500 border border-slate-200 bg-white rounded-xl hover:bg-slate-50 transition ${loading ? 'opacity-50' : ''}`} disabled={loading}>
+                      <RotateCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                    </button>
+
+                    <div className="relative">
+                      {!showDatePicker ? (
+                        <button onClick={() => setShowDatePicker(true)} className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-600 border border-slate-200 bg-white rounded-xl hover:bg-slate-50 transition">
+                          <CalendarCheck className="w-3.5 h-3.5 text-slate-400" /> Range Report
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-2 bg-white border border-slate-200 p-1 rounded-xl shadow-sm z-10">
+                          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="text-xs border-none bg-slate-50 rounded-lg focus:ring-0 text-slate-700 p-1.5" />
+                          <span className="text-[10px] text-slate-400 font-bold">TO</span>
+                          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="text-xs border-none bg-slate-50 rounded-lg focus:ring-0 text-slate-700 p-1.5" />
+                          {startDate && endDate && (
+                            <div className="flex items-center border-l border-slate-200 pl-1 gap-0.5">
+                              <button onClick={exportByRange} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"><FileDown className="w-3.5 h-3.5" /></button>
+                              <button onClick={deleteByRange} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-3.5 h-3.5" /></button>
+                            </div>
+                          )}
+                          <button onClick={() => { setShowDatePicker(false); setStartDate(''); setEndDate(''); }} className="p-1.5 text-slate-400 hover:text-slate-600 border-l border-slate-200 ml-1"><Check className="w-3.5 h-3.5" /></button>
+                        </div>
+                      )}
+                    </div>
+                    <button onClick={exportToPDF} className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-600 border border-slate-200 bg-white rounded-xl hover:bg-slate-50 transition">
+                      <FileDown className="w-3.5 h-3.5 text-slate-400" /> Export All PDF
+                    </button>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-full table-auto">
+                    <thead>
+                      <tr className="border-b border-slate-100 bg-slate-50/40 text-slate-400">
+                        <th className="w-16 px-6 py-3"></th>
+                        <th className="px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Booking ID</th>
+                        <th className="px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Patient Details</th>
+                        <th className="px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Diagnostics / Schedule</th>
+                        <th className="px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider w-64">Internal Remarks & Logs</th>
+                        <th className="px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider">Status</th>
+                        <th className="pr-6 pl-4 py-3.5 text-right text-[11px] font-bold uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-slate-700">
+                      {loading ? (
+                        <tr><td colSpan={7} className="py-24 text-center"><RotateCw className="w-6 h-6 animate-spin mx-auto text-blue-500" /></td></tr>
+                      ) : paginated.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="py-24 text-center text-slate-400">
+                            <div className="flex flex-col items-center gap-2 max-w-sm mx-auto">
+                              <Search className="w-8 h-8 text-slate-300 mb-1" />
+                              <p className="text-sm font-semibold text-slate-800">No matching appointments</p>
+                              <p className="text-xs text-slate-400">Try updating your parameters or filters.</p>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : paginated.map(item => (
+                        <AppointmentRow 
+                          key={item.id} 
+                          item={item} 
+                          selected={selectedIds.has(item.id)} 
+                          onToggle={() => toggleRow(item.id)} 
+                          onUpdateStatus={updateStatus} 
+                          onUpdateRemarks={updateRemarks} 
+                          onDelete={deleteBooking} 
+                          onWhatsApp={sendWhatsApp} 
+                          onViewAddress={setSelectedAddressItem}
+                          onViewTests={setSelectedTestItem}
+                          onSelectReschedule={setEditingAppointment}
+                          isInsideReminderWindow={checkReminderEligibility(item)}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+                  <p className="text-xs font-medium text-slate-500">Showing rows {Math.min(filtered.length, (currentPage - 1) * RECORDS_PER_PAGE + 1)}-{Math.min(filtered.length, currentPage * RECORDS_PER_PAGE)} of {filtered.length}</p>
+                  <div className="flex items-center gap-2">
+                    <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="flex items-center gap-1 px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"><ChevronLeft className="w-4 h-4" /> Prev</button>
+                    <span className="text-xs font-bold text-slate-700 px-2">Page {currentPage} of {totalPages}</span>
+                    <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="flex items-center gap-1 px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition">Next <ChevronRight className="w-4 h-4" /></button>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* DYNAMIC VIEW ADDRESS PORTAL WINDOW */}
