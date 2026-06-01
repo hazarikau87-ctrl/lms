@@ -286,7 +286,7 @@ export default function Dashboard() {
 
       {/* Main Content - adjusted margin to accommodate sidebar */}
       <div className="ml-16 transition-all duration-300">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4">
 
           {/* Header */}
           <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm px-6 py-4 mb-8 flex flex-wrap items-center justify-between gap-4">
