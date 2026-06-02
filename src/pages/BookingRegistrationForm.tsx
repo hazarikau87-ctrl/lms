@@ -26,13 +26,12 @@ export interface AppointmentData {
   created_at?: string;
   lab_id: string;
   prescription_url: string;
-  booking_type: 'walk_in' | 'home_collection' | 'online';
+  booking_type: 'Walk-in' | 'Home Collection' | 'Online';
   address_line: string;
   pincode: string;
   landmark: string;
 }
 
-// Support both array of strings and array of objects formats safely
 interface LabData {
   id: string;
   lab_name: string;
@@ -51,18 +50,6 @@ interface BookingRegistrationFormProps {
   isOpen?: boolean;
 }
 
-const DEFAULT_TESTS = [
-  "Complete Blood Count (CBC)",
-  "Fasting Blood Sugar (FBS)",
-  "HbA1c",
-  "Liver Function Test (LFT)",
-  "Kidney Function Test (KFT)",
-  "Lipid Profile",
-  "Thyroid Profile (T3, T4, TSH)",
-  "Vitamin D3",
-  "Vitamin B12"
-];
-
 export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = ({ 
   onSuccess, 
   onCancel,
@@ -70,6 +57,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
   isOpen = true
 }) => {
   const [labInfo, setLabInfo] = useState<LabData | null>(null);
+  const [dynamicTests, setDynamicTests] = useState<string[]>([]);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -96,7 +84,17 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
   const [prescriptionFile, setPrescriptionFile] = useState<File | null>(null);
   const [prescriptionPreview, setPrescriptionPreview] = useState<string | null>(null);
 
-  // Fetch Lab configuration
+  // Safe Helper to parse test references dynamically from strings or objects inside JSONB array
+  const getTestStringValue = (item: any): string => {
+    if (!item) return '';
+    if (typeof item === 'string') return item;
+    if (typeof item === 'object') {
+      return item.name || item.test_name || item.title || JSON.stringify(item);
+    }
+    return String(item);
+  };
+
+  // Fetch Lab configuration and populate the tests checklist dynamically
   useEffect(() => {
     const fetchLabLogics = async () => {
       try {
@@ -109,10 +107,21 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
         if (error) throw error;
         if (data) {
           setLabInfo(data);
+          
+          // Parse out the items inside the jsonb column safely
+          if (Array.isArray(data.available_tests)) {
+            const parsedTests = data.available_tests
+              .map(item => getTestStringValue(item))
+              .filter(name => name.trim() !== '');
+            setDynamicTests(parsedTests);
+          } else {
+            setDynamicTests([]);
+          }
         }
       } catch (err) {
-        console.error("Error fetching from labs table:", err);
+        console.error("Error fetching available_tests from labs table:", err);
         setLabInfo({ id: currentLabId, lab_name: "Diagnostic Lab Workspace" });
+        setDynamicTests([]);
       }
     };
 
@@ -159,16 +168,6 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     );
   };
 
-  // Safe Helper to read test names whether database returns strings or objects
-  const getTestStringValue = (item: any): string => {
-    if (!item) return '';
-    if (typeof item === 'string') return item;
-    if (typeof item === 'object') {
-      return item.name || item.test_name || JSON.stringify(item);
-    }
-    return String(item);
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) return;
@@ -195,7 +194,10 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
         finalPrescriptionUrl = urlData.publicUrl;
       }
 
-      // Payload built directly matching database row layout rules
+      const databaseBookingTypeMapped: 'Walk-in' | 'Home Collection' | 'Online' = 
+        formData.booking_type === 'walk_in' ? 'Walk-in' : 
+        formData.booking_type === 'home_collection' ? 'Home Collection' : 'Online';
+
       const targetPayload = {
         name: formData.name,
         mobile: formData.mobile,
@@ -205,7 +207,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
         gender: formData.gender,
         appointment_date: formData.appointment_date,
         time: formData.time,
-        test: selectedTests.join(', '), // Extracted clean text tokens string
+        test: selectedTests.join(', '), 
         booking_id: `BK-${Date.now().toString().slice(-6)}`,
         status: formData.status,
         is_deleted: false,
@@ -213,7 +215,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
         remarks: formData.remarks,
         lab_id: currentLabId,
         prescription_url: finalPrescriptionUrl,
-        booking_type: formData.booking_type,
+        booking_type: databaseBookingTypeMapped,
         address_line: formData.booking_type === 'home_collection' ? formData.address_line : '',
         pincode: formData.booking_type === 'home_collection' ? formData.pincode : '',
         landmark: formData.booking_type === 'home_collection' ? formData.landmark : ''
@@ -377,17 +379,14 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
             </div>
           )}
 
-          {/* STEP 2: Safe Test Rendering Grid */}
+          {/* STEP 2: Dynamically Fetched JSONB Checklist */}
           {activeStep === 2 && (
             <div className="space-y-5 animate-[fadeIn_0.2s_ease-out]">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">Available Diagnostics *</label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 border rounded-xl bg-gray-50/50">
-                  {(labInfo?.available_tests || DEFAULT_TESTS).map((rawItem, index) => {
-                    const cleanTestName = getTestStringValue(rawItem);
-                    if (!cleanTestName) return null;
-                    
-                    return (
+                  {dynamicTests.length > 0 ? (
+                    dynamicTests.map((cleanTestName, index) => (
                       <label key={index} className="flex items-center gap-3 p-2.5 bg-white hover:bg-indigo-50/40 border border-gray-100 rounded-xl text-sm cursor-pointer transition-colors">
                         <input
                           type="checkbox"
@@ -397,8 +396,12 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                         />
                         <span className="text-gray-700 font-medium">{cleanTestName}</span>
                       </label>
-                    );
-                  })}
+                    ))
+                  ) : (
+                    <p className="text-sm text-gray-500 p-3 italic col-span-2 text-center">
+                      No matching menu lists allocated inside this lab profile config.
+                    </p>
+                  )}
                 </div>
                 {errors.tests && <p className="text-xs text-red-500 mt-1">{errors.tests}</p>}
               </div>
