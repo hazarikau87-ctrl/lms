@@ -4,5 +4,5 @@ import App from './App.tsx';
 import './index.css';
 
 createRoot(document.getElementById('root')!).render(
-    <strictmode><app /></strictmode>
+    <strictmode><app/></strictmode>
 );
