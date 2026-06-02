@@ -281,30 +281,10 @@ export default function Dashboard() {
 
   // Handler passed directly to BookingRegistrationForm to write back to Supabase or localized stack
   const handleRegistrationSuccess = async (newAppointment: any) => {
-    try {
-      setLoading(true);
-      // Map local form fields directly onto the relational schema
-      const { error } = await supabase.from('appointments').insert([{
-        booking_id: newAppointment.booking_id,
-        name: newAppointment.name,
-        mobile: newAppointment.mobile,
-        whatsapp: newAppointment.whatsapp,
-        email: newAppointment.email,
-        age: parseInt(newAppointment.age) || null,
-        gender: newAppointment.gender,
-        appointment_date: newAppointment.appointment_date,
-        time: newAppointment.time,
-        test: newAppointment.test,
-        status: newAppointment.status,
-        remarks: newAppointment.remarks,
-        lab_id: lab?.id,
-        prescription_url: newAppointment.prescription_url,
-        booking_type: newAppointment.booking_type,
-        address_line: newAppointment.address_line,
-        pincode: newAppointment.pincode,
-        landmark: newAppointment.landmark,
-        is_deleted: false
-      }]);
+  // Form already saved to database - just refresh the list
+  setIsRegisterOpen(false);
+  await fetchAll(); // Refresh to show the new appointment
+};
 
       if (error) throw error;
       
