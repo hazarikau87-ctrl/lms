@@ -3,7 +3,7 @@ import {
   User, Phone, Mail, Calendar, Clock, Beaker, MapPin, 
   FileText, AlertCircle, CheckCircle, Upload, X, 
   Building2, Hash, Loader2, ChevronRight, Home, 
-  Hospital, Globe, CreditCard, Stethoscope, Activity,
+  Globe, CreditCard, Stethoscope, Activity,
   Droplet, Thermometer, Heart, Brain, Eye, Moon
 } from 'lucide-react';
 
