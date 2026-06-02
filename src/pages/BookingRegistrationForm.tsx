@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase'; 
 
-// ============== INTERFACES (STRICT MATCH) ==============
+// ============== INTERFACES (STRICT DATABASE MATCH) ==============
 export interface AppointmentData {
   id?: string;
   name: string;
@@ -26,7 +26,7 @@ export interface AppointmentData {
   created_at?: string;
   lab_id: string;
   prescription_url: string;
-  booking_type: 'Walk-in' | 'Home Collection' | 'Online';
+  booking_type: 'walk-in' | 'home'; // Matched perfectly to CHECK CONSTRAINT array values
   address_line: string;
   pincode: string;
   landmark: string;
@@ -70,7 +70,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     time: '',
     status: 'Pending' as const,
     remarks: '',
-    booking_type: 'walk_in' as 'walk_in' | 'home_collection' | 'online',
+    booking_type: 'walk-in' as 'walk-in' | 'home', // Standardized options
     address_line: '',
     pincode: '',
     landmark: ''
@@ -154,7 +154,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     if (!formData.time) newErrors.time = 'Time required';
     if (selectedTests.length === 0) newErrors.tests = 'Select at least one test';
     
-    if (formData.booking_type === 'home_collection' && !formData.address_line.trim()) {
+    if (formData.booking_type === 'home' && !formData.address_line.trim()) {
       newErrors.address = 'Address layout is required for Home Collection';
     }
     
@@ -194,11 +194,6 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
         finalPrescriptionUrl = urlData.publicUrl;
       }
 
-      // Maps UI local state string format directly to your exact CHECK CONSTRAINT values ('walk-in' or 'home')
-      const databaseBookingTypeMapped = 
-        formData.booking_type === 'walk_in' ? 'walk-in' : 
-        formData.booking_type === 'home_collection' ? 'home' : 'walk-in'; // Fallback safely to 'walk-in' if 'online' is chosen but unmapped in DB
-
       const targetPayload = {
         name: formData.name,
         mobile: formData.mobile,
@@ -216,10 +211,10 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
         remarks: formData.remarks,
         lab_id: currentLabId,
         prescription_url: finalPrescriptionUrl,
-        booking_type: databaseBookingTypeMapped as any, // Cast bypasses type strictness for database payload mapping
-        address_line: formData.booking_type === 'home_collection' ? formData.address_line : '',
-        pincode: formData.booking_type === 'home_collection' ? formData.pincode : '',
-        landmark: formData.booking_type === 'home_collection' ? formData.landmark : ''
+        booking_type: formData.booking_type, // Passes 'walk-in' or 'home' perfectly to SQL row instance
+        address_line: formData.booking_type === 'home' ? formData.address_line : '',
+        pincode: formData.booking_type === 'home' ? formData.pincode : '',
+        landmark: formData.booking_type === 'home' ? formData.landmark : ''
       };
 
       const { data, error: dbError } = await supabase
@@ -434,9 +429,8 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                     onChange={(e) => setFormData({...formData, booking_type: e.target.value as any})}
                     className="w-full px-4 py-2 border border-gray-200 rounded-xl bg-white"
                   >
-                    <option value="walk_in">Walk-in Clinic</option>
-                    <option value="home_collection">Home Collection</option>
-                    <option value="online">Online Consultation</option>
+                    <option value="walk-in">Walk-in Clinic</option>
+                    <option value="home">Home Collection</option>
                   </select>
                 </div>
                 <div>
