@@ -4,7 +4,7 @@ import {
   AlertCircle, CheckCircle, Upload, X, 
   Loader2, ChevronRight, Home, Globe, Activity, Stethoscope
 } from 'lucide-react';
-import { supabase } from '../lib/supabaseClient'; 
+import { supabase } from '../lib/supabase'; 
 
 // ============== INTERFACES (STRICT MATCH) ==============
 export interface AppointmentData {
