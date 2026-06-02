@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   User, Phone, Mail, Calendar, Clock, Beaker, MapPin, 
-  AlertCircle, CheckCircle, Upload, X, 
-  Hash, Loader2, ChevronRight, Home, 
-  Globe, Stethoscope, Activity, Heart, Eye, Droplet
+  AlertCircle, CheckCircle, Upload, X, Loader2, ChevronRight, 
+  Home, Globe, Stethoscope, Activity, Heart, Eye, Droplet
 } from 'lucide-react';
+// 1. IMPORT YOUR SUPABASE CLIENT HERE
+import { supabase } from '../utils/supabaseClient'; 
 
-// ============== SCHEMAS & INTERFACES ==============
+// ============== TYPES & INTERFACES ==============
 export interface AppointmentData {
   id?: string;
   name: string;
@@ -18,6 +19,7 @@ export interface AppointmentData {
   appointment_date: string;
   time: string;
   test: string;
+  test_codes?: string[];
   booking_id?: string;
   status: 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled';
   is_deleted: boolean;
@@ -31,27 +33,25 @@ export interface AppointmentData {
   address_line: string;
   pincode: string;
   landmark: string;
+  priority: 'Normal' | 'Urgent' | 'Emergency';
+  source: 'Direct' | 'Reference' | 'Online Portal' | 'Call Center';
+  payment_status: 'Pending' | 'Partial' | 'Paid';
+  estimated_amount?: number;
 }
 
-export interface LabSettingsData {
-  id: string;
-  created_at?: string;
-  lab_name: string;
-  slug: string;
-  theme_color: string;
-  domain: string;
-  is_active: boolean;
-  email: string;
-  phone_number: string;
-  whatsapp_number: string;
-  logo_url: string;
-  tagline: string;
-  operating_hours: string;
-  available_tests: Array<{
-    category: string;
-    icon_type: 'Droplet' | 'Activity' | 'Heart' | 'Eye';
-    tests: Array<{ code: string; name: string; price: number; duration: string }>;
-  }>;
+// Database type format matching what we will fetch
+interface DatabaseTestItem {
+  code: string;
+  name: string;
+  price: number;
+  duration: string;
+  category: string;
+}
+
+interface TestCategoryGroup {
+  category: string;
+  icon: any;
+  tests: Omit<DatabaseTestItem, 'category'>[];
 }
 
 interface ValidationErrors {
@@ -61,25 +61,28 @@ interface ValidationErrors {
 interface BookingRegistrationFormProps {
   onSuccess?: (data: AppointmentData) => void;
   onCancel?: () => void;
+  currentLabId?: string;
+  labName?: string;
   isOpen?: boolean;
-  labSettings?: LabSettingsData; // Made optional to prevent initial parent component load crashes
 }
 
-const ICON_MAP = {
-  Droplet: Droplet,
-  Activity: Activity,
-  Heart: Heart,
-  Eye: Eye
+const ICON_MAP: Record<string, any> = {
+  Hematology: Droplet,
+  Biochemistry: Activity,
+  Thyroid: Activity,
+  Cardiac: Heart,
+  Vitamins: Eye,
+  Default: Beaker
 };
 
 // ============== MAIN COMPONENT ==============
 export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = ({ 
   onSuccess, 
   onCancel,
-  isOpen = true,
-  labSettings
+  currentLabId = "LAB-001",
+  labName = "Diagnostic Lab",
+  isOpen = true
 }) => {
-  // Safe default initialization using optional chaining (?.) and fallbacks
   const [formData, setFormData] = useState<AppointmentData>({
     name: '',
     mobile: '',
@@ -94,47 +97,91 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     is_deleted: false,
     deleted_at: null,
     remarks: '',
-    lab_id: labSettings?.id || 'LAB-001', // Safe fallback if labSettings is undefined
+    lab_id: currentLabId,
     prescription_url: '',
     booking_type: 'Walk-in',
     address_line: '',
     pincode: '',
-    landmark: ''
+    landmark: '',
+    priority: 'Normal',
+    source: 'Direct',
+    payment_status: 'Pending',
+    estimated_amount: 0
   });
 
+  const [dbCategories, setDbCategories] = useState<TestCategoryGroup[]>([]);
   const [selectedTests, setSelectedTests] = useState<string[]>([]);
   const [errors, setErrors] = useState<ValidationErrors>({});
+  const [isLoadingTests, setIsLoadingTests] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [activeStep, setActiveStep] = useState(1);
   const [prescriptionPreview, setPrescriptionPreview] = useState<string | null>(null);
   const [estimatedTotal, setEstimatedTotal] = useState(0);
 
-  // Sync state if labSettings loads after the component initially mounts
+  // 2. FETCH AVAILABLE TESTS DYNAMICALLY FROM SUPABASE ON MOUNT
   useEffect(() => {
-    if (labSettings?.id) {
-      setFormData(prev => ({ ...prev, lab_id: labSettings.id }));
-    }
-  }, [labSettings?.id]);
+    const fetchTestsFromSupabase = async () => {
+      try {
+        setIsLoadingTests(true);
+        // Assumes you have a table named 'tests' with columns: code, name, price, duration, category
+        const { data, error } = await supabase
+          .from('tests')
+          .select('code, name, price, duration, category');
 
-  // Handle dynamic price evaluations safely
+        if (error) throw error;
+
+        if (data) {
+          // Group flat table array into categorized structure for the form UI
+          const groups: Record<string, Omit<DatabaseTestItem, 'category'>[]> = {};
+          data.forEach((item: DatabaseTestItem) => {
+            if (!groups[item.category]) groups[item.category] = [];
+            groups[item.category].push({
+              code: item.code,
+              name: item.name,
+              price: Number(item.price),
+              duration: item.duration
+            });
+          });
+
+          const formattedCategories: TestCategoryGroup[] = Object.keys(groups).map(categoryName => ({
+            category: categoryName,
+            icon: ICON_MAP[categoryName] || ICON_MAP.Default,
+            tests: groups[categoryName]
+          }));
+
+          setDbCategories(formattedCategories);
+        }
+      } catch (err: any) {
+        console.error("Error loading tests from Supabase:", err.message);
+        setErrors(prev => ({ ...prev, global: "Failed to sync diagnostic catalog from server." }));
+      } finally {
+        setIsLoadingTests(false);
+      }
+    };
+
+    if (isOpen) {
+      fetchTestsFromSupabase();
+    }
+  }, [isOpen]);
+
+  // Calculate estimated total based on dynamically fetched test prices
   useEffect(() => {
     let total = 0;
-    if (labSettings?.available_tests) {
-      selectedTests.forEach(testCode => {
-        for (const cat of labSettings.available_tests) {
-          const standardTest = cat.tests.find(t => t.code === testCode);
-          if (standardTest) {
-            total += standardTest.price;
-            break;
-          }
+    selectedTests.forEach(testCode => {
+      for (const category of dbCategories) {
+        const test = category.tests.find(t => t.code === testCode);
+        if (test) {
+          total += test.price;
+          break;
         }
-      });
-    }
+      }
+    });
     setEstimatedTotal(total);
-    setFormData(prev => ({ ...prev, test: selectedTests.join(', ') }));
-  }, [selectedTests, labSettings?.available_tests]);
+    setFormData(prev => ({ ...prev, estimated_amount: total, test: selectedTests.join(', ') }));
+  }, [selectedTests, dbCategories]);
 
+  // Handle file upload
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -142,54 +189,27 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
         setErrors(prev => ({ ...prev, prescription: 'File size must be less than 5MB' }));
         return;
       }
+      
       const previewUrl = URL.createObjectURL(file);
       setPrescriptionPreview(previewUrl);
-      setFormData(prev => ({ 
-        ...prev, 
-        prescription_file: file,
-        prescription_url: `/uploads/${labSettings?.slug || 'generic'}/prescriptions/${file.name}` 
-      }));
+      setFormData(prev => ({ ...prev, prescription_file: file }));
       setErrors(prev => ({ ...prev, prescription: '' }));
     }
-  }, [labSettings?.slug]);
+  }, []);
 
-  // Early load/loading screen if lab settings data hasn't arrived from API yet
-  if (!labSettings) {
-    return (
-      <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-        <div className="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center gap-3 max-w-sm w-full text-center">
-          <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
-          <p className="text-sm font-medium text-gray-600">Loading diagnostic terminal configs...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Gracefully handle deactivated labs
-  if (!labSettings.is_active) {
-    return (
-      <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-        <div className="bg-white p-6 rounded-xl max-w-sm text-center shadow-xl">
-          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
-          <h3 className="text-lg font-bold text-gray-900">Lab Offline</h3>
-          <p className="text-sm text-gray-500 mt-1">This diagnostic terminal is currently disabled.</p>
-        </div>
-      </div>
-    );
-  }
-
+  // Validate form
   const validateForm = (): boolean => {
     const newErrors: ValidationErrors = {};
+    
     if (!formData.name.trim()) newErrors.name = 'Patient name is required';
     if (!formData.mobile.match(/^[0-9]{10}$/)) newErrors.mobile = 'Valid 10-digit mobile number required';
-    if (!formData.age || parseInt(formData.age) < 0 || parseInt(formData.age) > 120) newErrors.age = 'Valid age required';
+    if (!formData.age || parseInt(formData.age) < 0 || parseInt(formData.age) > 120) newErrors.age = 'Valid age (0-120) required';
     if (!formData.gender) newErrors.gender = 'Gender is required';
     if (!formData.appointment_date) newErrors.appointment_date = 'Appointment date required';
     if (!formData.time) newErrors.time = 'Appointment time required';
     if (selectedTests.length === 0) newErrors.tests = 'At least one test must be selected';
-    if (formData.booking_type === 'Home Collection' && !formData.address_line.trim()) {
-      newErrors.address = 'Address line required for home collection';
-    }
+    if (formData.booking_type === 'Home Collection' && !formData.address_line) newErrors.address = 'Address required for home collection';
+    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -200,35 +220,91 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     );
   };
 
+  // 3. PERSIST THE REGISTRATION ENTRY TO SUPABASE
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validateForm()) {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
+    if (!validateForm()) return;
     
     setIsSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 1200));
-    
-    const executionData: AppointmentData = {
-      ...formData,
-      id: `APT-${Math.floor(100000 + Math.random() * 900000)}`,
-      booking_id: `BK-${Date.now().toString().slice(-8)}`,
-      created_at: new Date().toISOString()
-    };
-    
-    setSubmitSuccess(true);
-    setTimeout(() => {
-      if (onSuccess) onSuccess(executionData);
+    let publicPrescriptionUrl = '';
+
+    try {
+      // Step A: Optional Prescription File Upload to Supabase Storage Bucket
+      if (formData.prescription_file) {
+        const fileExt = formData.prescription_file.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+        const filePath = `prescriptions/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('patient-documents') // Make sure this bucket is created in your Supabase Dashboard
+          .upload(filePath, formData.prescription_file);
+
+        if (uploadError) throw uploadError;
+
+        const { data: publicUrlData } = supabase.storage
+          .from('patient-documents')
+          .getPublicUrl(filePath);
+
+        publicPrescriptionUrl = publicUrlData.publicUrl;
+      }
+
+      // Step B: Structural Database payload construction
+      const generatedBookingId = `BK-${Date.now().toString().slice(-8)}`;
+      
+      const payloadToInsert = {
+        name: formData.name,
+        mobile: formData.mobile,
+        whatsapp: formData.whatsapp,
+        email: formData.email,
+        age: parseInt(formData.age),
+        gender: formData.gender,
+        appointment_date: formData.appointment_date,
+        time: formData.time,
+        test: selectedTests.join(', '),
+        test_codes: selectedTests,
+        booking_id: generatedBookingId,
+        status: formData.status,
+        is_deleted: formData.is_deleted,
+        remarks: formData.remarks,
+        lab_id: formData.lab_id,
+        prescription_url: publicPrescriptionUrl,
+        booking_type: formData.booking_type,
+        address_line: formData.address_line,
+        pincode: formData.pincode,
+        landmark: formData.landmark,
+        priority: formData.priority,
+        source: formData.source,
+        payment_status: formData.payment_status,
+        estimated_amount: formData.estimated_amount
+      };
+
+      // Step C: Push Row directly to Supabase Table
+      const { data, error } = await supabase
+        .from('appointments') // Make sure this table exists in your Supabase project
+        .insert([payloadToInsert])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setSubmitSuccess(true);
+      setTimeout(() => {
+        if (onSuccess) onSuccess(data);
+        setIsSubmitting(false);
+      }, 1000);
+
+    } catch (err: any) {
+      console.error("Submission Error targeting Supabase:", err.message);
+      setErrors(prev => ({ ...prev, submit: err.message || "Failed to commit record to database." }));
       setIsSubmitting(false);
-    }, 1000);
+    }
   };
 
   const steps = [
     { number: 1, title: "Patient Info", icon: User },
     { number: 2, title: "Test Selection", icon: Beaker },
     { number: 3, title: "Schedule", icon: Calendar },
-    { number: 4, title: "Location / Remarks", icon: MapPin }
+    { number: 4, title: "Location", icon: MapPin }
   ];
 
   if (!isOpen) return null;
@@ -237,28 +313,19 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="relative max-w-5xl w-full mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden animate-[fadeIn_0.3s_ease-out]">
         
-        <div 
-          className="relative px-8 py-6 transition-all"
-          style={{ backgroundColor: labSettings.theme_color || '#4f46e5' }}
-        >
-          <div className="absolute inset-0 bg-black/10"></div>
+        {/* Premium Header with Gradient */}
+        <div className="relative bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-700 px-8 py-6">
+          <div className="absolute inset-0 bg-black/20"></div>
           <div className="relative flex justify-between items-center">
-            <div className="flex items-center gap-4">
-              {labSettings.logo_url ? (
-                <img 
-                  src={labSettings.logo_url} 
-                  alt={labSettings.lab_name} 
-                  className="w-12 h-12 rounded-xl object-cover bg-white p-1 shadow"
-                />
-              ) : (
-                <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
-                  <Stethoscope className="w-6 h-6 text-white" />
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                  <Stethoscope className="w-5 h-5 text-white" />
                 </div>
-              )}
-              <div>
-                <h2 className="text-2xl font-bold text-white tracking-tight">{labSettings.lab_name}</h2>
-                <p className="text-white/80 text-xs italic mt-0.5">{labSettings.tagline || 'Premium Diagnostics Terminal'}</p>
-                <p className="text-white/60 text-xs mt-1">Hours: {labSettings.operating_hours}</p>
+                <div>
+                  <h2 className="text-2xl font-bold text-white tracking-tight">New Patient Registration</h2>
+                  <p className="text-indigo-200 text-sm mt-1">{labName}</p>
+                </div>
               </div>
             </div>
             {onCancel && (
@@ -271,6 +338,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
             )}
           </div>
           
+          {/* Progress Steps */}
           <div className="flex gap-2 mt-6">
             {steps.map(step => (
               <button
@@ -279,37 +347,46 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                 onClick={() => setActiveStep(step.number)}
                 className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
                   activeStep === step.number 
-                    ? 'bg-white shadow-lg text-gray-900 font-semibold' 
+                    ? 'bg-white text-indigo-700 shadow-lg' 
                     : activeStep > step.number 
                       ? 'bg-white/20 text-white' 
-                      : 'bg-white/10 text-white/70'
+                      : 'bg-white/10 text-indigo-200'
                 }`}
               >
-                <step.icon className="w-4 h-4" />
+                <step.icon className={`w-4 h-4 ${activeStep === step.number ? 'text-indigo-600' : ''}`} />
                 <span className="text-xs font-medium hidden sm:inline">{step.title}</span>
               </button>
             ))}
           </div>
         </div>
 
+        {/* Global Connection/Submission Errors */}
+        {(errors.global || errors.submit) && (
+          <div className="m-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-red-600" />
+            <p className="text-sm text-red-700">{errors.global || errors.submit}</p>
+          </div>
+        )}
+
+        {/* Success Message */}
         {submitSuccess && (
           <div className="m-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3">
             <CheckCircle className="w-5 h-5 text-emerald-600" />
             <div>
-              <p className="font-semibold text-emerald-800">Booking Pipeline Synced!</p>
-              <p className="text-sm text-emerald-600">The scheduled records have requested persistent entry on domain context {labSettings.domain}</p>
+              <p className="font-semibold text-emerald-800">Registration Successful!</p>
+              <p className="text-sm text-emerald-600">Appointment row saved cleanly inside Supabase ecosystem.</p>
             </div>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="p-8 max-h-[65vh] overflow-y-auto custom-scrollbar">
+        <form onSubmit={handleSubmit} className="p-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
           
           {/* STEP 1: Patient Information */}
           {activeStep === 1 && (
             <div className="space-y-6 animate-[fadeIn_0.3s_ease-out]">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Patient Full Name *</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Full Name *</label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
@@ -317,17 +394,17 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                       type="text"
                       value={formData.name}
                       onChange={(e) => setFormData({...formData, name: e.target.value})}
-                      className={`w-full pl-10 pr-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-gray-400 transition-all ${
+                      className={`w-full pl-10 pr-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all ${
                         errors.name ? 'border-red-300 bg-red-50' : 'border-gray-200'
                       }`}
-                      placeholder="Enter patient full name"
+                      placeholder="Enter patient's full name"
                     />
                   </div>
                   {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Primary Phone *</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Mobile Number *</label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
@@ -335,25 +412,25 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                       type="tel"
                       value={formData.mobile}
                       onChange={(e) => setFormData({...formData, mobile: e.target.value})}
-                      className={`w-full pl-10 pr-4 py-2.5 border rounded-xl focus:ring-2 ${
+                      className={`w-full pl-10 pr-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${
                         errors.mobile ? 'border-red-300 bg-red-50' : 'border-gray-200'
                       }`}
-                      placeholder="10 digit contact identifier"
+                      placeholder="10-digit mobile number"
                     />
                   </div>
                   {errors.mobile && <p className="text-xs text-red-500 mt-1">{errors.mobile}</p>}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">WhatsApp Route Link</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">WhatsApp Number</label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                       type="tel"
                       value={formData.whatsapp}
                       onChange={(e) => setFormData({...formData, whatsapp: e.target.value})}
-                      className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl"
-                      placeholder={`Default fallback: ${labSettings.whatsapp_number}`}
+                      className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                      placeholder="For updates & reports"
                     />
                   </div>
                 </div>
@@ -366,20 +443,20 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                       type="email"
                       value={formData.email}
                       onChange={(e) => setFormData({...formData, email: e.target.value})}
-                      className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl"
-                      placeholder="patient@medicalrecords.com"
+                      className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                      placeholder="patient@example.com"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Age Context *</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Age *</label>
                   <input
                     required
                     type="number"
                     value={formData.age}
                     onChange={(e) => setFormData({...formData, age: e.target.value})}
-                    className={`w-full px-4 py-2.5 border rounded-xl ${
+                    className={`w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${
                       errors.age ? 'border-red-300 bg-red-50' : 'border-gray-200'
                     }`}
                     placeholder="Years"
@@ -388,147 +465,218 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Gender Category *</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Gender *</label>
                   <select
                     required
                     value={formData.gender}
                     onChange={(e) => setFormData({...formData, gender: e.target.value as any})}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-white"
+                    className={`w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white ${
+                      errors.gender ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                    }`}
                   >
                     <option value="">Select Gender</option>
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
                     <option value="Other">Other</option>
                   </select>
+                  {errors.gender && <p className="text-xs text-red-500 mt-1">{errors.gender}</p>}
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Priority Level</label>
+                  <div className="flex gap-3">
+                    {['Normal', 'Urgent', 'Emergency'].map(priority => (
+                      <button
+                        key={priority}
+                        type="button"
+                        onClick={() => setFormData({...formData, priority: priority as any})}
+                        className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                          formData.priority === priority
+                            ? priority === 'Emergency' ? 'bg-red-500 text-white' :
+                              priority === 'Urgent' ? 'bg-orange-500 text-white' : 'bg-indigo-600 text-white'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        {priority}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* STEP 2: Diagnostic Catalog */}
+          {/* STEP 2: Test Selection (FETCING LIVE FROM SUPABASE) */}
           {activeStep === 2 && (
             <div className="space-y-6 animate-[fadeIn_0.3s_ease-out]">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {labSettings.available_tests?.map((cat) => {
-                  const ResolvedIcon = ICON_MAP[cat.icon_type] || Beaker;
-                  return (
-                    <div key={cat.category} className="border border-gray-200 rounded-xl overflow-hidden">
-                      <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-200 flex items-center gap-2">
-                        <ResolvedIcon className="w-4 h-4 text-gray-600" />
-                        <h3 className="font-semibold text-gray-800 text-sm">{cat.category}</h3>
-                      </div>
-                      <div className="p-2 space-y-1">
-                        {cat.tests?.map(t => (
-                          <label
-                            key={t.code}
-                            className={`flex items-center justify-between p-2.5 rounded-lg cursor-pointer transition-all ${
-                              selectedTests.includes(t.code) ? 'bg-gray-50 border border-gray-300' : 'hover:bg-gray-50/50'
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="checkbox"
-                                checked={selectedTests.includes(t.code)}
-                                onChange={() => toggleTest(t.code)}
-                                className="rounded text-gray-800 focus:ring-0 w-4 h-4"
-                              />
-                              <div>
-                                <span className="text-xs font-bold bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded mr-2">{t.code}</span>
-                                <span className="text-sm font-medium text-gray-800">{t.name}</span>
-                                <p className="text-xs text-gray-400 mt-0.5">TAT: {t.duration}</p>
+              {isLoadingTests ? (
+                <div className="py-12 flex flex-col items-center justify-center gap-3 text-gray-500">
+                  <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+                  <p className="text-sm font-medium">Syncing database test indexes...</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {dbCategories.map((category) => {
+                    const CategoryIcon = category.icon;
+                    return (
+                      <div key={category.category} className="border border-gray-200 rounded-xl overflow-hidden">
+                        <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-3 border-b border-gray-200">
+                          <div className="flex items-center gap-2">
+                            <CategoryIcon className="w-4 h-4 text-indigo-600" />
+                            <h3 className="font-semibold text-gray-800">{category.category}</h3>
+                          </div>
+                        </div>
+                        <div className="p-3 space-y-2 max-h-64 overflow-y-auto">
+                          {category.tests.map(test => (
+                            <label
+                              key={test.code}
+                              className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all ${
+                                selectedTests.includes(test.code)
+                                  ? 'bg-indigo-50 border-indigo-200 border'
+                                  : 'hover:bg-gray-50 border border-transparent'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3 flex-1">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedTests.includes(test.code)}
+                                  onChange={() => toggleTest(test.code)}
+                                  className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                                />
+                                <div>
+                                  <p className="font-medium text-gray-800 text-sm">{test.name}</p>
+                                  <p className="text-xs text-gray-500">{test.duration} turnaround</p>
+                                </div>
                               </div>
-                            </div>
-                            <p className="text-sm font-bold text-gray-900">₹{t.price}</p>
-                          </label>
-                        ))}
+                              <div className="text-right">
+                                <p className="font-bold text-indigo-600">₹{test.price}</p>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
+              
+              {errors.tests && (
+                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl">
+                  <AlertCircle className="w-4 h-4 text-red-500" />
+                  <p className="text-sm text-red-600">{errors.tests}</p>
+                </div>
+              )}
 
               {selectedTests.length > 0 && (
-                <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 flex justify-between items-center">
-                  <div>
-                    <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Consolidated Pipeline Diagnostics</p>
-                    <p className="text-sm font-mono text-gray-700 bg-white px-2 py-1 rounded border mt-1 inline-block">{formData.test}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm text-gray-500">Gross Price Evaluation</p>
-                    <p className="text-2xl font-black text-gray-900">₹{estimatedTotal}</p>
+                <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-4 rounded-xl border border-indigo-100">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="text-sm text-gray-600">Estimated Total</p>
+                      <p className="text-2xl font-bold text-indigo-700">₹{estimatedTotal}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-gray-500">Tests Selected: {selectedTests.length}</p>
+                    </div>
                   </div>
                 </div>
               )}
             </div>
           )}
 
-          {/* STEP 3: Workflow Scheduling Setup */}
+          {/* STEP 3: Schedule Information */}
           {activeStep === 3 && (
             <div className="space-y-6 animate-[fadeIn_0.3s_ease-out]">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Booking Pathway Variant *</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Booking Type *</label>
                   <div className="grid grid-cols-3 gap-2">
-                    {['Walk-in', 'Home Collection', 'Online'].map(variant => (
+                    {[
+                      { value: 'Walk-in', icon: Beaker, label: 'Walk-in' },
+                      { value: 'Home Collection', icon: Home, label: 'Home' },
+                      { value: 'Online', icon: Globe, label: 'Online' }
+                    ].map(type => (
                       <button
-                        key={variant}
+                        key={type.value}
                         type="button"
-                        onClick={() => setFormData({...formData, booking_type: variant as any})}
-                        className={`py-3 rounded-xl border font-medium text-xs transition-all ${
-                          formData.booking_type === variant
-                            ? 'bg-gray-900 text-white border-gray-900 shadow'
-                            : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                        onClick={() => setFormData({...formData, booking_type: type.value as any})}
+                        className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all ${
+                          formData.booking_type === type.value
+                            ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                            : 'border-gray-200 hover:border-gray-300 text-gray-600'
                         }`}
                       >
-                        {variant}
+                        <type.icon className="w-5 h-5" />
+                        <span className="text-xs font-medium">{type.label}</span>
                       </button>
                     ))}
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Appointment Allocation Date *</label>
-                  <input
-                    required
-                    type="date"
-                    value={formData.appointment_date}
-                    min={new Date().toISOString().split('T')[0]}
-                    onChange={(e) => setFormData({...formData, appointment_date: e.target.value})}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm"
-                  />
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Appointment Date *</label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      required
+                      type="date"
+                      value={formData.appointment_date}
+                      min={new Date().toISOString().split('T')[0]}
+                      onChange={(e) => setFormData({...formData, appointment_date: e.target.value})}
+                      className={`w-full pl-10 pr-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${
+                        errors.appointment_date ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                      }`}
+                    />
+                  </div>
+                  {errors.appointment_date && <p className="text-xs text-red-500 mt-1">{errors.appointment_date}</p>}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Target Time Window *</label>
-                  <input
-                    required
-                    type="time"
-                    value={formData.time}
-                    onChange={(e) => setFormData({...formData, time: e.target.value})}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm"
-                  />
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Preferred Time *</label>
+                  <div className="relative">
+                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      required
+                      type="time"
+                      value={formData.time}
+                      onChange={(e) => setFormData({...formData, time: e.target.value})}
+                      className={`w-full pl-10 pr-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${
+                        errors.time ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                      }`}
+                    />
+                  </div>
+                  {errors.time && <p className="text-xs text-red-500 mt-1">{errors.time}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Payment Status</label>
+                  <select
+                    value={formData.payment_status}
+                    onChange={(e) => setFormData({...formData, payment_status: e.target.value as any})}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="Pending">Pending</option>
+                    <option value="Partial">Partial Payment</option>
+                    <option value="Paid">Fully Paid</option>
+                  </select>
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Clinical Prescription URL Routing</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Prescription (Optional)</label>
                   <div className="flex items-center gap-3">
-                    <label className="flex-1 flex items-center gap-3 px-4 py-3 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 text-sm text-gray-500">
-                      <Upload className="w-4 h-4 text-gray-400" />
-                      <span>Select local attachment to index dynamically under lab slug configuration context</span>
+                    <label className="flex-1 flex items-center gap-3 px-4 py-2.5 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-indigo-400 transition-all">
+                      <Upload className="w-5 h-5 text-gray-400" />
+                      <span className="text-sm text-gray-600">Upload prescription file to Supabase Storage</span>
                       <input type="file" accept="image/*,.pdf" onChange={handleFileUpload} className="hidden" />
                     </label>
                     {prescriptionPreview && (
-                      <div className="relative border p-1 rounded-lg bg-white">
-                        <img src={prescriptionPreview} alt="Preview Matrix" className="w-12 h-12 object-cover rounded" />
+                      <div className="relative">
+                        <img src={prescriptionPreview} alt="Preview" className="w-12 h-12 object-cover rounded-lg border" />
                         <button
                           type="button"
-                          onClick={() => {
-                            setPrescriptionPreview(null);
-                            setFormData(prev => ({ ...prev, prescription_file: null, prescription_url: '' }));
-                          }}
-                          className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-gray-800 text-white rounded-full flex items-center justify-center text-[9px]"
+                          onClick={() => { setPrescriptionPreview(null); setFormData(prev => ({ ...prev, prescription_file: null })); }}
+                          className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center"
                         >
-                          ✕
+                          <X className="w-3 h-3 text-white" />
                         </button>
                       </div>
                     )}
@@ -538,94 +686,129 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
             </div>
           )}
 
-          {/* STEP 4: Geographic Properties & Contextual Remarks */}
+          {/* STEP 4: Location Details */}
           {activeStep === 4 && (
             <div className="space-y-6 animate-[fadeIn_0.3s_ease-out]">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Geographic Address Details</label>
-                  <textarea
-                    rows={2}
-                    value={formData.address_line}
-                    onChange={(e) => setFormData({...formData, address_line: e.target.value})}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm"
-                    placeholder="Provide detailed home location structural variables if home sample allocation pathway is checked"
-                  />
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Address Line</label>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                    <textarea
+                      rows={2}
+                      value={formData.address_line}
+                      onChange={(e) => setFormData({...formData, address_line: e.target.value})}
+                      className={`w-full pl-10 pr-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${
+                        errors.address ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                      }`}
+                      placeholder="House/Flat No, Street, Area, City"
+                    />
+                  </div>
+                  {errors.address && <p className="text-xs text-red-500 mt-1">{errors.address}</p>}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Postal Pincode</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Pincode</label>
                   <input
                     type="text"
                     value={formData.pincode}
                     onChange={(e) => setFormData({...formData, pincode: e.target.value})}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm"
-                    placeholder="6-digit verification code"
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                    placeholder="6-digit pincode"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Landmark Reference</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Landmark</label>
                   <input
                     type="text"
                     value={formData.landmark}
                     onChange={(e) => setFormData({...formData, landmark: e.target.value})}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm"
-                    placeholder="Nearby milestone markers"
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Nearby landmark"
                   />
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Patient History Notes & Case Remarks</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Source of Lead</label>
+                  <select
+                    value={formData.source}
+                    onChange={(e) => setFormData({...formData, source: e.target.value as any})}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="Direct">Direct Walk-in</option>
+                    <option value="Reference">Doctor/Patient Reference</option>
+                    <option value="Online Portal">Online Portal</option>
+                    <option value="Call Center">Call Center</option>
+                  </select>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Additional Remarks</label>
                   <textarea
                     rows={3}
                     value={formData.remarks}
                     onChange={(e) => setFormData({...formData, remarks: e.target.value})}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm"
-                    placeholder="Enter generic system case record notes here..."
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Any specific instructions, clinical history, or special requirements..."
                   />
                 </div>
               </div>
             </div>
           )}
 
-          {/* Execution Pipeline Controls */}
-          <div className="flex justify-between items-center pt-6 mt-6 border-t border-gray-100">
-            {activeStep > 1 ? (
-              <button
-                type="button"
-                onClick={() => setActiveStep(prev => prev - 1)}
-                className="px-5 py-2 border border-gray-200 text-gray-700 text-xs font-medium rounded-xl hover:bg-gray-50"
-              >
-                Back
-              </button>
-            ) : <div />}
+          {/* Navigation Buttons */}
+          <div className="flex justify-between gap-3 pt-6 mt-6 border-t border-gray-100">
+            <div>
+              {activeStep > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setActiveStep(prev => prev - 1)}
+                  className="px-6 py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-50 transition-all"
+                >
+                  Back
+                </button>
+              )}
+            </div>
             
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               {activeStep < 4 ? (
                 <button
                   type="button"
                   onClick={() => setActiveStep(prev => prev + 1)}
-                  className="px-5 py-2 text-white text-xs font-medium rounded-xl flex items-center gap-1"
-                  style={{ backgroundColor: labSettings.theme_color || '#4f46e5' }}
+                  className="px-6 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 transition-all flex items-center gap-2"
                 >
-                  Continue Workflow <ChevronRight className="w-3.5 h-3.5" />
+                  Continue <ChevronRight className="w-4 h-4" />
                 </button>
               ) : (
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-6 py-2.5 bg-gray-900 text-white text-xs font-bold rounded-xl shadow-md disabled:opacity-50 flex items-center gap-2"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      Registering Database Row Ledger...
-                    </>
-                  ) : (
-                    <>Commit Registration Entry</>
+                <>
+                  {onCancel && (
+                    <button
+                      type="button"
+                      onClick={onCancel}
+                      className="px-6 py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-50 transition-all"
+                    >
+                      Cancel
+                    </button>
                   )}
-                </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="px-8 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-semibold rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Writing to Database...
+                      </>
+                    ) : (
+                      <>
+                        Register Patient
+                        <ChevronRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -633,13 +816,10 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
       </div>
 
       <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: scale(0.99); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        .custom-scrollbar::-webkit-scrollbar { width: 5px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 99px; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
       `}</style>
     </div>
   );
