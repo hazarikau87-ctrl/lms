@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   User, Phone, Mail, Calendar, Clock, Beaker, MapPin, 
   AlertCircle, CheckCircle, Upload, X, 
@@ -26,7 +26,7 @@ export interface AppointmentData {
   created_at?: string;
   lab_id: string;
   prescription_url: string;
-  booking_type: 'walk-in' | 'home'; // Matched perfectly to CHECK CONSTRAINT array values
+  booking_type: 'walk-in' | 'home'; 
   address_line: string;
   pincode: string;
   landmark: string;
@@ -70,7 +70,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     time: '',
     status: 'Pending' as const,
     remarks: '',
-    booking_type: 'walk-in' as 'walk-in' | 'home', // Standardized options
+    booking_type: 'walk-in' as 'walk-in' | 'home', 
     address_line: '',
     pincode: '',
     landmark: ''
@@ -83,6 +83,9 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
   const [activeStep, setActiveStep] = useState(1);
   const [prescriptionFile, setPrescriptionFile] = useState<File | null>(null);
   const [prescriptionPreview, setPrescriptionPreview] = useState<string | null>(null);
+
+  // Synchronous network firewall lock to completely block duplicate execution loops
+  const isProcessingPayload = useRef(false);
 
   // Safe Helper to parse test references dynamically from strings or objects inside JSONB array
   const getTestStringValue = (item: any): string => {
@@ -108,7 +111,6 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
         if (data) {
           setLabInfo(data);
           
-          // Parse out the items inside the jsonb column safely
           if (Array.isArray(data.available_tests)) {
             const parsedTests = data.available_tests
               .map(item => getTestStringValue(item))
@@ -170,8 +172,13 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Critical Protection Check: If locked or state says submitting, bounce instantly.
+    if (isProcessingPayload.current || isSubmitting || submitSuccess) return;
     if (!validateForm()) return;
     
+    // Activate immediate lock barriers
+    isProcessingPayload.current = true;
     setIsSubmitting(true);
     let finalPrescriptionUrl = '';
 
@@ -211,7 +218,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
         remarks: formData.remarks,
         lab_id: currentLabId,
         prescription_url: finalPrescriptionUrl,
-        booking_type: formData.booking_type, // Passes 'walk-in' or 'home' perfectly to SQL row instance
+        booking_type: formData.booking_type, 
         address_line: formData.booking_type === 'home' ? formData.address_line : '',
         pincode: formData.booking_type === 'home' ? formData.pincode : '',
         landmark: formData.booking_type === 'home' ? formData.landmark : ''
@@ -231,9 +238,11 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     } catch (err: any) {
       console.error("Database Save Error:", err);
       setErrors(prev => ({ ...prev, global: err.message || "Failed to submit data to row instance." }));
-    } finally {
+      // Open lock again ONLY if payload insert fails so patient can correct and resubmit
+      isProcessingPayload.current = false;
       setIsSubmitting(false);
-    }
+    } 
+    // Removed the finally block to prevent clearing submission states mid-render lifecycle loop
   };
 
   const steps = [
@@ -261,7 +270,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
               </div>
             </div>
             {onCancel && (
-              <button onClick={onCancel} className="p-1 rounded-lg bg-white/10 hover:bg-white/20 text-white">
+              <button onClick={onCancel} disabled={isSubmitting} className="p-1 rounded-lg bg-white/10 hover:bg-white/20 text-white disabled:opacity-30">
                 <X className="w-4 h-4" />
               </button>
             )}
@@ -273,10 +282,11 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
               <button
                 key={step.number}
                 type="button"
+                disabled={isSubmitting}
                 onClick={() => setActiveStep(step.number)}
                 className={`flex-1 flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                   activeStep === step.number ? 'bg-white text-gray-900 shadow-md' : 'bg-white/10 text-white'
-                }`}
+                } disabled:opacity-50`}
               >
                 <step.icon className="w-3.5 h-3.5" />
                 <span>{step.title}</span>
@@ -308,8 +318,9 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Full Name *</label>
                 <input
                   required type="text" value={formData.name}
+                  disabled={isSubmitting || submitSuccess}
                   onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50"
                   placeholder="Patient Name"
                 />
                 {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
@@ -320,8 +331,9 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                   <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Mobile Primary *</label>
                   <input
                     required type="tel" value={formData.mobile}
+                    disabled={isSubmitting || submitSuccess}
                     onChange={(e) => setFormData({...formData, mobile: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-xl disabled:bg-gray-50"
                     placeholder="10-digit number"
                   />
                   {errors.mobile && <p className="text-xs text-red-500 mt-1">{errors.mobile}</p>}
@@ -330,8 +342,9 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                   <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">WhatsApp Communications</label>
                   <input
                     type="tel" value={formData.whatsapp}
+                    disabled={isSubmitting || submitSuccess}
                     onChange={(e) => setFormData({...formData, whatsapp: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-xl disabled:bg-gray-50"
                     placeholder="Defaults to primary mobile if blank"
                   />
                 </div>
@@ -341,8 +354,9 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Email Address</label>
                 <input
                   type="email" value={formData.email}
+                  disabled={isSubmitting || submitSuccess}
                   onChange={(e) => setFormData({...formData, email: e.target.value})}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-xl"
+                  className="w-full px-4 py-2 border border-gray-200 rounded-xl disabled:bg-gray-50"
                   placeholder="name@domain.com"
                 />
               </div>
@@ -352,8 +366,9 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                   <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Age *</label>
                   <input
                     required type="number" value={formData.age}
+                    disabled={isSubmitting || submitSuccess}
                     onChange={(e) => setFormData({...formData, age: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-xl disabled:bg-gray-50"
                     placeholder="Years"
                   />
                   {errors.age && <p className="text-xs text-red-500 mt-1">{errors.age}</p>}
@@ -362,8 +377,9 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                   <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Gender *</label>
                   <select
                     required value={formData.gender}
+                    disabled={isSubmitting || submitSuccess}
                     onChange={(e) => setFormData({...formData, gender: e.target.value as any})}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl bg-white"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-xl bg-white disabled:bg-gray-50"
                   >
                     <option value="">Select</option>
                     <option value="Male">Male</option>
@@ -386,9 +402,10 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                       <label key={index} className="flex items-center gap-3 p-2.5 bg-white hover:bg-indigo-50/40 border border-gray-100 rounded-xl text-sm cursor-pointer transition-colors">
                         <input
                           type="checkbox"
+                          disabled={isSubmitting || submitSuccess}
                           checked={selectedTests.includes(cleanTestName)}
                           onChange={() => toggleTest(cleanTestName)}
-                          className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                          className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 disabled:opacity-50"
                         />
                         <span className="text-gray-700 font-medium">{cleanTestName}</span>
                       </label>
@@ -407,16 +424,18 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                   <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Appointment Date *</label>
                   <input
                     required type="date" value={formData.appointment_date}
+                    disabled={isSubmitting || submitSuccess}
                     onChange={(e) => setFormData({...formData, appointment_date: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-xl disabled:bg-gray-50"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Time Selection *</label>
                   <input
                     required type="time" value={formData.time}
+                    disabled={isSubmitting || submitSuccess}
                     onChange={(e) => setFormData({...formData, time: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-xl disabled:bg-gray-50"
                   />
                 </div>
               </div>
@@ -426,8 +445,9 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                   <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Booking Type</label>
                   <select
                     value={formData.booking_type}
+                    disabled={isSubmitting || submitSuccess}
                     onChange={(e) => setFormData({...formData, booking_type: e.target.value as any})}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl bg-white"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-xl bg-white disabled:bg-gray-50"
                   >
                     <option value="walk-in">Walk-in Clinic</option>
                     <option value="home">Home Collection</option>
@@ -437,8 +457,9 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                   <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Workflow Status</label>
                   <select
                     value={formData.status}
+                    disabled={isSubmitting || submitSuccess}
                     onChange={(e) => setFormData({...formData, status: e.target.value as any})}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl bg-white"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-xl bg-white disabled:bg-gray-50"
                   >
                     <option value="Pending">Pending</option>
                     <option value="Confirmed">Confirmed</option>
@@ -451,21 +472,23 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Prescription Document Upload</label>
                 <div className="flex items-center gap-3">
-                  <label className="flex-1 flex items-center gap-2 px-4 py-2 border-2 border-dashed rounded-xl cursor-pointer hover:bg-gray-50 text-sm text-gray-600">
+                  <label className={`flex-1 flex items-center gap-2 px-4 py-2 border-2 border-dashed rounded-xl cursor-pointer hover:bg-gray-50 text-sm text-gray-600 ${isSubmitting || submitSuccess ? 'opacity-50 pointer-events-none bg-gray-50' : ''}`}>
                     <Upload className="w-4 h-4 text-gray-400" />
                     <span>Upload to storage bucket</span>
-                    <input type="file" accept="image/*,.pdf" onChange={handleFileUpload} className="hidden" />
+                    <input type="file" accept="image/*,.pdf" disabled={isSubmitting || submitSuccess} onChange={handleFileUpload} className="hidden" />
                   </label>
                   {prescriptionPreview && (
                     <div className="relative">
                       <img src={prescriptionPreview} alt="Preview" className="w-10 h-10 object-cover rounded-lg border" />
-                      <button
-                        type="button"
-                        onClick={() => { setPrescriptionPreview(null); setPrescriptionFile(null); }}
-                        className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5"
-                      >
-                        <X className="w-2.5 h-2.5" />
-                      </button>
+                      {!isSubmitting && !submitSuccess && (
+                        <button
+                          type="button"
+                          onClick={() => { setPrescriptionPreview(null); setPrescriptionFile(null); }}
+                          className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5"
+                        >
+                          <X className="w-2.5 h-2.5" />
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -480,8 +503,9 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Address Line</label>
                 <textarea
                   rows={2} value={formData.address_line}
+                  disabled={isSubmitting || submitSuccess}
                   onChange={(e) => setFormData({...formData, address_line: e.target.value})}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-xl"
+                  className="w-full px-4 py-2 border border-gray-200 rounded-xl disabled:bg-gray-50"
                   placeholder="Required for Home Collection setups"
                 />
                 {errors.address && <p className="text-xs text-red-500 mt-1">{errors.address}</p>}
@@ -492,8 +516,9 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                   <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Pincode</label>
                   <input
                     type="text" value={formData.pincode}
+                    disabled={isSubmitting || submitSuccess}
                     onChange={(e) => setFormData({...formData, pincode: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-xl disabled:bg-gray-50"
                     placeholder="Postal Code"
                   />
                 </div>
@@ -501,8 +526,9 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                   <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Landmark</label>
                   <input
                     type="text" value={formData.landmark}
+                    disabled={isSubmitting || submitSuccess}
                     onChange={(e) => setFormData({...formData, landmark: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-xl disabled:bg-gray-50"
                     placeholder="Nearby reference point"
                   />
                 </div>
@@ -512,8 +538,9 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Remarks & Internal Notes</label>
                 <textarea
                   rows={2} value={formData.remarks}
+                  disabled={isSubmitting || submitSuccess}
                   onChange={(e) => setFormData({...formData, remarks: e.target.value})}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-xl"
+                  className="w-full px-4 py-2 border border-gray-200 rounded-xl disabled:bg-gray-50"
                   placeholder="Additional observations..."
                 />
               </div>
@@ -524,7 +551,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
           <div className="flex justify-between items-center pt-6 mt-6 border-t border-gray-100">
             <button
               type="button"
-              disabled={activeStep === 1}
+              disabled={activeStep === 1 || isSubmitting}
               onClick={() => setActiveStep(p => p - 1)}
               className="px-4 py-2 text-sm font-medium text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 disabled:opacity-30"
             >
@@ -544,7 +571,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
               ) : (
                 <button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || submitSuccess}
                   className="px-6 py-2 text-sm font-bold text-white rounded-xl shadow-md flex items-center gap-2 disabled:opacity-50"
                   style={{ backgroundColor: themeColor }}
                 >
@@ -553,6 +580,8 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Saving to Workspace...
                     </>
+                  ) : submitSuccess ? (
+                    "Saved successfully"
                   ) : (
                     "Register Appointment"
                   )}
