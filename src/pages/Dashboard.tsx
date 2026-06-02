@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   FlaskConical, LogOut, Search, CalendarCheck, Clock, CheckCheck,
   Phone, FileText, Check, Trash2, ChevronLeft, ChevronRight,
-  MessageCircle, Building2, FileDown, RotateCw, Edit3, X, Settings as SettingsIcon, LayoutDashboard, MapPin, Beaker, BellRing, ChevronDown, ChevronUp, UserPlus
+  MessageCircle, Building2, FileDown, RotateCw, Edit3, X, Settings as SettingsIcon, LayoutDashboard, MapPin, Beaker, BellRing, ChevronDown, ChevronUp, Plus
 } from 'lucide-react';
 import { supabase, Appointment, Lab } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,7 +10,7 @@ import Settings from './settings';
 import RescheduleDrawer from './RescheduleDrawer';
 import ActionBar from './ActionBar';
 import { SlidoverSettings } from './SlidoverSettings';
-import { BookingRegistrationForm, AppointmentData } from './BookingRegistrationForm';
+import { BookingRegistrationForm } from './BookingRegistrationForm';
 
 const RECORDS_PER_PAGE = 10;
 
@@ -44,6 +44,9 @@ export default function Dashboard() {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
+  // Registration Form Toggle Modal State
+  const [isRegisterOpen, setIsRegisterOpen] = useState(false);
+
   // Filters state
   const [selectedDate, setSelectedDate] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all'); 
@@ -59,9 +62,6 @@ export default function Dashboard() {
 
   // Track active appointment assigned for rescheduling
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
-
-  // Booking Registration Modal State
-  const [showBookingForm, setShowBookingForm] = useState(false);
 
   const fetchAll = useCallback(async () => {
     if (!user?.id) return;
@@ -96,44 +96,6 @@ export default function Dashboard() {
   }, [user?.id]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
-
-  // Handle new appointment submission
-  const handleBookingSuccess = async (newAppointment: AppointmentData) => {
-    if (!lab?.id) return;
-    
-    try {
-      // Insert into Supabase
-      const { data, error } = await supabase
-        .from('appointments')
-        .insert([{
-          ...newAppointment,
-          lab_id: lab.id,
-          created_at: new Date().toISOString(),
-          status: 'Pending'
-        }])
-        .select()
-        .single();
-
-      if (error) {
-        console.error("Error saving appointment:", error);
-        alert("Failed to save appointment. Please try again.");
-        return;
-      }
-
-      // Refresh the appointments list
-      await fetchAll();
-      
-      // Close the modal
-      setShowBookingForm(false);
-      
-      // Optional: Show success message
-      alert(`Appointment registered successfully! Booking ID: ${data.booking_id}`);
-      
-    } catch (err) {
-      console.error("Submission error:", err);
-      alert("An error occurred. Please try again.");
-    }
-  };
 
   const checkReminderEligibility = useCallback((item: Appointment) => {
     if (item.status === 'Completed' || item.status === 'Cancelled') return false;
@@ -317,6 +279,45 @@ export default function Dashboard() {
     return selectedTestItem.test.split(',').map((t: string) => t.trim()).filter(Boolean);
   }, [selectedTestItem]);
 
+  // Handler passed directly to BookingRegistrationForm to write back to Supabase or localized stack
+  const handleRegistrationSuccess = async (newAppointment: any) => {
+    try {
+      setLoading(true);
+      // Map local form fields directly onto the relational schema
+      const { error } = await supabase.from('appointments').insert([{
+        booking_id: newAppointment.booking_id,
+        name: newAppointment.name,
+        mobile: newAppointment.mobile,
+        whatsapp: newAppointment.whatsapp,
+        email: newAppointment.email,
+        age: parseInt(newAppointment.age) || null,
+        gender: newAppointment.gender,
+        appointment_date: newAppointment.appointment_date,
+        time: newAppointment.time,
+        test: newAppointment.test,
+        status: newAppointment.status,
+        remarks: newAppointment.remarks,
+        lab_id: lab?.id,
+        prescription_url: newAppointment.prescription_url,
+        booking_type: newAppointment.booking_type,
+        address_line: newAppointment.address_line,
+        pincode: newAppointment.pincode,
+        landmark: newAppointment.landmark,
+        is_deleted: false
+      }]);
+
+      if (error) throw error;
+      
+      setIsRegisterOpen(false);
+      await fetchAll();
+    } catch (err) {
+      console.error("Error creating record workflow:", err);
+      alert("Failed to write registration to cloud system workspace.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 selection:bg-blue-500 selection:text-white antialiased relative">
       {/* SlidoverSettings Sidebar */}
@@ -360,18 +361,16 @@ export default function Dashboard() {
             </div>
 
             <div className="flex items-center gap-3">
-              {/* Add New Booking Button */}
-              {currentView === 'dashboard' && (
-                <button 
-                  onClick={() => setShowBookingForm(true)}
-                  className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-semibold hover:from-emerald-700 hover:to-teal-700 transition-all shadow-sm"
-                >
-                  <UserPlus className="w-3.5 h-3.5" /> New Booking
-                </button>
-              )}
-              
               {currentView === 'dashboard' && (
                 <>
+                  {/* UX Addition: Primary Interactive Form Opener Call to Action */}
+                  <button 
+                    onClick={() => setIsRegisterOpen(true)}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl hover:bg-indigo-700 shadow-sm shadow-indigo-600/10 transition-all"
+                  >
+                    <Plus className="w-4 h-4 stroke-[2.5]" /> New Registration
+                  </button>
+
                   <div className="relative flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-all">
                     <CalendarCheck className="w-3.5 h-3.5 text-slate-400" />
                     <input type="date" value={selectedDate} onChange={(e) => { setSelectedDate(e.target.value); setCurrentPage(1); }} className="bg-transparent border-none text-xs font-medium text-slate-700 focus:ring-0 p-0 outline-none cursor-pointer" />
@@ -543,15 +542,40 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Booking Registration Modal */}
-      {showBookingForm && (
-        <BookingRegistrationForm
-          currentLabId={lab?.id}
-          labName={lab?.lab_name}
-          onSuccess={handleBookingSuccess}
-          onCancel={() => setShowBookingForm(false)}
-          isOpen={showBookingForm}
-        />
+      {/* UX SLIDE-OVER RIGHT PORTAL: NEW PATIENT REGISTRATION DRAWER */}
+      {isRegisterOpen && (
+        <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/30 backdrop-blur-xs animate-[fadeIn_0.15s_ease-out]">
+          <div className="absolute inset-0 overflow-hidden">
+            <div className="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10">
+              <div className="pointer-events-auto w-screen max-w-3xl transform transition-transform duration-300 ease-in-out">
+                <div className="flex h-full flex-col overflow-y-scroll bg-white shadow-2xl border-l border-slate-200/80 custom-scrollbar">
+                  <div className="px-6 pt-5 pb-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center">
+                        <Plus className="w-4 h-4 stroke-[2.5]" />
+                      </div>
+                      <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Workspace Flow Manager</span>
+                    </div>
+                    <button 
+                      onClick={() => setIsRegisterOpen(false)}
+                      className="p-1.5 rounded-xl border border-slate-200 bg-white text-slate-400 hover:text-slate-600 hover:bg-slate-50 shadow-2xs transition"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  
+                  <div className="relative flex-1 py-6 px-4 sm:px-6">
+                    <BookingRegistrationForm 
+                      currentLabId={lab?.id ? String(lab.id) : "LAB-001"}
+                      onCancel={() => setIsRegisterOpen(false)}
+                      onSuccess={handleRegistrationSuccess}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* DYNAMIC VIEW ADDRESS PORTAL WINDOW */}
@@ -650,11 +674,9 @@ export default function Dashboard() {
         labId={lab?.id}
         onClose={() => setEditingAppointment(null)}
         onSuccess={(updatedFields) => {
-          if (editingAppointment) {
-            setAppointments(prev => prev.map(appt => 
-              appt.id === editingAppointment?.id ? { ...appt, ...updatedFields } : appt
-            ));
-          }
+          setAppointments(prev => prev.map(appt => 
+            appt.id === editingAppointment?.id ? { ...appt, ...updatedFields } : appt
+          ));
         }}
       />
 
@@ -683,7 +705,9 @@ function StatCard({ icon, iconBg, value, label, isActive, onClick }: { icon: Rea
 }
 
 function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRemarks, onDelete, onWhatsApp, onViewAddress, onViewTests, onSelectReschedule, isInsideReminderWindow }: AppointmentRowProps) {
-  // Added useEffect import is now available from the parent import
+  const isCompleted = item.status === 'Completed';
+  const isCancelled = item.status === 'Cancelled';
+  
   const [isExpanded, setIsExpanded] = useState(false);
   const [localRemarks, setLocalRemarks] = useState(item.remarks || '');
   const [isFocused, setIsFocused] = useState(false);
@@ -708,28 +732,12 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
     } 
   };
 
-  const isHomeCollection = item.bookingType === 'home' || item.booking_type === 'home';
+  const isHomeCollection = item.bookingType === 'home' || item.booking_type === 'home' || item.booking_type === 'Home Collection';
 
   const totalTestCount = useMemo(() => {
     if (!item.test) return 0;
     return item.test.split(',').map((t: string) => t.trim()).filter(Boolean).length;
   }, [item.test]);
-
-  // Get prescription URL safely
-  const getPrescriptionUrl = () => {
-    if (!item.prescription_url) return null;
-    if (item.prescription_url.startsWith('http')) {
-      return item.prescription_url;
-    }
-    try {
-      return supabase.storage.from('prescriptions').getPublicUrl(item.prescription_url).data.publicUrl;
-    } catch (error) {
-      console.error("Error getting prescription URL:", error);
-      return null;
-    }
-  };
-
-  const prescriptionUrl = getPrescriptionUrl();
 
   return (
     <>
@@ -782,7 +790,6 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
           </div>
         </td>
 
-        {/* Standalone Internal Remarks and Logs Column */}
         <td className="px-4 py-3.5">
           <div className="relative group w-full max-w-[240px]">
             <textarea 
@@ -808,7 +815,7 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
         </td>
 
         <td className="px-4 py-3.5 whitespace-nowrap">
-          <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide uppercase border ${item.status === 'Completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : item.status === 'Cancelled' ? 'bg-rose-50 text-rose-700 border-rose-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
+          <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide uppercase border ${isCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : isCancelled ? 'bg-rose-50 text-rose-700 border-rose-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
             {item.status || 'Pending'}
           </span>
         </td>
@@ -830,8 +837,8 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
               {/* Prescription */}
               <div className="bg-white p-4 rounded-xl border border-slate-200/70 shadow-2xs">
                 <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-2.5">Prescription Doc</span>
-                {prescriptionUrl ? ( 
-                  <a href={prescriptionUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-150 rounded-lg font-semibold text-blue-700 transition">
+                {item.prescription_url ? ( 
+                  <a href={item.prescription_url.startsWith('http') ? item.prescription_url : supabase.storage.from('prescriptions').getPublicUrl(item.prescription_url).data.publicUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-150 rounded-lg font-semibold text-blue-700 transition">
                     <FileText className="w-3.5 h-3.5" /> View Prescription (Rx)
                   </a> 
                 ) : (
