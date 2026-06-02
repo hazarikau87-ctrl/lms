@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   FlaskConical, LogOut, Search, CalendarCheck, Clock, CheckCheck,
   Phone, FileText, Check, Trash2, ChevronLeft, ChevronRight,
-  MessageCircle, Building2, FileDown, RotateCw, Edit3, X, Settings as SettingsIcon, LayoutDashboard, MapPin, Beaker, BellRing, ChevronDown, ChevronUp
+  MessageCircle, Building2, FileDown, RotateCw, Edit3, X, Settings as SettingsIcon, LayoutDashboard, MapPin, Beaker, BellRing, ChevronDown, ChevronUp, UserPlus
 } from 'lucide-react';
 import { supabase, Appointment, Lab } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,6 +10,7 @@ import Settings from './settings';
 import RescheduleDrawer from './RescheduleDrawer';
 import ActionBar from './ActionBar';
 import { SlidoverSettings } from './SlidoverSettings';
+import { BookingRegistrationForm, AppointmentData } from './BookingRegistrationForm';
 
 const RECORDS_PER_PAGE = 10;
 
@@ -59,6 +60,9 @@ export default function Dashboard() {
   // Track active appointment assigned for rescheduling
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
 
+  // Booking Registration Modal State
+  const [showBookingForm, setShowBookingForm] = useState(false);
+
   const fetchAll = useCallback(async () => {
     if (!user?.id) return;
     setLoading(true);
@@ -92,6 +96,44 @@ export default function Dashboard() {
   }, [user?.id]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // Handle new appointment submission
+  const handleBookingSuccess = async (newAppointment: AppointmentData) => {
+    if (!lab?.id) return;
+    
+    try {
+      // Insert into Supabase
+      const { data, error } = await supabase
+        .from('appointments')
+        .insert([{
+          ...newAppointment,
+          lab_id: lab.id,
+          created_at: new Date().toISOString(),
+          status: 'Pending'
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error saving appointment:", error);
+        alert("Failed to save appointment. Please try again.");
+        return;
+      }
+
+      // Refresh the appointments list
+      await fetchAll();
+      
+      // Close the modal
+      setShowBookingForm(false);
+      
+      // Optional: Show success message
+      alert(`Appointment registered successfully! Booking ID: ${data.booking_id}`);
+      
+    } catch (err) {
+      console.error("Submission error:", err);
+      alert("An error occurred. Please try again.");
+    }
+  };
 
   const checkReminderEligibility = useCallback((item: Appointment) => {
     if (item.status === 'Completed' || item.status === 'Cancelled') return false;
@@ -318,7 +360,15 @@ export default function Dashboard() {
             </div>
 
             <div className="flex items-center gap-3">
-              {/* Settings/Dashboard toggle buttons removed from header since they're now in sidebar */}
+              {/* Add New Booking Button */}
+              {currentView === 'dashboard' && (
+                <button 
+                  onClick={() => setShowBookingForm(true)}
+                  className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-semibold hover:from-emerald-700 hover:to-teal-700 transition-all shadow-sm"
+                >
+                  <UserPlus className="w-3.5 h-3.5" /> New Booking
+                </button>
+              )}
               
               {currentView === 'dashboard' && (
                 <>
@@ -492,6 +542,17 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Booking Registration Modal */}
+      {showBookingForm && (
+        <BookingRegistrationForm
+          currentLabId={lab?.id}
+          labName={lab?.lab_name}
+          onSuccess={handleBookingSuccess}
+          onCancel={() => setShowBookingForm(false)}
+          isOpen={showBookingForm}
+        />
+      )}
 
       {/* DYNAMIC VIEW ADDRESS PORTAL WINDOW */}
       {selectedAddressItem && (
