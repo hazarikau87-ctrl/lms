@@ -2,9 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { 
   User, Phone, Mail, Calendar, Clock, Beaker, MapPin, 
   AlertCircle, CheckCircle, Upload, X, 
-  Loader2, ChevronRight, Home, Globe, Activity, Stethoscope
+  Loader2, ChevronRight, Stethoscope
 } from 'lucide-react';
-import { supabase } from '../lib/supabase'; 
+import { supabase } from '../lib/supabaseClient'; 
 
 // ============== INTERFACES (STRICT MATCH) ==============
 export interface AppointmentData {
@@ -26,17 +26,18 @@ export interface AppointmentData {
   created_at?: string;
   lab_id: string;
   prescription_url: string;
-  booking_type: 'Walk-in' | 'Home Collection' | 'Online';
+  booking_type: 'walk_in' | 'home_collection' | 'online';
   address_line: string;
   pincode: string;
   landmark: string;
 }
 
+// Support both array of strings and array of objects formats safely
 interface LabData {
   id: string;
   lab_name: string;
   theme_color?: string;
-  available_tests?: string[]; // Expected format: Array of test names/codes
+  available_tests?: any[]; 
 }
 
 interface ValidationErrors {
@@ -50,7 +51,6 @@ interface BookingRegistrationFormProps {
   isOpen?: boolean;
 }
 
-// Fallback test list if the Lab record doesn't have available_tests populated yet
 const DEFAULT_TESTS = [
   "Complete Blood Count (CBC)",
   "Fasting Blood Sugar (FBS)",
@@ -69,27 +69,20 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
   currentLabId = "LAB-001",
   isOpen = true
 }) => {
-  // Lab Info State
   const [labInfo, setLabInfo] = useState<LabData | null>(null);
   
-  // Strict Form Data State
-  const [formData, setFormData] = useState<AppointmentData>({
+  const [formData, setFormData] = useState({
     name: '',
     mobile: '',
     whatsapp: '',
     email: '',
     age: '',
-    gender: '',
+    gender: '' as 'Male' | 'Female' | 'Other' | '',
     appointment_date: '',
     time: '',
-    test: '',
-    status: 'Pending',
-    is_deleted: false,
-    deleted_at: null,
+    status: 'Pending' as const,
     remarks: '',
-    lab_id: currentLabId,
-    prescription_url: '',
-    booking_type: 'Walk-in',
+    booking_type: 'walk_in' as 'walk_in' | 'home_collection' | 'online',
     address_line: '',
     pincode: '',
     landmark: ''
@@ -103,7 +96,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
   const [prescriptionFile, setPrescriptionFile] = useState<File | null>(null);
   const [prescriptionPreview, setPrescriptionPreview] = useState<string | null>(null);
 
-  // Fetch Lab logic from 'Labs' table on mount/id change
+  // Fetch Lab configuration
   useEffect(() => {
     const fetchLabLogics = async () => {
       try {
@@ -118,8 +111,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
           setLabInfo(data);
         }
       } catch (err) {
-        console.error("Error fetching from Labs table:", err);
-        // Fallback setting if database table is empty or unreachable
+        console.error("Error fetching from labs table:", err);
         setLabInfo({ id: currentLabId, lab_name: "Diagnostic Lab Workspace" });
       }
     };
@@ -128,14 +120,6 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
       fetchLabLogics();
     }
   }, [currentLabId, isOpen]);
-
-  // Sync selected arrays back to the flat string "test" payload column
-  useEffect(() => {
-    setFormData(prev => ({ 
-      ...prev, 
-      test: selectedTests.join(', ') 
-    }));
-  }, [selectedTests]);
 
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -161,7 +145,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     if (!formData.time) newErrors.time = 'Time required';
     if (selectedTests.length === 0) newErrors.tests = 'Select at least one test';
     
-    if (formData.booking_type === 'Home Collection' && !formData.address_line.trim()) {
+    if (formData.booking_type === 'home_collection' && !formData.address_line.trim()) {
       newErrors.address = 'Address layout is required for Home Collection';
     }
     
@@ -175,6 +159,16 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     );
   };
 
+  // Safe Helper to read test names whether database returns strings or objects
+  const getTestStringValue = (item: any): string => {
+    if (!item) return '';
+    if (typeof item === 'string') return item;
+    if (typeof item === 'object') {
+      return item.name || item.test_name || JSON.stringify(item);
+    }
+    return String(item);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) return;
@@ -183,11 +177,10 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     let finalPrescriptionUrl = '';
 
     try {
-      // 1. Storage bucket processing
       if (prescriptionFile) {
         const fileExt = prescriptionFile.name.split('.').pop();
         const fileName = `${Date.now()}.${fileExt}`;
-        const filePath = `${formData.lab_id}/${fileName}`;
+        const filePath = `${currentLabId}/${fileName}`;
 
         const { error: uploadError } = await supabase.storage
           .from('prescriptions')
@@ -202,7 +195,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
         finalPrescriptionUrl = urlData.publicUrl;
       }
 
-      // 2. Exact schema payload construction
+      // Payload built directly matching database row layout rules
       const targetPayload = {
         name: formData.name,
         mobile: formData.mobile,
@@ -212,21 +205,20 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
         gender: formData.gender,
         appointment_date: formData.appointment_date,
         time: formData.time,
-        test: formData.test,
+        test: selectedTests.join(', '), // Extracted clean text tokens string
         booking_id: `BK-${Date.now().toString().slice(-6)}`,
         status: formData.status,
         is_deleted: false,
         deleted_at: null,
         remarks: formData.remarks,
-        lab_id: formData.lab_id,
+        lab_id: currentLabId,
         prescription_url: finalPrescriptionUrl,
         booking_type: formData.booking_type,
-        address_line: formData.booking_type === 'Home Collection' ? formData.address_line : '',
-        pincode: formData.booking_type === 'Home Collection' ? formData.pincode : '',
-        landmark: formData.booking_type === 'Home Collection' ? formData.landmark : ''
+        address_line: formData.booking_type === 'home_collection' ? formData.address_line : '',
+        pincode: formData.booking_type === 'home_collection' ? formData.pincode : '',
+        landmark: formData.booking_type === 'home_collection' ? formData.landmark : ''
       };
 
-      // 3. Insert into database table
       const { data, error: dbError } = await supabase
         .from('appointments')
         .insert([targetPayload])
@@ -240,7 +232,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
 
     } catch (err: any) {
       console.error("Database Save Error:", err);
-      setErrors(prev => ({ ...prev, global: err.message || "Failed to submit data." }));
+      setErrors(prev => ({ ...prev, global: err.message || "Failed to submit data to row instance." }));
     } finally {
       setIsSubmitting(false);
     }
@@ -254,14 +246,13 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
 
   if (!isOpen) return null;
 
-  // Use dynamic color string if it arrives from backend database row data
   const themeColor = labInfo?.theme_color || '#4f46e5';
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="relative max-w-4xl w-full mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden">
         
-        {/* Dynamic Branded Header */}
+        {/* Dynamic Header */}
         <div style={{ backgroundColor: themeColor }} className="relative px-8 py-6 text-white">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-3">
@@ -278,7 +269,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
             )}
           </div>
           
-          {/* Steps Progress Tracker */}
+          {/* Steps */}
           <div className="flex gap-2 mt-6">
             {steps.map(step => (
               <button
@@ -306,13 +297,13 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
         {submitSuccess && (
           <div className="m-6 p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl flex items-center gap-2 text-sm font-medium">
             <CheckCircle className="w-4 h-4 text-emerald-600" />
-            <span>Success! Data successfully committed to your database row metrics.</span>
+            <span>Success! Data successfully committed to your database.</span>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="p-8 max-h-[65vh] overflow-y-auto">
           
-          {/* STEP 1: Basic Patient Records */}
+          {/* STEP 1: Patient Details */}
           {activeStep === 1 && (
             <div className="space-y-4 animate-[fadeIn_0.2s_ease-out]">
               <div>
@@ -386,23 +377,28 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
             </div>
           )}
 
-          {/* STEP 2: Tests Aggregation & Appointment Time */}
+          {/* STEP 2: Safe Test Rendering Grid */}
           {activeStep === 2 && (
             <div className="space-y-5 animate-[fadeIn_0.2s_ease-out]">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">Available Diagnostics *</label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-1 border rounded-xl">
-                  {(labInfo?.available_tests || DEFAULT_TESTS).map((testItem) => (
-                    <label key={testItem} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg text-sm cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={selectedTests.includes(testItem)}
-                        onChange={() => toggleTest(testItem)}
-                        className="rounded border-gray-300 text-indigo-600"
-                      />
-                      <span className="text-gray-700">{testItem}</span>
-                    </label>
-                  ))}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 border rounded-xl bg-gray-50/50">
+                  {(labInfo?.available_tests || DEFAULT_TESTS).map((rawItem, index) => {
+                    const cleanTestName = getTestStringValue(rawItem);
+                    if (!cleanTestName) return null;
+                    
+                    return (
+                      <label key={index} className="flex items-center gap-3 p-2.5 bg-white hover:bg-indigo-50/40 border border-gray-100 rounded-xl text-sm cursor-pointer transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={selectedTests.includes(cleanTestName)}
+                          onChange={() => toggleTest(cleanTestName)}
+                          className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                        />
+                        <span className="text-gray-700 font-medium">{cleanTestName}</span>
+                      </label>
+                    );
+                  })}
                 </div>
                 {errors.tests && <p className="text-xs text-red-500 mt-1">{errors.tests}</p>}
               </div>
@@ -434,9 +430,9 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                     onChange={(e) => setFormData({...formData, booking_type: e.target.value as any})}
                     className="w-full px-4 py-2 border border-gray-200 rounded-xl bg-white"
                   >
-                    <option value="Walk-in">Walk-in Clinic</option>
-                    <option value="Home Collection">Home Collection</option>
-                    <option value="Online">Online Consultation</option>
+                    <option value="walk_in">Walk-in Clinic</option>
+                    <option value="home_collection">Home Collection</option>
+                    <option value="online">Online Consultation</option>
                   </select>
                 </div>
                 <div>
@@ -479,7 +475,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
             </div>
           )}
 
-          {/* STEP 3: Logistics Data Setup */}
+          {/* STEP 3: Logistics Setup */}
           {activeStep === 3 && (
             <div className="space-y-4 animate-[fadeIn_0.2s_ease-out]">
               <div>
@@ -526,7 +522,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
             </div>
           )}
 
-          {/* Action Footer Navigation Panel */}
+          {/* Action Footer Panel */}
           <div className="flex justify-between items-center pt-6 mt-6 border-t border-gray-100">
             <button
               type="button"
