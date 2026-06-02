@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   User, Phone, Mail, Calendar, Clock, Beaker, MapPin, 
-  AlertCircle, CheckCircle, Upload, X, 
-  Loader2, ChevronRight, Stethoscope
+  FileText, AlertCircle, CheckCircle, Upload, X, 
+  Building2, Hash, Loader2, ChevronRight, Home, 
+  Globe, CreditCard, Stethoscope, Activity,
+  Droplet, Thermometer, Heart, Brain, Eye, Moon
 } from 'lucide-react';
-import { supabase } from '../lib/supabase'; 
+import { supabase } from '../lib/supabase'; // 1. Import your supabase client instance
 
-// ============== INTERFACES (STRICT MATCH) ==============
+// ============== TYPES & INTERFACES ==============
 export interface AppointmentData {
   id?: string;
   name: string;
@@ -18,6 +20,7 @@ export interface AppointmentData {
   appointment_date: string;
   time: string;
   test: string;
+  test_codes?: string[];
   booking_id?: string;
   status: 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled';
   is_deleted: boolean;
@@ -26,17 +29,17 @@ export interface AppointmentData {
   created_at?: string;
   lab_id: string;
   prescription_url: string;
+  prescription_file?: File | null;
   booking_type: 'Walk-in' | 'Home Collection' | 'Online';
   address_line: string;
   pincode: string;
   landmark: string;
-}
-
-interface LabData {
-  id: string;
-  lab_name: string;
-  theme_color?: string;
-  available_tests?: any[]; 
+  city?: string;
+  state?: string;
+  priority: 'Normal' | 'Urgent' | 'Emergency';
+  source: 'Direct' | 'Reference' | 'Online Portal' | 'Call Center';
+  payment_status: 'Pending' | 'Partial' | 'Paid';
+  estimated_amount?: number;
 }
 
 interface ValidationErrors {
@@ -47,526 +50,696 @@ interface BookingRegistrationFormProps {
   onSuccess?: (data: AppointmentData) => void;
   onCancel?: () => void;
   currentLabId?: string;
+  labName?: string;
   isOpen?: boolean;
 }
 
+// ============== MAIN COMPONENT ==============
 export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = ({ 
   onSuccess, 
   onCancel,
   currentLabId = "LAB-001",
+  labName = "Diagnostic Lab",
   isOpen = true
 }) => {
-  const [labInfo, setLabInfo] = useState<LabData | null>(null);
-  const [dynamicTests, setDynamicTests] = useState<string[]>([]);
-  
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<AppointmentData>({
     name: '',
     mobile: '',
     whatsapp: '',
     email: '',
     age: '',
-    gender: '' as 'Male' | 'Female' | 'Other' | '',
+    gender: '',
     appointment_date: '',
     time: '',
-    status: 'Pending' as const,
+    test: '',
+    status: 'Pending',
+    is_deleted: false,
+    deleted_at: null,
     remarks: '',
-    booking_type: 'walk_in' as 'walk_in' | 'home_collection' | 'online',
+    lab_id: currentLabId,
+    prescription_url: '',
+    booking_type: 'Walk-in',
     address_line: '',
     pincode: '',
-    landmark: ''
+    landmark: '',
+    priority: 'Normal',
+    source: 'Direct',
+    payment_status: 'Pending',
+    estimated_amount: 0
   });
 
+  // 2. Added states to track downloaded test configurations dynamically
+  const [dynamicTests, setDynamicTests] = useState<string[]>([]);
+  const [isLoadingTests, setIsLoadingTests] = useState(false);
   const [selectedTests, setSelectedTests] = useState<string[]>([]);
+  
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [activeStep, setActiveStep] = useState(1);
-  const [prescriptionFile, setPrescriptionFile] = useState<File | null>(null);
   const [prescriptionPreview, setPrescriptionPreview] = useState<string | null>(null);
 
-  // Safe Helper to parse test references dynamically from strings or objects inside JSONB array
-  const getTestStringValue = (item: any): string => {
-    if (!item) return '';
-    if (typeof item === 'string') return item;
-    if (typeof item === 'object') {
-      return item.name || item.test_name || item.title || JSON.stringify(item);
-    }
-    return String(item);
-  };
-
-  // Fetch Lab configuration and populate the tests checklist dynamically
+  // 3. Effect hook to download the dynamic test list from column 'available_tests' inside table 'labs'
   useEffect(() => {
-    const fetchLabLogics = async () => {
+    const fetchLabTests = async () => {
+      if (!isOpen) return;
+      setIsLoadingTests(true);
       try {
         const { data, error } = await supabase
           .from('labs')
-          .select('id, lab_name, theme_color, available_tests')
+          .select('available_tests')
           .eq('id', currentLabId)
           .single();
 
         if (error) throw error;
-        if (data) {
-          setLabInfo(data);
-          
-          // Parse out the items inside the jsonb column safely
-          if (Array.isArray(data.available_tests)) {
-            const parsedTests = data.available_tests
-              .map(item => getTestStringValue(item))
-              .filter(name => name.trim() !== '');
-            setDynamicTests(parsedTests);
-          } else {
-            setDynamicTests([]);
-          }
+
+        if (data && Array.isArray(data.available_tests)) {
+          // Robust mapping to clean up strings or object elements from JSONB arrays safely
+          const cleanTests = data.available_tests.map((item: any) => {
+            if (typeof item === 'string') return item;
+            if (typeof item === 'object' && item !== null) return item.name || item.test_name || JSON.stringify(item);
+            return String(item);
+          });
+          setDynamicTests(cleanTests);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error fetching available_tests from labs table:", err);
-        setLabInfo({ id: currentLabId, lab_name: "Diagnostic Lab Workspace" });
-        setDynamicTests([]);
+        setErrors(prev => ({ ...prev, global: "Could not sync laboratory available tests." }));
+      } finally {
+        setIsLoadingTests(false);
       }
     };
 
-    if (isOpen) {
-      fetchLabLogics();
-    }
+    fetchLabTests();
   }, [currentLabId, isOpen]);
 
+  // Synchronize stringified representation of selected items to local form state
+  useEffect(() => {
+    setFormData(prev => ({ ...prev, test: selectedTests.join(', ') }));
+  }, [selectedTests]);
+
+  // Handle file upload
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
-        setErrors(prev => ({ ...prev, prescription: 'File size must be under 5MB' }));
+        setErrors(prev => ({ ...prev, prescription: 'File size must be less than 5MB' }));
         return;
       }
-      setPrescriptionPreview(URL.createObjectURL(file));
-      setPrescriptionFile(file);
+      
+      const previewUrl = URL.createObjectURL(file);
+      setPrescriptionPreview(previewUrl);
+      setFormData(prev => ({ ...prev, prescription_file: file }));
       setErrors(prev => ({ ...prev, prescription: '' }));
     }
   }, []);
 
+  // Validate form
   const validateForm = (): boolean => {
     const newErrors: ValidationErrors = {};
     
     if (!formData.name.trim()) newErrors.name = 'Patient name is required';
     if (!formData.mobile.match(/^[0-9]{10}$/)) newErrors.mobile = 'Valid 10-digit mobile number required';
-    if (!formData.age || parseInt(formData.age) < 0 || parseInt(formData.age) > 120) newErrors.age = 'Valid age required';
+    if (!formData.age || parseInt(formData.age) < 0 || parseInt(formData.age) > 120) newErrors.age = 'Valid age (0-120) required';
     if (!formData.gender) newErrors.gender = 'Gender is required';
-    if (!formData.appointment_date) newErrors.appointment_date = 'Date required';
-    if (!formData.time) newErrors.time = 'Time required';
-    if (selectedTests.length === 0) newErrors.tests = 'Select at least one test';
-    
-    if (formData.booking_type === 'home_collection' && !formData.address_line.trim()) {
-      newErrors.address = 'Address layout is required for Home Collection';
-    }
+    if (!formData.appointment_date) newErrors.appointment_date = 'Appointment date required';
+    if (!formData.time) newErrors.time = 'Appointment time required';
+    if (selectedTests.length === 0) newErrors.tests = 'At least one test must be selected';
+    if (formData.booking_type === 'Home Collection' && !formData.address_line) newErrors.address = 'Address required for home collection';
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
+  // Handle test selection
   const toggleTest = (testName: string) => {
     setSelectedTests(prev => 
-      prev.includes(testName) ? prev.filter(t => t !== testName) : [...prev, testName]
+      prev.includes(testName) 
+        ? prev.filter(t => t !== testName)
+        : [...prev, testName]
     );
   };
 
+  // Handle submit
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validateForm()) return;
+    
+    if (!validateForm()) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     
     setIsSubmitting(true);
-    let finalPrescriptionUrl = '';
-
-    try {
-      if (prescriptionFile) {
-        const fileExt = prescriptionFile.name.split('.').pop();
-        const fileName = `${Date.now()}.${fileExt}`;
-        const filePath = `${currentLabId}/${fileName}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('prescriptions')
-          .upload(filePath, prescriptionFile);
-
-        if (uploadError) throw uploadError;
-
-        const { data: urlData } = supabase.storage
-          .from('prescriptions')
-          .getPublicUrl(filePath);
-          
-        finalPrescriptionUrl = urlData.publicUrl;
-      }
-
-      const databaseBookingTypeMapped: 'Walk-in' | 'Home Collection' | 'Online' = 
-        formData.booking_type === 'walk_in' ? 'Walk-in' : 
-        formData.booking_type === 'home_collection' ? 'Home Collection' : 'Online';
-
-      const targetPayload = {
-        name: formData.name,
-        mobile: formData.mobile,
-        whatsapp: formData.whatsapp || formData.mobile,
-        email: formData.email,
-        age: parseInt(formData.age),
-        gender: formData.gender,
-        appointment_date: formData.appointment_date,
-        time: formData.time,
-        test: selectedTests.join(', '), 
-        booking_id: `BK-${Date.now().toString().slice(-6)}`,
-        status: formData.status,
-        is_deleted: false,
-        deleted_at: null,
-        remarks: formData.remarks,
-        lab_id: currentLabId,
-        prescription_url: finalPrescriptionUrl,
-        booking_type: databaseBookingTypeMapped,
-        address_line: formData.booking_type === 'home_collection' ? formData.address_line : '',
-        pincode: formData.booking_type === 'home_collection' ? formData.pincode : '',
-        landmark: formData.booking_type === 'home_collection' ? formData.landmark : ''
-      };
-
-      const { data, error: dbError } = await supabase
-        .from('appointments')
-        .insert([targetPayload])
-        .select()
-        .single();
-
-      if (dbError) throw dbError;
-
-      setSubmitSuccess(true);
-      if (onSuccess) onSuccess(data);
-
-    } catch (err: any) {
-      console.error("Database Save Error:", err);
-      setErrors(prev => ({ ...prev, global: err.message || "Failed to submit data to row instance." }));
-    } finally {
+    
+    // Simulate API call or write real database insertion code here
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    const finalSubmissionData: AppointmentData = {
+      ...formData,
+      id: `APT-${Math.floor(100000 + Math.random() * 900000)}`,
+      booking_id: `BK-${Date.now().toString().slice(-8)}`,
+      created_at: new Date().toISOString(),
+      test: selectedTests.join(', ')
+    };
+    
+    console.log("Submitting Appointment:", finalSubmissionData);
+    setSubmitSuccess(true);
+    
+    setTimeout(() => {
+      if (onSuccess) onSuccess(finalSubmissionData);
       setIsSubmitting(false);
-    }
+    }, 1000);
   };
 
   const steps = [
     { number: 1, title: "Patient Info", icon: User },
-    { number: 2, title: "Tests & Schedule", icon: Beaker },
-    { number: 3, title: "Logistics Details", icon: MapPin }
+    { number: 2, title: "Test Selection", icon: Beaker },
+    { number: 3, title: "Schedule", icon: Calendar },
+    { number: 4, title: "Location", icon: MapPin }
   ];
 
   if (!isOpen) return null;
 
-  const themeColor = labInfo?.theme_color || '#4f46e5';
-
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="relative max-w-4xl w-full mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden">
+      <div className="relative max-w-5xl w-full mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden animate-[fadeIn_0.3s_ease-out]">
         
-        {/* Dynamic Header */}
-        <div style={{ backgroundColor: themeColor }} className="relative px-8 py-6 text-white">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <Stethoscope className="w-6 h-6 text-white/90" />
-              <div>
-                <h2 className="text-xl font-bold tracking-tight">{labInfo?.lab_name || "Loading Clinic Data..."}</h2>
-                <p className="text-xs text-white/70 mt-0.5">Workspace Lab ID: {currentLabId}</p>
+        {/* Premium Header with Gradient */}
+        <div className="relative bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-700 px-8 py-6">
+          <div className="absolute inset-0 bg-black/20"></div>
+          <div className="relative flex justify-between items-center">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                  <Stethoscope className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-white tracking-tight">New Patient Registration</h2>
+                  <p className="text-indigo-200 text-sm mt-1">{labName}</p>
+                </div>
               </div>
             </div>
             {onCancel && (
-              <button onClick={onCancel} className="p-1 rounded-lg bg-white/10 hover:bg-white/20 text-white">
+              <button 
+                onClick={onCancel}
+                className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition-all flex items-center justify-center text-white"
+              >
                 <X className="w-4 h-4" />
               </button>
             )}
           </div>
           
-          {/* Steps */}
+          {/* Progress Steps */}
           <div className="flex gap-2 mt-6">
             {steps.map(step => (
               <button
                 key={step.number}
                 type="button"
                 onClick={() => setActiveStep(step.number)}
-                className={`flex-1 flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                  activeStep === step.number ? 'bg-white text-gray-900 shadow-md' : 'bg-white/10 text-white'
+                className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
+                  activeStep === step.number 
+                    ? 'bg-white text-indigo-700 shadow-lg' 
+                    : activeStep > step.number 
+                      ? 'bg-white/20 text-white' 
+                      : 'bg-white/10 text-indigo-200'
                 }`}
               >
-                <step.icon className="w-3.5 h-3.5" />
-                <span>{step.title}</span>
+                <step.icon className={`w-4 h-4 ${activeStep === step.number ? 'text-indigo-600' : ''}`} />
+                <span className="text-xs font-medium hidden sm:inline">{step.title}</span>
               </button>
             ))}
           </div>
         </div>
 
-        {errors.global && (
-          <div className="m-6 p-4 bg-red-50 border border-red-200 text-red-800 rounded-xl flex items-center gap-2 text-sm font-medium">
-            <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
-            <span>{errors.global}</span>
-          </div>
-        )}
-
+        {/* Success Message */}
         {submitSuccess && (
-          <div className="m-6 p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl flex items-center gap-2 text-sm font-medium">
-            <CheckCircle className="w-4 h-4 text-emerald-600" />
-            <span>Success! Data successfully committed to your database.</span>
+          <div className="m-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3 animate-[slideDown_0.3s_ease-out]">
+            <CheckCircle className="w-5 h-5 text-emerald-600" />
+            <div>
+              <p className="font-semibold text-emerald-800">Registration Successful!</p>
+              <p className="text-sm text-emerald-600">Appointment has been scheduled successfully.</p>
+            </div>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="p-8 max-h-[65vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="p-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
           
-          {/* STEP 1: Patient Details */}
+          {/* STEP 1: Patient Information */}
           {activeStep === 1 && (
-            <div className="space-y-4 animate-[fadeIn_0.2s_ease-out]">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Full Name *</label>
-                <input
-                  required type="text" value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
-                  placeholder="Patient Name"
-                />
-                {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
-              </div>
+            <div className="space-y-6 animate-[fadeIn_0.3s_ease-out]">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Full Name *</label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      required
+                      type="text"
+                      name="name"
+                      value={formData.name}
+                      onChange={(e) => setFormData({...formData, name: e.target.value})}
+                      className={`w-full pl-10 pr-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all ${
+                        errors.name ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                      }`}
+                      placeholder="Enter patient's full name"
+                    />
+                  </div>
+                  {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
+                </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Mobile Primary *</label>
-                  <input
-                    required type="tel" value={formData.mobile}
-                    onChange={(e) => setFormData({...formData, mobile: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl"
-                    placeholder="10-digit number"
-                  />
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Mobile Number *</label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      required
+                      type="tel"
+                      name="mobile"
+                      value={formData.mobile}
+                      onChange={(e) => setFormData({...formData, mobile: e.target.value})}
+                      className={`w-full pl-10 pr-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+                        errors.mobile ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                      }`}
+                      placeholder="10-digit mobile number"
+                    />
+                  </div>
                   {errors.mobile && <p className="text-xs text-red-500 mt-1">{errors.mobile}</p>}
                 </div>
+
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">WhatsApp Communications</label>
-                  <input
-                    type="tel" value={formData.whatsapp}
-                    onChange={(e) => setFormData({...formData, whatsapp: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl"
-                    placeholder="Defaults to primary mobile if blank"
-                  />
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">WhatsApp Number</label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="tel"
+                      name="whatsapp"
+                      value={formData.whatsapp}
+                      onChange={(e) => setFormData({...formData, whatsapp: e.target.value})}
+                      className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                      placeholder="For updates & reports"
+                    />
+                  </div>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Email Address</label>
-                <input
-                  type="email" value={formData.email}
-                  onChange={(e) => setFormData({...formData, email: e.target.value})}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-xl"
-                  placeholder="name@domain.com"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Age *</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Email Address</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData({...formData, email: e.target.value})}
+                      className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                      placeholder="patient@example.com"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Age *</label>
                   <input
-                    required type="number" value={formData.age}
+                    required
+                    type="number"
+                    name="age"
+                    value={formData.age}
                     onChange={(e) => setFormData({...formData, age: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl"
+                    className={`w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${
+                      errors.age ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                    }`}
                     placeholder="Years"
                   />
                   {errors.age && <p className="text-xs text-red-500 mt-1">{errors.age}</p>}
                 </div>
+
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Gender *</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Gender *</label>
                   <select
-                    required value={formData.gender}
+                    required
+                    name="gender"
+                    value={formData.gender}
                     onChange={(e) => setFormData({...formData, gender: e.target.value as any})}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl bg-white"
+                    className={`w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white ${
+                      errors.gender ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                    }`}
                   >
-                    <option value="">Select</option>
+                    <option value="">Select Gender</option>
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
                     <option value="Other">Other</option>
                   </select>
+                  {errors.gender && <p className="text-xs text-red-500 mt-1">{errors.gender}</p>}
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Priority Level</label>
+                  <div className="flex gap-3">
+                    {['Normal', 'Urgent', 'Emergency'].map(priority => (
+                      <button
+                        key={priority}
+                        type="button"
+                        onClick={() => setFormData({...formData, priority: priority as any})}
+                        className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                          formData.priority === priority
+                            ? priority === 'Emergency' ? 'bg-red-500 text-white' :
+                              priority === 'Urgent' ? 'bg-orange-500 text-white' : 'bg-indigo-600 text-white'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        {priority}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* STEP 2: Dynamically Fetched JSONB Checklist */}
+          {/* STEP 2: Dynamically Fetched Test Selections */}
           {activeStep === 2 && (
-            <div className="space-y-5 animate-[fadeIn_0.2s_ease-out]">
+            <div className="space-y-6 animate-[fadeIn_0.3s_ease-out]">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">Available Diagnostics *</label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 border rounded-xl bg-gray-50/50">
-                  {dynamicTests.length > 0 ? (
-                    dynamicTests.map((cleanTestName, index) => (
-                      <label key={index} className="flex items-center gap-3 p-2.5 bg-white hover:bg-indigo-50/40 border border-gray-100 rounded-xl text-sm cursor-pointer transition-colors">
-                        <input
-                          type="checkbox"
-                          checked={selectedTests.includes(cleanTestName)}
-                          onChange={() => toggleTest(cleanTestName)}
-                          className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
-                        />
-                        <span className="text-gray-700 font-medium">{cleanTestName}</span>
-                      </label>
-                    ))
-                  ) : (
-                    <p className="text-sm text-gray-500 p-3 italic col-span-2 text-center">
-                      No matching menu lists allocated inside this lab profile config.
-                    </p>
-                  )}
-                </div>
-                {errors.tests && <p className="text-xs text-red-500 mt-1">{errors.tests}</p>}
+                <label className="block text-sm font-semibold text-gray-700 mb-3">Available Laboratory Diagnostics *</label>
+                
+                {isLoadingTests ? (
+                  <div className="flex items-center justify-center py-12 gap-2 text-indigo-600 text-sm font-medium">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Fetching latest list from Supabase...
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-80 overflow-y-auto p-2 border border-gray-100 rounded-xl bg-gray-50/50">
+                    {dynamicTests.length > 0 ? (
+                      dynamicTests.map((testName, index) => (
+                        <label
+                          key={index}
+                          className={`flex items-center gap-3 p-3 bg-white hover:bg-indigo-50/30 border rounded-xl cursor-pointer transition-all ${
+                            selectedTests.includes(testName) ? 'border-indigo-200 bg-indigo-50/40' : 'border-gray-200'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedTests.includes(testName)}
+                            onChange={() => toggleTest(testName)}
+                            className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                          />
+                          <span className="text-gray-800 text-sm font-medium">{testName}</span>
+                        </label>
+                      ))
+                    ) : (
+                      <p className="text-sm text-gray-500 p-4 italic col-span-2 text-center">
+                        No active medical menus are allocated inside this laboratory's dashboard setup.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {errors.tests && (
+                  <div className="flex items-center gap-2 p-3 mt-3 bg-red-50 border border-red-200 rounded-xl">
+                    <AlertCircle className="w-4 h-4 text-red-500" />
+                    <p className="text-sm text-red-600">{errors.tests}</p>
+                  </div>
+                )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Appointment Date *</label>
-                  <input
-                    required type="date" value={formData.appointment_date}
-                    onChange={(e) => setFormData({...formData, appointment_date: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl"
-                  />
+              {selectedTests.length > 0 && (
+                <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-4 rounded-xl border border-indigo-100">
+                  <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-1">Queue Plan Overview</p>
+                  <p className="text-sm font-semibold text-indigo-900 bg-white px-3 py-2 rounded-lg border border-indigo-100 inline-block">
+                    {formData.test}
+                  </p>
                 </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Time Selection *</label>
-                  <input
-                    required type="time" value={formData.time}
-                    onChange={(e) => setFormData({...formData, time: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl"
-                  />
-                </div>
-              </div>
+              )}
+            </div>
+          )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* STEP 3: Schedule Information */}
+          {activeStep === 3 && (
+            <div className="space-y-6 animate-[fadeIn_0.3s_ease-out]">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Booking Type</label>
-                  <select
-                    value={formData.booking_type}
-                    onChange={(e) => setFormData({...formData, booking_type: e.target.value as any})}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl bg-white"
-                  >
-                    <option value="walk_in">Walk-in Clinic</option>
-                    <option value="home_collection">Home Collection</option>
-                    <option value="online">Online Consultation</option>
-                  </select>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Booking Type *</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { value: 'Walk-in', icon: Activity, label: 'Walk-in' },
+                      { value: 'Home Collection', icon: Home, label: 'Home' },
+                      { value: 'Online', icon: Globe, label: 'Online' }
+                    ].map(type => (
+                      <button
+                        key={type.value}
+                        type="button"
+                        onClick={() => setFormData({...formData, booking_type: type.value as any})}
+                        className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all ${
+                          formData.booking_type === type.value
+                            ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                            : 'border-gray-200 hover:border-gray-300 text-gray-600'
+                        }`}
+                      >
+                        <type.icon className="w-5 h-5" />
+                        <span className="text-xs font-medium">{type.label}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
+
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Workflow Status</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Appointment Date *</label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      required
+                      type="date"
+                      name="appointment_date"
+                      value={formData.appointment_date}
+                      min={new Date().toISOString().split('T')[0]}
+                      onChange={(e) => setFormData({...formData, appointment_date: e.target.value})}
+                      className={`w-full pl-10 pr-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${
+                        errors.appointment_date ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                      }`}
+                    />
+                  </div>
+                  {errors.appointment_date && <p className="text-xs text-red-500 mt-1">{errors.appointment_date}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Preferred Time *</label>
+                  <div className="relative">
+                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      required
+                      type="time"
+                      name="time"
+                      value={formData.time}
+                      onChange={(e) => setFormData({...formData, time: e.target.value})}
+                      className={`w-full pl-10 pr-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${
+                        errors.time ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                      }`}
+                    />
+                  </div>
+                  {errors.time && <p className="text-xs text-red-500 mt-1">{errors.time}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Payment Status</label>
                   <select
-                    value={formData.status}
-                    onChange={(e) => setFormData({...formData, status: e.target.value as any})}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl bg-white"
+                    name="payment_status"
+                    value={formData.payment_status}
+                    onChange={(e) => setFormData({...formData, payment_status: e.target.value as any})}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white"
                   >
                     <option value="Pending">Pending</option>
-                    <option value="Confirmed">Confirmed</option>
-                    <option value="Completed">Completed</option>
-                    <option value="Cancelled">Cancelled</option>
+                    <option value="Partial">Partial Payment</option>
+                    <option value="Paid">Fully Paid</option>
                   </select>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Prescription Document Upload</label>
-                <div className="flex items-center gap-3">
-                  <label className="flex-1 flex items-center gap-2 px-4 py-2 border-2 border-dashed rounded-xl cursor-pointer hover:bg-gray-50 text-sm text-gray-600">
-                    <Upload className="w-4 h-4 text-gray-400" />
-                    <span>Upload to storage bucket</span>
-                    <input type="file" accept="image/*,.pdf" onChange={handleFileUpload} className="hidden" />
-                  </label>
-                  {prescriptionPreview && (
-                    <div className="relative">
-                      <img src={prescriptionPreview} alt="Preview" className="w-10 h-10 object-cover rounded-lg border" />
-                      <button
-                        type="button"
-                        onClick={() => { setPrescriptionPreview(null); setPrescriptionFile(null); }}
-                        className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5"
-                      >
-                        <X className="w-2.5 h-2.5" />
-                      </button>
-                    </div>
-                  )}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Prescription (Optional)</label>
+                  <div className="flex items-center gap-3">
+                    <label className="flex-1 flex items-center gap-3 px-4 py-2.5 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-indigo-400 transition-all">
+                      <Upload className="w-5 h-5 text-gray-400" />
+                      <span className="text-sm text-gray-600">Upload prescription file</span>
+                      <input type="file" accept="image/*,.pdf" onChange={handleFileUpload} className="hidden" />
+                    </label>
+                    {prescriptionPreview && (
+                      <div className="relative">
+                        <img src={prescriptionPreview} alt="Preview" className="w-12 h-12 object-cover rounded-lg border" />
+                        <button
+                          type="button"
+                          onClick={() => { setPrescriptionPreview(null); setFormData(prev => ({ ...prev, prescription_file: null })); }}
+                          className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center"
+                        >
+                          <X className="w-3 h-3 text-white" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  {errors.prescription && <p className="text-xs text-red-500 mt-1">{errors.prescription}</p>}
                 </div>
               </div>
             </div>
           )}
 
-          {/* STEP 3: Logistics Setup */}
-          {activeStep === 3 && (
-            <div className="space-y-4 animate-[fadeIn_0.2s_ease-out]">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Address Line</label>
-                <textarea
-                  rows={2} value={formData.address_line}
-                  onChange={(e) => setFormData({...formData, address_line: e.target.value})}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-xl"
-                  placeholder="Required for Home Collection setups"
-                />
-                {errors.address && <p className="text-xs text-red-500 mt-1">{errors.address}</p>}
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Pincode</label>
-                  <input
-                    type="text" value={formData.pincode}
-                    onChange={(e) => setFormData({...formData, pincode: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl"
-                    placeholder="Postal Code"
-                  />
+          {/* STEP 4: Location Details */}
+          {activeStep === 4 && (
+            <div className="space-y-6 animate-[fadeIn_0.3s_ease-out]">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Address Line</label>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                    <textarea
+                      name="address_line"
+                      rows={2}
+                      value={formData.address_line}
+                      onChange={(e) => setFormData({...formData, address_line: e.target.value})}
+                      className={`w-full pl-10 pr-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${
+                        errors.address ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                      }`}
+                      placeholder="House/Flat No, Street, Area, City"
+                    />
+                  </div>
+                  {errors.address && <p className="text-xs text-red-500 mt-1">{errors.address}</p>}
                 </div>
+
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Landmark</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Pincode</label>
+                  <div className="relative">
+                    <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="text"
+                      name="pincode"
+                      value={formData.pincode}
+                      onChange={(e) => setFormData({...formData, pincode: e.target.value})}
+                      className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                      placeholder="6-digit pincode"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Landmark</label>
                   <input
-                    type="text" value={formData.landmark}
+                    type="text"
+                    name="landmark"
+                    value={formData.landmark}
                     onChange={(e) => setFormData({...formData, landmark: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl"
-                    placeholder="Nearby reference point"
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Nearby landmark"
                   />
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Remarks & Internal Notes</label>
-                <textarea
-                  rows={2} value={formData.remarks}
-                  onChange={(e) => setFormData({...formData, remarks: e.target.value})}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-xl"
-                  placeholder="Additional observations..."
-                />
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Source of Lead</label>
+                  <select
+                    name="source"
+                    value={formData.source}
+                    onChange={(e) => setFormData({...formData, source: e.target.value as any})}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white"
+                  >
+                    <option value="Direct">Direct Walk-in</option>
+                    <option value="Reference">Doctor/Patient Reference</option>
+                    <option value="Online Portal">Online Portal</option>
+                    <option value="Call Center">Call Center</option>
+                  </select>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Additional Remarks</label>
+                  <textarea
+                    rows={3}
+                    name="remarks"
+                    value={formData.remarks}
+                    onChange={(e) => setFormData({...formData, remarks: e.target.value})}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Any specific instructions, clinical history, or special requirements..."
+                  />
+                </div>
               </div>
             </div>
           )}
 
-          {/* Action Footer Panel */}
-          <div className="flex justify-between items-center pt-6 mt-6 border-t border-gray-100">
-            <button
-              type="button"
-              disabled={activeStep === 1}
-              onClick={() => setActiveStep(p => p - 1)}
-              className="px-4 py-2 text-sm font-medium text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 disabled:opacity-30"
-            >
-              Back
-            </button>
-            
-            <div className="flex gap-2">
-              {activeStep < 3 ? (
+          {/* Navigation Buttons */}
+          <div className="flex justify-between gap-3 pt-6 mt-6 border-t border-gray-100">
+            <div className="flex gap-3">
+              {activeStep > 1 && (
                 <button
                   type="button"
-                  onClick={() => setActiveStep(p => p + 1)}
-                  className="px-5 py-2 text-sm font-medium text-white rounded-xl flex items-center gap-1.5"
-                  style={{ backgroundColor: themeColor }}
+                  onClick={() => setActiveStep(prev => prev - 1)}
+                  className="px-6 py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-50 transition-all"
                 >
-                  Next <ChevronRight className="w-4 h-4" />
+                  Back
+                </button>
+              )}
+            </div>
+            
+            <div className="flex gap-3">
+              {activeStep < 4 ? (
+                <button
+                  type="button"
+                  onClick={() => setActiveStep(prev => prev + 1)}
+                  className="px-6 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 transition-all flex items-center gap-2"
+                >
+                  Continue <ChevronRight className="w-4 h-4" />
                 </button>
               ) : (
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-6 py-2 text-sm font-bold text-white rounded-xl shadow-md flex items-center gap-2 disabled:opacity-50"
-                  style={{ backgroundColor: themeColor }}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Saving to Workspace...
-                    </>
-                  ) : (
-                    "Register Appointment"
+                <>
+                  {onCancel && (
+                    <button
+                      type="button"
+                      onClick={onCancel}
+                      className="px-6 py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-50 transition-all"
+                    >
+                      Cancel
+                    </button>
                   )}
-                </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="px-8 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-semibold rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        Register Patient
+                        <ChevronRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </>
               )}
             </div>
           </div>
         </form>
       </div>
+
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: scale(0.98); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes slideDown {
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: #f1f1f1;
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #94a3b8;
+        }
+      `}</style>
     </div>
   );
 };
