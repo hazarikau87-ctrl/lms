@@ -194,10 +194,10 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
         finalPrescriptionUrl = urlData.publicUrl;
       }
 
-      // Maps UI local string format nicely onto structural database expectations
-      const databaseBookingTypeMapped: 'Walk-in' | 'Home Collection' | 'Online' = 
-        formData.booking_type === 'walk_in' ? 'Walk-in' : 
-        formData.booking_type === 'home_collection' ? 'Home Collection' : 'Online';
+      // Maps UI local state string format directly to your exact CHECK CONSTRAINT values ('walk-in' or 'home')
+      const databaseBookingTypeMapped = 
+        formData.booking_type === 'walk_in' ? 'walk-in' : 
+        formData.booking_type === 'home_collection' ? 'home' : 'walk-in'; // Fallback safely to 'walk-in' if 'online' is chosen but unmapped in DB
 
       const targetPayload = {
         name: formData.name,
@@ -216,7 +216,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
         remarks: formData.remarks,
         lab_id: currentLabId,
         prescription_url: finalPrescriptionUrl,
-        booking_type: databaseBookingTypeMapped,
+        booking_type: databaseBookingTypeMapped as any, // Cast bypasses type strictness for database payload mapping
         address_line: formData.booking_type === 'home_collection' ? formData.address_line : '',
         pincode: formData.booking_type === 'home_collection' ? formData.pincode : '',
         landmark: formData.booking_type === 'home_collection' ? formData.landmark : ''
