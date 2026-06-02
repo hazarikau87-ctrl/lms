@@ -650,9 +650,11 @@ export default function Dashboard() {
         labId={lab?.id}
         onClose={() => setEditingAppointment(null)}
         onSuccess={(updatedFields) => {
-          setAppointments(prev => prev.map(appt => 
-            appt.id === editingAppointment?.id ? { ...appt, ...updatedFields } : appt
-          ));
+          if (editingAppointment) {
+            setAppointments(prev => prev.map(appt => 
+              appt.id === editingAppointment?.id ? { ...appt, ...updatedFields } : appt
+            ));
+          }
         }}
       />
 
@@ -681,9 +683,7 @@ function StatCard({ icon, iconBg, value, label, isActive, onClick }: { icon: Rea
 }
 
 function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRemarks, onDelete, onWhatsApp, onViewAddress, onViewTests, onSelectReschedule, isInsideReminderWindow }: AppointmentRowProps) {
-  const isCompleted = item.status === 'Completed';
-  const isCancelled = item.status === 'Cancelled';
-  
+  // Added useEffect import is now available from the parent import
   const [isExpanded, setIsExpanded] = useState(false);
   const [localRemarks, setLocalRemarks] = useState(item.remarks || '');
   const [isFocused, setIsFocused] = useState(false);
@@ -714,6 +714,22 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
     if (!item.test) return 0;
     return item.test.split(',').map((t: string) => t.trim()).filter(Boolean).length;
   }, [item.test]);
+
+  // Get prescription URL safely
+  const getPrescriptionUrl = () => {
+    if (!item.prescription_url) return null;
+    if (item.prescription_url.startsWith('http')) {
+      return item.prescription_url;
+    }
+    try {
+      return supabase.storage.from('prescriptions').getPublicUrl(item.prescription_url).data.publicUrl;
+    } catch (error) {
+      console.error("Error getting prescription URL:", error);
+      return null;
+    }
+  };
+
+  const prescriptionUrl = getPrescriptionUrl();
 
   return (
     <>
@@ -792,7 +808,7 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
         </td>
 
         <td className="px-4 py-3.5 whitespace-nowrap">
-          <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide uppercase border ${isCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : isCancelled ? 'bg-rose-50 text-rose-700 border-rose-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
+          <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide uppercase border ${item.status === 'Completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : item.status === 'Cancelled' ? 'bg-rose-50 text-rose-700 border-rose-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
             {item.status || 'Pending'}
           </span>
         </td>
@@ -814,8 +830,8 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
               {/* Prescription */}
               <div className="bg-white p-4 rounded-xl border border-slate-200/70 shadow-2xs">
                 <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-2.5">Prescription Doc</span>
-                {item.prescription_url ? ( 
-                  <a href={item.prescription_url.startsWith('http') ? item.prescription_url : supabase.storage.from('prescriptions').getPublicUrl(item.prescription_url).data.publicUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-150 rounded-lg font-semibold text-blue-700 transition">
+                {prescriptionUrl ? ( 
+                  <a href={prescriptionUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-150 rounded-lg font-semibold text-blue-700 transition">
                     <FileText className="w-3.5 h-3.5" /> View Prescription (Rx)
                   </a> 
                 ) : (
