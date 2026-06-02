@@ -279,43 +279,12 @@ export default function Dashboard() {
     return selectedTestItem.test.split(',').map((t: string) => t.trim()).filter(Boolean);
   }, [selectedTestItem]);
 
-  // Handler passed directly to BookingRegistrationForm to write back to Supabase or localized stack
+  // FIXED: Handler now only refreshes data - the form already saved to database
   const handleRegistrationSuccess = async (newAppointment: any) => {
-    try {
-      setLoading(true);
-      // Map local form fields directly onto the relational schema
-      const { error } = await supabase.from('appointments').insert([{
-        booking_id: newAppointment.booking_id,
-        name: newAppointment.name,
-        mobile: newAppointment.mobile,
-        whatsapp: newAppointment.whatsapp,
-        email: newAppointment.email,
-        age: parseInt(newAppointment.age) || null,
-        gender: newAppointment.gender,
-        appointment_date: newAppointment.appointment_date,
-        time: newAppointment.time,
-        test: newAppointment.test,
-        status: newAppointment.status,
-        remarks: newAppointment.remarks,
-        lab_id: lab?.id,
-        prescription_url: newAppointment.prescription_url,
-        booking_type: newAppointment.booking_type,
-        address_line: newAppointment.address_line,
-        pincode: newAppointment.pincode,
-        landmark: newAppointment.landmark,
-        is_deleted: false
-      }]);
-
-      if (error) throw error;
-      
-      setIsRegisterOpen(false);
-      await fetchAll();
-    } catch (err) {
-      console.error("Error creating record workflow:", err);
-      alert("Failed to write registration to cloud system workspace.");
-    } finally {
-      setLoading(false);
-    }
+    // Close the registration drawer
+    setIsRegisterOpen(false);
+    // Refresh the appointments list to show the newly created record
+    await fetchAll();
   };
 
   return (
