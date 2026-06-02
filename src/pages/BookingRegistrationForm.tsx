@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   User, Phone, Mail, Calendar, Clock, Beaker, MapPin, 
-  FileText, AlertCircle, CheckCircle, Upload, X, 
-  Building2, Hash, Loader2, ChevronRight, Home, 
-  Globe, CreditCard, Stethoscope, Activity,
-  Droplet, Thermometer, Heart, Brain, Eye, Moon
+  AlertCircle, CheckCircle, Upload, X, 
+  Hash, Loader2, ChevronRight, Home, 
+  Globe, Stethoscope, Activity, Heart, Eye, Droplet
 } from 'lucide-react';
 
 // ============== TYPES & INTERFACES ==============
@@ -19,7 +18,6 @@ export interface AppointmentData {
   appointment_date: string;
   time: string;
   test: string;
-  test_codes?: string[];
   booking_id?: string;
   status: 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled';
   is_deleted: boolean;
@@ -28,17 +26,11 @@ export interface AppointmentData {
   created_at?: string;
   lab_id: string;
   prescription_url: string;
-  prescription_file?: File | null;
+  prescription_file?: File | null; // Tracked locally for upload processing
   booking_type: 'Walk-in' | 'Home Collection' | 'Online';
   address_line: string;
   pincode: string;
   landmark: string;
-  city?: string;
-  state?: string;
-  priority: 'Normal' | 'Urgent' | 'Emergency';
-  source: 'Direct' | 'Reference' | 'Online Portal' | 'Call Center';
-  payment_status: 'Pending' | 'Partial' | 'Paid';
-  estimated_amount?: number;
 }
 
 interface ValidationErrors {
@@ -130,11 +122,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     booking_type: 'Walk-in',
     address_line: '',
     pincode: '',
-    landmark: '',
-    priority: 'Normal',
-    source: 'Direct',
-    payment_status: 'Pending',
-    estimated_amount: 0
+    landmark: ''
   });
 
   const [selectedTests, setSelectedTests] = useState<string[]>([]);
@@ -145,7 +133,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
   const [prescriptionPreview, setPrescriptionPreview] = useState<string | null>(null);
   const [estimatedTotal, setEstimatedTotal] = useState(0);
 
-  // Calculate estimated total when tests change
+  // Calculate estimated total and join tests into string
   useEffect(() => {
     let total = 0;
     selectedTests.forEach(testCode => {
@@ -158,7 +146,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
       }
     });
     setEstimatedTotal(total);
-    setFormData(prev => ({ ...prev, estimated_amount: total, test: selectedTests.join(', ') }));
+    setFormData(prev => ({ ...prev, test: selectedTests.join(', ') }));
   }, [selectedTests]);
 
   // Handle file upload
@@ -172,7 +160,13 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
       
       const previewUrl = URL.createObjectURL(file);
       setPrescriptionPreview(previewUrl);
-      setFormData(prev => ({ ...prev, prescription_file: file }));
+      
+      // Update local file and set sample/mock string for database column mapping
+      setFormData(prev => ({ 
+        ...prev, 
+        prescription_file: file,
+        prescription_url: `/uploads/prescriptions/${file.name}` 
+      }));
       setErrors(prev => ({ ...prev, prescription: '' }));
     }
   }, []);
@@ -183,18 +177,20 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     
     if (!formData.name.trim()) newErrors.name = 'Patient name is required';
     if (!formData.mobile.match(/^[0-9]{10}$/)) newErrors.mobile = 'Valid 10-digit mobile number required';
-    if (!formData.age || parseInt(formData.age) < 0 || parseInt(formData.age) > 120) newErrors.age = 'Valid age (0-120) required';
+    if (!formData.age || parseInt(formData.age) < 0 || parseInt(formData.age) > 120) newErrors.age = 'Valid age required';
     if (!formData.gender) newErrors.gender = 'Gender is required';
     if (!formData.appointment_date) newErrors.appointment_date = 'Appointment date required';
     if (!formData.time) newErrors.time = 'Appointment time required';
     if (selectedTests.length === 0) newErrors.tests = 'At least one test must be selected';
-    if (formData.booking_type === 'Home Collection' && !formData.address_line) newErrors.address = 'Address required for home collection';
+    if (formData.booking_type === 'Home Collection' && !formData.address_line.trim()) {
+      newErrors.address = 'Address line required for home collection';
+    }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  // Handle test selection
+  // Handle test selection toggle
   const toggleTest = (testCode: string) => {
     setSelectedTests(prev => 
       prev.includes(testCode) 
@@ -203,7 +199,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     );
   };
 
-  // Handle submit
+  // Handle form execution
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -214,18 +210,17 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     
     setIsSubmitting(true);
     
-    // Simulate API call
+    // Simulating endpoint delay
     await new Promise(resolve => setTimeout(resolve, 1500));
     
     const finalSubmissionData: AppointmentData = {
       ...formData,
       id: `APT-${Math.floor(100000 + Math.random() * 900000)}`,
       booking_id: `BK-${Date.now().toString().slice(-8)}`,
-      created_at: new Date().toISOString(),
-      test: selectedTests.join(', ')
+      created_at: new Date().toISOString()
     };
     
-    console.log("Submitting Appointment:", finalSubmissionData);
+    console.log("Submitting Appointment exactly to schema mapping:", finalSubmissionData);
     setSubmitSuccess(true);
     
     setTimeout(() => {
@@ -234,12 +229,12 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     }, 1000);
   };
 
-  // Steps for multi-step form
+  // Steps matching your modular categories
   const steps = [
     { number: 1, title: "Patient Info", icon: User },
     { number: 2, title: "Test Selection", icon: Beaker },
     { number: 3, title: "Schedule", icon: Calendar },
-    { number: 4, title: "Location", icon: MapPin }
+    { number: 4, title: "Location / Setup", icon: MapPin }
   ];
 
   if (!isOpen) return null;
@@ -259,7 +254,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-white tracking-tight">New Patient Registration</h2>
-                  <p className="text-indigo-200 text-sm mt-1">{labName}</p>
+                  <p className="text-indigo-200 text-sm mt-1">{labName} (ID: {formData.lab_id})</p>
                 </div>
               </div>
             </div>
@@ -278,6 +273,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
             {steps.map(step => (
               <button
                 key={step.number}
+                type="button"
                 onClick={() => setActiveStep(step.number)}
                 className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
                   activeStep === step.number 
@@ -294,13 +290,13 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
           </div>
         </div>
 
-        {/* Success Message */}
+        {/* Success Banner */}
         {submitSuccess && (
           <div className="m-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3 animate-[slideDown_0.3s_ease-out]">
             <CheckCircle className="w-5 h-5 text-emerald-600" />
             <div>
               <p className="font-semibold text-emerald-800">Registration Successful!</p>
-              <p className="text-sm text-emerald-600">Appointment has been scheduled successfully.</p>
+              <p className="text-sm text-emerald-600">The database operation records have completed setup logic.</p>
             </div>
           </div>
         )}
@@ -318,7 +314,6 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                     <input
                       required
                       type="text"
-                      name="name"
                       value={formData.name}
                       onChange={(e) => setFormData({...formData, name: e.target.value})}
                       className={`w-full pl-10 pr-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all ${
@@ -337,10 +332,9 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                     <input
                       required
                       type="tel"
-                      name="mobile"
                       value={formData.mobile}
                       onChange={(e) => setFormData({...formData, mobile: e.target.value})}
-                      className={`w-full pl-10 pr-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+                      className={`w-full pl-10 pr-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${
                         errors.mobile ? 'border-red-300 bg-red-50' : 'border-gray-200'
                       }`}
                       placeholder="10-digit mobile number"
@@ -355,11 +349,10 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                       type="tel"
-                      name="whatsapp"
                       value={formData.whatsapp}
                       onChange={(e) => setFormData({...formData, whatsapp: e.target.value})}
-                      className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                      placeholder="For updates & reports"
+                      className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                      placeholder="For immediate message routing"
                     />
                   </div>
                 </div>
@@ -370,10 +363,9 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                       type="email"
-                      name="email"
                       value={formData.email}
                       onChange={(e) => setFormData({...formData, email: e.target.value})}
-                      className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                      className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
                       placeholder="patient@example.com"
                     />
                   </div>
@@ -384,7 +376,6 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                   <input
                     required
                     type="number"
-                    name="age"
                     value={formData.age}
                     onChange={(e) => setFormData({...formData, age: e.target.value})}
                     className={`w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${
@@ -395,11 +386,10 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                   {errors.age && <p className="text-xs text-red-500 mt-1">{errors.age}</p>}
                 </div>
 
-                <div>
+                <div className="md:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Gender *</label>
                   <select
                     required
-                    name="gender"
                     value={formData.gender}
                     onChange={(e) => setFormData({...formData, gender: e.target.value as any})}
                     className={`w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white ${
@@ -412,27 +402,6 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                     <option value="Other">Other</option>
                   </select>
                   {errors.gender && <p className="text-xs text-red-500 mt-1">{errors.gender}</p>}
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Priority Level</label>
-                  <div className="flex gap-3">
-                    {['Normal', 'Urgent', 'Emergency'].map(priority => (
-                      <button
-                        key={priority}
-                        type="button"
-                        onClick={() => setFormData({...formData, priority: priority as any})}
-                        className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                          formData.priority === priority
-                            ? priority === 'Emergency' ? 'bg-red-500 text-white' :
-                              priority === 'Urgent' ? 'bg-orange-500 text-white' : 'bg-indigo-600 text-white'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}
-                      >
-                        {priority}
-                      </button>
-                    ))}
-                  </div>
                 </div>
               </div>
             </div>
@@ -492,16 +461,17 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                 </div>
               )}
 
-              {/* Estimated Total */}
               {selectedTests.length > 0 && (
                 <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-4 rounded-xl border border-indigo-100">
                   <div className="flex justify-between items-center">
                     <div>
-                      <p className="text-sm text-gray-600">Estimated Total</p>
-                      <p className="text-2xl font-bold text-indigo-700">₹{estimatedTotal}</p>
+                      <p className="text-sm text-gray-600">Selected Aggregates (`test` column payload)</p>
+                      <p className="text-sm font-semibold text-indigo-900 mt-1 bg-white px-3 py-1 rounded-md border inline-block">
+                        {formData.test}
+                      </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs text-gray-500">Tests Selected: {selectedTests.length}</p>
+                      <p className="text-sm font-bold text-indigo-700">Total: ₹{estimatedTotal}</p>
                     </div>
                   </div>
                 </div>
@@ -517,7 +487,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Booking Type *</label>
                   <div className="grid grid-cols-3 gap-2">
                     {[
-                      { value: 'Walk-in', icon: Hospital, label: 'Walk-in' },
+                      { value: 'Walk-in', icon: Activity, label: 'Walk-in' },
                       { value: 'Home Collection', icon: Home, label: 'Home' },
                       { value: 'Online', icon: Globe, label: 'Online' }
                     ].map(type => (
@@ -545,7 +515,6 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                     <input
                       required
                       type="date"
-                      name="appointment_date"
                       value={formData.appointment_date}
                       min={new Date().toISOString().split('T')[0]}
                       onChange={(e) => setFormData({...formData, appointment_date: e.target.value})}
@@ -564,7 +533,6 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                     <input
                       required
                       type="time"
-                      name="time"
                       value={formData.time}
                       onChange={(e) => setFormData({...formData, time: e.target.value})}
                       className={`w-full pl-10 pr-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${
@@ -576,25 +544,25 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Payment Status</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Workflow Status</label>
                   <select
-                    name="payment_status"
-                    value={formData.payment_status}
-                    onChange={(e) => setFormData({...formData, payment_status: e.target.value as any})}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                    value={formData.status}
+                    onChange={(e) => setFormData({...formData, status: e.target.value as any})}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white"
                   >
                     <option value="Pending">Pending</option>
-                    <option value="Partial">Partial Payment</option>
-                    <option value="Paid">Fully Paid</option>
+                    <option value="Confirmed">Confirmed</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Cancelled">Cancelled</option>
                   </select>
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Prescription (Optional)</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Prescription Document (Optional)</label>
                   <div className="flex items-center gap-3">
                     <label className="flex-1 flex items-center gap-3 px-4 py-2.5 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-indigo-400 transition-all">
                       <Upload className="w-5 h-5 text-gray-400" />
-                      <span className="text-sm text-gray-600">Upload prescription file</span>
+                      <span className="text-sm text-gray-600">Upload prescription file to set prescription_url</span>
                       <input type="file" accept="image/*,.pdf" onChange={handleFileUpload} className="hidden" />
                     </label>
                     {prescriptionPreview && (
@@ -602,7 +570,10 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                         <img src={prescriptionPreview} alt="Preview" className="w-12 h-12 object-cover rounded-lg border" />
                         <button
                           type="button"
-                          onClick={() => { setPrescriptionPreview(null); setFormData(prev => ({ ...prev, prescription_file: null })); }}
+                          onClick={() => { 
+                            setPrescriptionPreview(null); 
+                            setFormData(prev => ({ ...prev, prescription_file: null, prescription_url: '' })); 
+                          }}
                           className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center"
                         >
                           <X className="w-3 h-3 text-white" />
@@ -625,14 +596,13 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                   <div className="relative">
                     <MapPin className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
                     <textarea
-                      name="address_line"
                       rows={2}
                       value={formData.address_line}
                       onChange={(e) => setFormData({...formData, address_line: e.target.value})}
                       className={`w-full pl-10 pr-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${
                         errors.address ? 'border-red-300 bg-red-50' : 'border-gray-200'
                       }`}
-                      placeholder="House/Flat No, Street, Area, City"
+                      placeholder="House No, Street name, City location info"
                     />
                   </div>
                   {errors.address && <p className="text-xs text-red-500 mt-1">{errors.address}</p>}
@@ -644,11 +614,10 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                     <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                       type="text"
-                      name="pincode"
                       value={formData.pincode}
                       onChange={(e) => setFormData({...formData, pincode: e.target.value})}
                       className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
-                      placeholder="6-digit pincode"
+                      placeholder="6-digit pincode code"
                     />
                   </div>
                 </div>
@@ -657,38 +626,21 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Landmark</label>
                   <input
                     type="text"
-                    name="landmark"
                     value={formData.landmark}
                     onChange={(e) => setFormData({...formData, landmark: e.target.value})}
                     className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
-                    placeholder="Nearby landmark"
+                    placeholder="Nearby reference milestone"
                   />
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Source of Lead</label>
-                  <select
-                    name="source"
-                    value={formData.source}
-                    onChange={(e) => setFormData({...formData, source: e.target.value as any})}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
-                  >
-                    <option value="Direct">Direct Walk-in</option>
-                    <option value="Reference">Doctor/Patient Reference</option>
-                    <option value="Online Portal">Online Portal</option>
-                    <option value="Call Center">Call Center</option>
-                  </select>
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Additional Remarks</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Remarks</label>
                   <textarea
                     rows={3}
-                    name="remarks"
                     value={formData.remarks}
                     onChange={(e) => setFormData({...formData, remarks: e.target.value})}
                     className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500"
-                    placeholder="Any specific instructions, clinical history, or special requirements..."
+                    placeholder="Provide any case clinical records history or generic system notes here..."
                   />
                 </div>
               </div>
@@ -737,7 +689,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                     {isSubmitting ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        Processing...
+                        Processing Database Entry...
                       </>
                     ) : (
                       <>
