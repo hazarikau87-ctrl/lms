@@ -33,13 +33,12 @@ export interface AppointmentData {
   landmark: string;
 }
 
-// Exactly matches the Lab Settings table structural payload
 export interface LabSettingsData {
   id: string;
   created_at?: string;
   lab_name: string;
   slug: string;
-  theme_color: string; // e.g., "#4f46e5" or Tailwind code formats
+  theme_color: string;
   domain: string;
   is_active: boolean;
   email: string;
@@ -47,7 +46,7 @@ export interface LabSettingsData {
   whatsapp_number: string;
   logo_url: string;
   tagline: string;
-  operating_hours: string; // Dynamic info label displayed to customers
+  operating_hours: string;
   available_tests: Array<{
     category: string;
     icon_type: 'Droplet' | 'Activity' | 'Heart' | 'Eye';
@@ -63,11 +62,9 @@ interface BookingRegistrationFormProps {
   onSuccess?: (data: AppointmentData) => void;
   onCancel?: () => void;
   isOpen?: boolean;
-  // Dynamic entry point for injecting the dynamic lab settings row entity
-  labSettings: LabSettingsData;
+  labSettings?: LabSettingsData; // Made optional to prevent initial parent component load crashes
 }
 
-// Utility map to cleanly decode schema metadata markers into icons
 const ICON_MAP = {
   Droplet: Droplet,
   Activity: Activity,
@@ -82,6 +79,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
   isOpen = true,
   labSettings
 }) => {
+  // Safe default initialization using optional chaining (?.) and fallbacks
   const [formData, setFormData] = useState<AppointmentData>({
     name: '',
     mobile: '',
@@ -96,7 +94,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     is_deleted: false,
     deleted_at: null,
     remarks: '',
-    lab_id: labSettings.id, // Linked with lab row profile
+    lab_id: labSettings?.id || 'LAB-001', // Safe fallback if labSettings is undefined
     prescription_url: '',
     booking_type: 'Walk-in',
     address_line: '',
@@ -112,34 +110,30 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
   const [prescriptionPreview, setPrescriptionPreview] = useState<string | null>(null);
   const [estimatedTotal, setEstimatedTotal] = useState(0);
 
-  // Fallback defaults if lab active state isn't asserted cleanly
-  if (!labSettings.is_active) {
-    return (
-      <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-        <div className="bg-white p-6 rounded-xl max-w-sm text-center shadow-xl">
-          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
-          <h3 className="text-lg font-bold text-gray-900">Lab Offline</h3>
-          <p className="text-sm text-gray-500 mt-1">This diagnostic terminal is currently disabled.</p>
-        </div>
-      </div>
-    );
-  }
+  // Sync state if labSettings loads after the component initially mounts
+  useEffect(() => {
+    if (labSettings?.id) {
+      setFormData(prev => ({ ...prev, lab_id: labSettings.id }));
+    }
+  }, [labSettings?.id]);
 
-  // Calculate processing aggregates via lab settings matrix configurations mapping
+  // Handle dynamic price evaluations safely
   useEffect(() => {
     let total = 0;
-    selectedTests.forEach(testCode => {
-      for (const cat of labSettings.available_tests) {
-        const standardTest = cat.tests.find(t => t.code === testCode);
-        if (standardTest) {
-          total += standardTest.price;
-          break;
+    if (labSettings?.available_tests) {
+      selectedTests.forEach(testCode => {
+        for (const cat of labSettings.available_tests) {
+          const standardTest = cat.tests.find(t => t.code === testCode);
+          if (standardTest) {
+            total += standardTest.price;
+            break;
+          }
         }
-      }
-    });
+      });
+    }
     setEstimatedTotal(total);
     setFormData(prev => ({ ...prev, test: selectedTests.join(', ') }));
-  }, [selectedTests, labSettings.available_tests]);
+  }, [selectedTests, labSettings?.available_tests]);
 
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -153,11 +147,36 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
       setFormData(prev => ({ 
         ...prev, 
         prescription_file: file,
-        prescription_url: `/uploads/${labSettings.slug}/prescriptions/${file.name}` 
+        prescription_url: `/uploads/${labSettings?.slug || 'generic'}/prescriptions/${file.name}` 
       }));
       setErrors(prev => ({ ...prev, prescription: '' }));
     }
-  }, [labSettings.slug]);
+  }, [labSettings?.slug]);
+
+  // Early load/loading screen if lab settings data hasn't arrived from API yet
+  if (!labSettings) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center gap-3 max-w-sm w-full text-center">
+          <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+          <p className="text-sm font-medium text-gray-600">Loading diagnostic terminal configs...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Gracefully handle deactivated labs
+  if (!labSettings.is_active) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="bg-white p-6 rounded-xl max-w-sm text-center shadow-xl">
+          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
+          <h3 className="text-lg font-bold text-gray-900">Lab Offline</h3>
+          <p className="text-sm text-gray-500 mt-1">This diagnostic terminal is currently disabled.</p>
+        </div>
+      </div>
+    );
+  }
 
   const validateForm = (): boolean => {
     const newErrors: ValidationErrors = {};
@@ -218,7 +237,6 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="relative max-w-5xl w-full mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden animate-[fadeIn_0.3s_ease-out]">
         
-        {/* Dynamic Theme Color Integration Mapping onto Form Header element background */}
         <div 
           className="relative px-8 py-6 transition-all"
           style={{ backgroundColor: labSettings.theme_color || '#4f46e5' }}
@@ -253,7 +271,6 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
             )}
           </div>
           
-          {/* Progress Tracking bars */}
           <div className="flex gap-2 mt-6">
             {steps.map(step => (
               <button
@@ -388,12 +405,11 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
             </div>
           )}
 
-          {/* STEP 2: Dynamically Rendered Diagnostic Catalog via available_tests column JSON matrix */}
+          {/* STEP 2: Diagnostic Catalog */}
           {activeStep === 2 && (
             <div className="space-y-6 animate-[fadeIn_0.3s_ease-out]">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {labSettings.available_tests.map((cat) => {
-                  // Resolve correct diagnostic category vector icon mapping safely
+                {labSettings.available_tests?.map((cat) => {
                   const ResolvedIcon = ICON_MAP[cat.icon_type] || Beaker;
                   return (
                     <div key={cat.category} className="border border-gray-200 rounded-xl overflow-hidden">
@@ -402,7 +418,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                         <h3 className="font-semibold text-gray-800 text-sm">{cat.category}</h3>
                       </div>
                       <div className="p-2 space-y-1">
-                        {cat.tests.map(t => (
+                        {cat.tests?.map(t => (
                           <label
                             key={t.code}
                             className={`flex items-center justify-between p-2.5 rounded-lg cursor-pointer transition-all ${
