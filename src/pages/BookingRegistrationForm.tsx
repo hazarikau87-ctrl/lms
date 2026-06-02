@@ -108,7 +108,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     const fetchLabLogics = async () => {
       try {
         const { data, error } = await supabase
-          .from('Labs')
+          .from('labs')
           .select('id, lab_name, theme_color, available_tests')
           .eq('id', currentLabId)
           .single();
