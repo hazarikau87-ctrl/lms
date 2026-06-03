@@ -11,6 +11,7 @@ import RescheduleDrawer from './RescheduleDrawer';
 import ActionBar from './ActionBar';
 import { SlidoverSettings } from './SlidoverSettings';
 import { BookingRegistrationForm } from './BookingRegistrationForm';
+import { SampleBarcodeLabel } from './SampleBarcodeLabel';
 
 const RECORDS_PER_PAGE = 10;
 
@@ -279,24 +280,19 @@ export default function Dashboard() {
     return selectedTestItem.test.split(',').map((t: string) => t.trim()).filter(Boolean);
   }, [selectedTestItem]);
 
-  // FIXED: Handler now only refreshes data - the form already saved to database
-  const handleRegistrationSuccess = async (newAppointment: any) => {
-    // Close the registration drawer
+  const handleRegistrationSuccess = async () => {
     setIsRegisterOpen(false);
-    // Refresh the appointments list to show the newly created record
     await fetchAll();
   };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 selection:bg-blue-500 selection:text-white antialiased relative">
-      {/* SlidoverSettings Sidebar */}
       <SlidoverSettings 
         currentLab={lab?.lab_name || "City Diagnostic"}
         currentView={currentView}
         setCurrentView={setCurrentView}
       />
 
-      {/* Main Content - adjusted margin to accommodate sidebar */}
       <div className="ml-16 transition-all duration-300">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4">
 
@@ -332,7 +328,6 @@ export default function Dashboard() {
             <div className="flex items-center gap-3">
               {currentView === 'dashboard' && (
                 <>
-                  {/* UX Addition: Primary Interactive Form Opener Call to Action */}
                   <button 
                     onClick={() => setIsRegisterOpen(true)}
                     className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl hover:bg-indigo-700 shadow-sm shadow-indigo-600/10 transition-all"
@@ -403,7 +398,7 @@ export default function Dashboard() {
                 />
               </div>
 
-              {/* Premium Table Component Layout */}
+              {/* Table Configuration */}
               <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
                 <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b border-slate-100 bg-slate-50/70">
                   <div className="flex items-center gap-3">
@@ -511,7 +506,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* UX SLIDE-OVER RIGHT PORTAL: NEW PATIENT REGISTRATION DRAWER */}
+      {/* UX SLIDE-OVER REGISTRATION DRAWER */}
       {isRegisterOpen && (
         <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/30 backdrop-blur-xs animate-[fadeIn_0.15s_ease-out]">
           <div className="absolute inset-0 overflow-hidden">
@@ -547,7 +542,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* DYNAMIC VIEW ADDRESS PORTAL WINDOW */}
+      {/* DYNAMIC VIEW ADDRESS PORTAL */}
       {selectedAddressItem && (
         <div onClick={() => setSelectedAddressItem(null)} className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-[fadeIn_0.1s_ease-out]">
           <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl border border-slate-100 shadow-xl max-w-md w-full overflow-hidden animate-[scaleUp_0.1s_ease-out]">
@@ -592,7 +587,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* DYNAMIC VIEW INVESTIGATIONS PORTAL WINDOW */}
+      {/* DYNAMIC VIEW INVESTIGATIONS PORTAL */}
       {selectedTestItem && (
         <div onClick={() => setSelectedTestItem(null)} className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-[fadeIn_0.1s_ease-out]">
           <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl border border-slate-100 shadow-xl max-w-md w-full overflow-hidden animate-[scaleUp_0.1s_ease-out]">
@@ -801,9 +796,19 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
       {isExpanded && (
         <tr className="bg-slate-50/50">
           <td colSpan={7} className="px-8 py-5 border-t border-b border-slate-100">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs text-slate-600">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 text-xs text-slate-600">
               
-              {/* Prescription */}
+              {/* 1. Barcode Tracking & Generation */}
+              <div className="bg-white p-4 rounded-xl border border-slate-200/70 shadow-2xs flex flex-col justify-between items-center min-h-[110px]">
+                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block w-full text-left mb-2.5">
+                  Vial Barcode Automation
+                </span>
+                <div className="w-full flex justify-center items-center flex-grow">
+                  <SampleBarcodeLabel appointment={item} />
+                </div>
+              </div>
+
+              {/* 2. Prescription */}
               <div className="bg-white p-4 rounded-xl border border-slate-200/70 shadow-2xs">
                 <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-2.5">Prescription Doc</span>
                 {item.prescription_url ? ( 
@@ -815,7 +820,7 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
                 )}
               </div>
 
-              {/* Contact Profiles */}
+              {/* 3. Contact Profiles */}
               <div className="bg-white p-4 rounded-xl border border-slate-200/70 shadow-2xs">
                 <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-2">Contact Profile</span>
                 <div className="space-y-2">
@@ -836,7 +841,7 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
                 </div>
               </div>
 
-              {/* Fulfillment Matrix */}
+              {/* 4. Fulfillment Matrix */}
               <div className="bg-white p-4 rounded-xl border border-slate-200/70 shadow-2xs">
                 <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-2.5">Fulfillment Target</span>
                 {isHomeCollection ? (
