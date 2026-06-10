@@ -258,8 +258,8 @@ export default function Dashboard() {
     doc.setTextColor(255, 255, 255); doc.setFontSize(20); doc.setFont('helvetica', 'bold'); doc.text(labName.toUpperCase(), 14, 22);
     doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.text('Generated via LabOps Scheduler by Zebnox', 14, 31);
     doc.setFontSize(9); doc.text(`Exported on: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`, 14, 38);
-    const rows = dataToExport.map(item => [item.booking_id, { content: `${item.name}\n${item.age ?? 'N/A'}Y / ${item.gender || ''}\n${item.mobile || 'N/A'}`, styles: { fontStyle: 'bold' as const } }, item.test, `${item.appointment_date}\n${item.time || 'N/A'}`, item.remarks || '-', { content: (item.status || 'Pending').toUpperCase(), styles: { textColor: item.status === 'Completed' ? [46, 125, 50] as [number, number, number] : item.status === 'Cancelled' ? [185, 28, 28] as [number, number, number] : [194, 65, 12] as [number, number, number], fontStyle: 'bold' as const } }]);
-    autoTable(doc, { startY: 50, head: [['ID', 'Patient Details', 'Test', 'Schedule', 'Remarks', 'Status']], body: rows, theme: 'striped', headStyles: { fillColor: [26, 115, 232] as [number, number, number] }, styles: { fontSize: 9, valign: 'middle' } });
+    const rows = dataToExport.map(item => [item.booking_id, { content: `${item.name}\n${item.age ?? 'N/A'}Y / ${item.gender || ''}\n${item.mobile || 'N/A'}`, styles: { fontStyle: 'bold' as const } }, item.test || 'N/A', `${item.appointment_date} ${item.time || ''}`, item.remarks || '-', item.status || 'Pending']);
+    autoTable(doc, { startY: 50, head: [['ID', 'Patient Details', 'Test', 'Schedule', 'Remarks', 'Status']], body: rows, theme: 'striped', headStyles: { fillColor: [26, 115, 232] as [number, number, number] }, alternateRowStyles: { fillColor: [245, 245, 245] }, columnStyles: { 0: { cellWidth: 35 }, 1: { cellWidth: 50 }, 2: { cellWidth: 50 } } });
     doc.save(`${labName}_Report.pdf`);
   };
 
@@ -281,8 +281,13 @@ export default function Dashboard() {
   }, [selectedTestItem]);
 
   const handleRegistrationSuccess = async () => {
-    setIsRegisterOpen(false);
+    // Allow form to complete and show billing screen
+    // Refresh the data in the background
     await fetchAll();
+    // Close form after a delay to let user see success + billing if needed
+    setTimeout(() => {
+      setIsRegisterOpen(false);
+    }, 2000);
   };
 
   return (
@@ -335,9 +340,9 @@ export default function Dashboard() {
                     <Plus className="w-4 h-4 stroke-[2.5]" /> New Registration
                   </button>
 
-                  <div className="relative flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-all">
+                  <div className="relative flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-200 transition-all">
                     <CalendarCheck className="w-3.5 h-3.5 text-slate-400" />
-                    <input type="date" value={selectedDate} onChange={(e) => { setSelectedDate(e.target.value); setCurrentPage(1); }} className="bg-transparent border-none text-xs font-medium text-slate-700 focus:ring-0 p-0 outline-none cursor-pointer" />
+                    <input type="date" value={selectedDate} onChange={(e) => { setSelectedDate(e.target.value); setCurrentPage(1); }} className="bg-transparent border-none text-xs font-medium text-slate-700 focus:outline-none" />
                     {selectedDate && (
                       <button onClick={() => { setSelectedDate(''); setCurrentPage(1); }} className="p-0.5 hover:bg-slate-200 rounded-full">
                         <X className="w-3 h-3 text-slate-400" />
@@ -347,7 +352,7 @@ export default function Dashboard() {
 
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                    <input type="text" value={search} onChange={e => { setSearch(e.target.value); setCurrentPage(1); }} placeholder="Search ID or patient..." className="pl-9 pr-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 w-48 transition" />
+                    <input type="text" value={search} onChange={e => { setSearch(e.target.value); setCurrentPage(1); }} placeholder="Search ID or patient..." className="pl-9 pr-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-200 outline-none transition-all" />
                   </div>
                 </>
               )}
@@ -403,7 +408,7 @@ export default function Dashboard() {
                 <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b border-slate-100 bg-slate-50/70">
                   <div className="flex items-center gap-3">
                     <div className="flex items-center h-5">
-                      <input type="checkbox" checked={isAllPageSelected} onChange={e => toggleSelectAll(e.target.checked)} className="w-4 h-4 border-slate-300 rounded text-blue-600 focus:ring-blue-500/20 cursor-pointer" />
+                      <input type="checkbox" checked={isAllPageSelected} onChange={e => toggleSelectAll(e.target.checked)} className="w-4 h-4 border-slate-300 rounded text-blue-600 focus:ring-blue-500/10" />
                     </div>
                     <label className="text-xs font-semibold text-slate-500 select-none">Select Page Records</label>
                     
@@ -416,7 +421,7 @@ export default function Dashboard() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <button onClick={fetchAll} title="Refresh data" className={`flex items-center justify-center p-2 text-slate-500 border border-slate-200 bg-white rounded-xl hover:bg-slate-50 transition ${loading ? 'opacity-50' : ''}`} disabled={loading}>
+                    <button onClick={fetchAll} title="Refresh data" className="flex items-center justify-center p-2 text-slate-500 border border-slate-200 bg-white rounded-xl hover:bg-slate-50 transition">
                       <RotateCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
                     </button>
 
@@ -436,7 +441,7 @@ export default function Dashboard() {
                               <button onClick={deleteByRange} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-3.5 h-3.5" /></button>
                             </div>
                           )}
-                          <button onClick={() => { setShowDatePicker(false); setStartDate(''); setEndDate(''); }} className="p-1.5 text-slate-400 hover:text-slate-600 border-l border-slate-200 ml-1"><Check className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => { setShowDatePicker(false); setStartDate(''); setEndDate(''); }} className="p-1.5 text-slate-400 hover:text-slate-600 border-l border-slate-200 ml-1"><X className="w-3.5 h-3.5" /></button>
                         </div>
                       )}
                     </div>
@@ -495,9 +500,13 @@ export default function Dashboard() {
                 <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
                   <p className="text-xs font-medium text-slate-500">Showing rows {Math.min(filtered.length, (currentPage - 1) * RECORDS_PER_PAGE + 1)}-{Math.min(filtered.length, currentPage * RECORDS_PER_PAGE)} of {filtered.length}</p>
                   <div className="flex items-center gap-2">
-                    <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="flex items-center gap-1 px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"><ChevronLeft className="w-4 h-4" /> Prev</button>
+                    <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="flex items-center gap-1 px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition">
+                      <ChevronLeft className="w-3 h-3" />
+                    </button>
                     <span className="text-xs font-bold text-slate-700 px-2">Page {currentPage} of {totalPages}</span>
-                    <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="flex items-center gap-1 px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition">Next <ChevronRight className="w-4 h-4" /></button>
+                    <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="flex items-center gap-1 px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition">
+                      <ChevronRight className="w-3 h-3" />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -533,6 +542,7 @@ export default function Dashboard() {
                       currentLabId={lab?.id ? String(lab.id) : "LAB-001"}
                       onCancel={() => setIsRegisterOpen(false)}
                       onSuccess={handleRegistrationSuccess}
+                      isOpen={isRegisterOpen}
                     />
                   </div>
                 </div>
@@ -658,7 +668,7 @@ export default function Dashboard() {
 
 function StatCard({ icon, iconBg, value, label, isActive, onClick }: { icon: React.ReactNode; iconBg: string; value: number; label: string; isActive?: boolean; onClick?: () => void }) {
   return (
-    <button onClick={onClick} className={`w-full text-left bg-white rounded-2xl border p-4 flex items-center gap-3.5 transition-all focus:outline-none ${isActive ? 'border-blue-500 shadow-sm shadow-blue-500/5 ring-1 ring-blue-500' : 'border-slate-200 hover:border-slate-300'}`}>
+    <button onClick={onClick} className={`w-full text-left bg-white rounded-2xl border p-4 flex items-center gap-3.5 transition-all focus:outline-none ${isActive ? 'border-blue-500 shadow-sm shadow-blue-500/10' : 'border-slate-200 hover:border-slate-300'}`}>
       <div className={`w-9 h-9 rounded-xl ${iconBg} flex items-center justify-center flex-shrink-0`}>{icon}</div>
       <div>
         <p className="text-xl font-bold tracking-tight text-slate-900">{value}</p>
@@ -669,9 +679,6 @@ function StatCard({ icon, iconBg, value, label, isActive, onClick }: { icon: Rea
 }
 
 function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRemarks, onDelete, onWhatsApp, onViewAddress, onViewTests, onSelectReschedule, isInsideReminderWindow }: AppointmentRowProps) {
-  const isCompleted = item.status === 'Completed';
-  const isCancelled = item.status === 'Cancelled';
-  
   const [isExpanded, setIsExpanded] = useState(false);
   const [localRemarks, setLocalRemarks] = useState(item.remarks || '');
   const [isFocused, setIsFocused] = useState(false);
@@ -696,6 +703,8 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
     } 
   };
 
+  const isCompleted = item.status === 'Completed';
+  const isCancelled = item.status === 'Cancelled';
   const isHomeCollection = item.bookingType === 'home' || item.booking_type === 'home' || item.booking_type === 'Home Collection';
 
   const totalTestCount = useMemo(() => {
@@ -723,7 +732,7 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
           <button 
             type="button"
             onClick={() => onSelectReschedule(item)}
-            className="font-mono text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline bg-blue-50/60 hover:bg-blue-50 border border-blue-100/80 px-2 py-1 rounded-lg shadow-2xs transition-all text-left"
+            className="font-mono text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline bg-blue-50/60 hover:bg-blue-50 border border-blue-100/80 px-2 py-1 rounded-lg shadow-2xs transition"
           >
             {item.booking_id}
           </button>
@@ -732,7 +741,7 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
         <td className="px-4 py-3.5">
           <div className="max-w-[200px]">
             <p className="font-semibold text-slate-900 text-xs truncate" title={item.name}>{item.name}</p>
-            <p className="text-[11px] font-medium text-slate-400 mt-0.5">{item.age ?? 'N/A'}Y &bull; {item.gender || 'N/A'}</p>
+            <p className="text-[11px] font-medium text-slate-400 mt-0.5">{item.age ?? 'N/A'}Y • {item.gender || 'N/A'}</p>
           </div>
         </td>
         
@@ -743,7 +752,7 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
               <span className="truncate max-w-[150px]">Investigations {totalTestCount > 0 ? `(${totalTestCount})` : ''}</span>
             </button>
             <div className="flex items-center gap-1.5 mt-0.5">
-              <p className="text-[10px] font-semibold text-slate-400 tracking-tight">{item.appointment_date} &bull; {item.time || 'N/A'}</p>
+              <p className="text-[10px] font-semibold text-slate-400 tracking-tight">{item.appointment_date} • {item.time || 'N/A'}</p>
               {isInsideReminderWindow && (
                 <span className="flex h-2 w-2 relative" title="Due for pre-test reminder execution">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
@@ -764,7 +773,7 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
               placeholder="Add log entry..." 
               rows={1} 
               disabled={isSaving} 
-              className="w-full text-[11px] font-medium p-1.5 bg-slate-50 border border-slate-200 focus:border-blue-400 focus:bg-white rounded-lg outline-none resize-none transition-all custom-scrollbar" 
+              className="w-full text-[11px] font-medium p-1.5 bg-slate-50 border border-slate-200 focus:border-blue-400 focus:bg-white rounded-lg outline-none resize-none transition-all custom-scrollbar"
             />
             <div className="absolute right-2 top-2.5 flex items-center gap-1 pointer-events-none select-none">
               {isSaving && <RotateCw className="w-2.5 h-2.5 text-blue-500 animate-spin" />}
@@ -779,14 +788,14 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
         </td>
 
         <td className="px-4 py-3.5 whitespace-nowrap">
-          <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide uppercase border ${isCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : isCancelled ? 'bg-rose-50 text-rose-700 border-rose-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
+          <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide uppercase border ${isCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : isCancelled ? 'bg-red-50 text-red-700 border-red-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
             {item.status || 'Pending'}
           </span>
         </td>
         <td className="pr-6 pl-4 py-3.5 text-right whitespace-nowrap">
           <div className="flex items-center justify-end gap-1">
-            <button onClick={() => onUpdateStatus(item.id, 'Completed')} title="Mark Completed" className="w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-emerald-600 hover:border-emerald-200 flex items-center justify-center transition shadow-sm"><Check className="w-3.5 h-3.5" /></button>
-            <button onClick={() => onUpdateStatus(item.id, 'Cancelled')} title="Cancel Workflow" className="w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-rose-600 hover:border-rose-200 flex items-center justify-center transition shadow-sm"><X className="w-3.5 h-3.5" /></button>
+            <button onClick={() => onUpdateStatus(item.id, 'Completed')} title="Mark Completed" className="w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-emerald-600 flex items-center justify-center transition"><CheckCheck className="w-3.5 h-3.5" /></button>
+            <button onClick={() => onUpdateStatus(item.id, 'Cancelled')} title="Cancel Workflow" className="w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-rose-600 flex items-center justify-center transition"><X className="w-3.5 h-3.5" /></button>
             <button onClick={() => onDelete(item.id)} title="Trash Record" className="w-7 h-7 rounded-lg border border-transparent bg-transparent text-slate-400 hover:text-rose-600 flex items-center justify-center transition"><Trash2 className="w-3.5 h-3.5" /></button>
           </div>
         </td>
@@ -812,7 +821,7 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
               <div className="bg-white p-4 rounded-xl border border-slate-200/70 shadow-2xs">
                 <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-2.5">Prescription Doc</span>
                 {item.prescription_url ? ( 
-                  <a href={item.prescription_url.startsWith('http') ? item.prescription_url : supabase.storage.from('prescriptions').getPublicUrl(item.prescription_url).data.publicUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-150 rounded-lg font-semibold text-blue-700 transition">
+                  <a href={item.prescription_url.startsWith('http') ? item.prescription_url : supabase.storage.from('prescriptions').getPublicUrl(item.prescription_url).data.publicUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-2 py-1 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-600 rounded-lg text-[10px] font-bold">
                     <FileText className="w-3.5 h-3.5" /> View Prescription (Rx)
                   </a> 
                 ) : (
@@ -828,13 +837,13 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
                     <Phone className="w-3 h-3 text-slate-400" /> {item.mobile}
                   </a>
                   <div className="flex items-center gap-2">
-                    <select defaultValue="" onChange={e => { onWhatsApp(item.mobile, e.target.value, item); e.target.value = ''; }} className="text-[11px] font-medium px-2 py-1 rounded-lg border border-slate-200 bg-white text-slate-600 cursor-pointer focus:outline-none">
+                    <select defaultValue="" onChange={e => { onWhatsApp(item.mobile, e.target.value, item); e.target.value = ''; }} className="text-[11px] font-medium px-2 py-1 rounded-lg border border-slate-200 bg-white">
                       <option value="">Send Alert</option>
                       <option value="welcome">Welcome</option>
                       <option value="report">Ready</option>
                       <option value="reminder">Remind</option>
                     </select>
-                    <button onClick={() => onWhatsApp(item.mobile, 'default', item)} className="inline-flex items-center px-2 py-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-lg font-bold transition">
+                    <button onClick={() => onWhatsApp(item.mobile, 'default', item)} className="inline-flex items-center px-2 py-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-lg text-[10px] font-bold">
                       <MessageCircle className="w-3.5 h-3.5 mr-1" /> Chat
                     </button>
                   </div>
@@ -845,7 +854,7 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
               <div className="bg-white p-4 rounded-xl border border-slate-200/70 shadow-2xs">
                 <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-2.5">Fulfillment Target</span>
                 {isHomeCollection ? (
-                  <button type="button" onClick={() => onViewAddress(item)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg font-semibold transition">
+                  <button type="button" onClick={() => onViewAddress(item)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-[10px] font-bold">
                     <MapPin className="w-3.5 h-3.5 text-amber-600" /> View Map Address
                   </button>
                 ) : (
