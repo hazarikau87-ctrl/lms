@@ -148,9 +148,6 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
   const [prescriptionFileName, setPrescriptionFileName] = useState('');
   
   const [showBilling, setShowBilling] = useState(false);
-  
-  // Store appointment data temporarily (not saved yet)
-  const pendingAppointmentData = useRef<any>(null);
 
   const isProcessingPayload = useRef(false);
 
@@ -265,7 +262,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     return Object.keys(allErrors).length === 0;
   };
 
-  // Prepare appointment but DON'T save it yet
+  // Save appointment to database IMMEDIATELY after form validation
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isProcessingPayload.current || isSubmitting || submitSuccess) return;
@@ -296,8 +293,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
 
       const generatedBookingId = `BK-${Date.now().toString().slice(-6)}`;
 
-      // Store appointment data temporarily (not in DB yet)
-      pendingAppointmentData.current = {
+      const targetPayload = {
         name: formData.name,
         mobile: formData.mobile,
         whatsapp: formData.whatsapp || formData.mobile,
@@ -320,52 +316,35 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
         landmark: formData.booking_type === 'home' ? formData.landmark : null,
       };
 
+      // Save appointment to database FIRST (with real ID)
+      const { data, error: dbError } = await supabase
+        .from('appointments')
+        .insert([targetPayload])
+        .select()
+        .single();
+
+      if (dbError) throw dbError;
+
       setSavedBookingId(generatedBookingId);
+      setSavedAppointmentId(data.id as number); // NOW has real ID from DB
       setSubmitSuccess(true);
       setIsSubmitting(false);
+      if (onSuccess) onSuccess(data);
     } catch (err: any) {
-      console.error('Preparation Error:', err);
+      console.error('Database Save Error:', err);
       setErrors((prev) => ({
         ...prev,
-        global: err.message || 'Failed to prepare appointment. Please try again.',
+        global: err.message || 'Failed to save appointment. Please try again.',
       }));
       isProcessingPayload.current = false;
       setIsSubmitting(false);
     }
   };
 
-  // Save appointment to database (called after billing or skip)
-  const saveAppointmentToDatabase = async () => {
-    if (!pendingAppointmentData.current) return;
-
-    try {
-      const { data, error: dbError } = await supabase
-        .from('appointments')
-        .insert([pendingAppointmentData.current])
-        .select()
-        .single();
-
-      if (dbError) throw dbError;
-
-      setSavedAppointmentId(data.id as number);
-      if (onSuccess) onSuccess(data);
-      
-      return data;
-    } catch (err: any) {
-      console.error('Database Save Error:', err);
-      throw err;
-    }
-  };
-
   // Called after billing is completed or skipped
   const handleBillingComplete = async () => {
-    try {
-      await saveAppointmentToDatabase();
-      handleReset();
-      if (onCancel) onCancel();
-    } catch (err) {
-      console.error('Error saving after billing:', err);
-    }
+    handleReset();
+    if (onCancel) onCancel();
   };
 
   const handleReset = () => {
@@ -388,7 +367,6 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     setTestSearch('');
     setActiveStep(1);
     setShowBilling(false);
-    pendingAppointmentData.current = null;
     isProcessingPayload.current = false;
   };
 
@@ -480,7 +458,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
         )}
 
         {/* ── CENTRAL SWITCH PANEL STATE VIEW FOR WORKSPACE SUCCESS DRIVER ── */}
-        {submitSuccess ? (
+        {submitSuccess && savedAppointmentId !== null ? (
           <div className="flex flex-col flex-1 overflow-y-auto bg-gray-50/50">
             {!showBilling && (
               <div className="flex flex-col items-center justify-center px-8 py-12 text-center max-w-md mx-auto my-auto gap-6 animate-in fade-in zoom-in-95 duration-150">
@@ -488,9 +466,9 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                   <BadgeCheck className="w-9 h-9 text-emerald-600" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-gray-900 tracking-tight">Appointment Details Validated</h3>
+                  <h3 className="text-xl font-bold text-gray-900 tracking-tight">Appointment Registered ✓</h3>
                   <p className="text-sm text-gray-500 mt-1.5 leading-relaxed">
-                    Please complete billing to finalize the appointment registration.
+                    The encounter has been saved. Now collect payment if needed.
                   </p>
                 </div>
 
@@ -522,14 +500,14 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                       onClick={handleBillingComplete}
                       className="flex-1 px-4 py-2.5 text-xs font-semibold text-gray-600 bg-gray-50 border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors"
                     >
-                      Skip & Finalize
+                      Skip & Close
                     </button>
                   </div>
                 </div>
               </div>
             )}
 
-            {showBilling && savedAppointmentId === null && (
+            {showBilling && savedAppointmentId !== null && (
               <div className="px-6 py-6 flex flex-col flex-1 animate-in slide-in-from-bottom-4 duration-200">
                 <div className="flex items-center justify-between pb-4 mb-5 border-b border-gray-100">
                   <div className="flex items-center gap-3">
@@ -551,14 +529,8 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                 </div>
 
                 <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm flex-1 overflow-y-auto">
-                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg mb-4">
-                    <p className="text-xs text-amber-800 font-semibold">
-                      ⚠️ Appointment will be saved AFTER payment is completed
-                    </p>
-                  </div>
-                  
                   <BillingModule
-                    appointmentId={999999}
+                    appointmentId={savedAppointmentId}
                     labId={currentLabId}
                     selectedTests={selectedTests}
                     availableTestsMeta={labInfo?.available_tests || []}
@@ -570,8 +542,19 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
 
                 <div className="mt-5 pt-4 border-t border-gray-100 flex flex-col sm:flex-row gap-2.5 justify-between items-center bg-transparent">
                   <p className="text-[11px] text-gray-400 italic">
-                    * Appointment saves to database after payment is recorded.
+                    * Payments write directly down to relational ledger rows.
                   </p>
+                  <div className="flex gap-2 w-full sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={handleBillingComplete}
+                      className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white rounded-xl shadow-sm hover:opacity-95 transition-all active:scale-95"
+                      style={{ backgroundColor: themeColor }}
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      Close & Register Next
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -779,7 +762,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                 </button>
               ) : (
                 <button type="submit" disabled={isSubmitting} className="flex items-center gap-2 px-6 py-2 text-sm font-bold text-white rounded-lg shadow transition-opacity hover:opacity-90 disabled:opacity-60" style={{ backgroundColor: themeColor }}>
-                  {isSubmitting ? <><Loader2 className="w-4 h-4 animate-spin" />Validating…</> : <><CheckCircle className="w-4 h-4" />Proceed to Billing</>}
+                  {isSubmitting ? <><Loader2 className="w-4 h-4 animate-spin" />Saving…</> : <><CheckCircle className="w-4 h-4" />Save & Proceed to Billing</>}
                 </button>
               )}
             </div>
