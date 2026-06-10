@@ -148,6 +148,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
   const [prescriptionFileName, setPrescriptionFileName] = useState('');
   
   const [showBilling, setShowBilling] = useState(false);
+  const [billingComplete, setBillingComplete] = useState(false);
 
   const isProcessingPayload = useRef(false);
 
@@ -342,9 +343,13 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
   };
 
   // Called after billing is completed or skipped
-  const handleBillingComplete = async () => {
-    handleReset();
-    if (onCancel) onCancel();
+  const handleBillingComplete = () => {
+    setBillingComplete(true);
+    // Wait 2 seconds to show success message, then close
+    setTimeout(() => {
+      handleReset();
+      if (onCancel) onCancel();
+    }, 2000);
   };
 
   const handleReset = () => {
@@ -367,6 +372,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     setTestSearch('');
     setActiveStep(1);
     setShowBilling(false);
+    setBillingComplete(false);
     isProcessingPayload.current = false;
   };
 
@@ -460,7 +466,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
         {/* ── CENTRAL SWITCH PANEL STATE VIEW FOR WORKSPACE SUCCESS DRIVER ── */}
         {submitSuccess && savedAppointmentId !== null ? (
           <div className="flex flex-col flex-1 overflow-y-auto bg-gray-50/50">
-            {!showBilling && (
+            {!showBilling && !billingComplete && (
               <div className="flex flex-col items-center justify-center px-8 py-12 text-center max-w-md mx-auto my-auto gap-6 animate-in fade-in zoom-in-95 duration-150">
                 <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200/60 flex items-center justify-center shadow-sm">
                   <BadgeCheck className="w-9 h-9 text-emerald-600" />
@@ -507,7 +513,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
               </div>
             )}
 
-            {showBilling && savedAppointmentId !== null && (
+            {showBilling && savedAppointmentId !== null && !billingComplete && (
               <div className="px-6 py-6 flex flex-col flex-1 animate-in slide-in-from-bottom-4 duration-200">
                 <div className="flex items-center justify-between pb-4 mb-5 border-b border-gray-100">
                   <div className="flex items-center gap-3">
@@ -539,22 +545,23 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                     onPaymentSuccess={handleBillingComplete}
                   />
                 </div>
+              </div>
+            )}
 
-                <div className="mt-5 pt-4 border-t border-gray-100 flex flex-col sm:flex-row gap-2.5 justify-between items-center bg-transparent">
-                  <p className="text-[11px] text-gray-400 italic">
-                    * Payments write directly down to relational ledger rows.
+            {billingComplete && (
+              <div className="flex flex-col items-center justify-center px-8 py-12 text-center max-w-md mx-auto my-auto gap-6 animate-in fade-in zoom-in-95 duration-150">
+                <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200/60 flex items-center justify-center shadow-sm animate-pulse">
+                  <CheckCircle className="w-9 h-9 text-emerald-600" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900 tracking-tight">Complete! ✓</h3>
+                  <p className="text-sm text-gray-500 mt-1.5 leading-relaxed">
+                    Appointment and payment processed successfully.
                   </p>
-                  <div className="flex gap-2 w-full sm:w-auto">
-                    <button
-                      type="button"
-                      onClick={handleBillingComplete}
-                      className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white rounded-xl shadow-sm hover:opacity-95 transition-all active:scale-95"
-                      style={{ backgroundColor: themeColor }}
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      Close & Register Next
-                    </button>
-                  </div>
+                </div>
+                <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-5 py-3.5 w-full justify-center">
+                  <Hash className="w-4 h-4 text-emerald-600" />
+                  <span className="text-xs text-emerald-700 font-bold">{savedBookingId}</span>
                 </div>
               </div>
             )}
