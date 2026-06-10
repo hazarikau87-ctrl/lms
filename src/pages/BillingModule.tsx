@@ -1,249 +1,252 @@
-import { useState, useEffect, CSSProperties } from "react";
-import { supabase } from "../lib/supabase"; // Use your existing shared supabase client instantiation
+import { useEffect, useMemo, useState } from "react";
+import QRCode from "react-qr-code";
+import { supabase } from "../lib/supabase";
 
 type PaymentMethod = "cash" | "upi" | "card_external";
 
-interface MethodMeta {
-  label: string;
-  icon: string;
-  refLabel: string | null;
-}
-
 interface BillingModuleProps {
-  appointmentId: number; // bigint from database
-  labId: string;         // uuid from database
-  selectedTests: string[]; // Pass selected test array down to cross-verify prices
-  availableTestsMeta: any[] | null; // labInfo.available_tests jsonb metadata array
+  appointmentId: number;
+  labId: string;
+  selectedTests: string[];
+  availableTestsMeta: any[] | null;
   onPaymentSuccess?: (payment: Record<string, unknown>) => void;
   themeColor?: string;
-  isInline?: boolean;
 }
 
-const fmt = (n: number): string =>
-  "₹" + Number(n).toLocaleString("en-IN", { minimumFractionDigits: 0 });
-
-const METHOD_META: Record<PaymentMethod, MethodMeta> = {
-  cash:          { label: "Cash",       icon: "💵", refLabel: null },
-  upi:           { label: "UPI",        icon: "📲", refLabel: "UPI Transaction ID / UTR (optional)" },
-  card_external: { label: "Card / POS", icon: "🖥️",  refLabel: "POS Slip/Approval Reference (optional)" },
-};
+const fmt = (n:number)=>"₹"+Number(n).toLocaleString("en-IN");
 
 export default function BillingModule({
   appointmentId,
   labId,
-  selectedTests = [],
-  availableTestsMeta = [],
+  selectedTests=[],
+  availableTestsMeta=[],
   onPaymentSuccess,
-  themeColor = "#4f46e5",
-  isInline = false,
-}: BillingModuleProps) {
-  // Financial calculation tracking states
-  const [advancePaid, setAdvancePaid] = useState<number>(0);
-  const [loading, setLoading]         = useState<boolean>(true);
-  const [fetchError, setFetchError]   = useState<string | null>(null);
+  themeColor="#4f46e5"
+}:BillingModuleProps){
 
-  // Form submission tracking states
-  const [method, setMethod]               = useState<PaymentMethod>("cash");
-  const [transactionRef, setTransactionRef] = useState<string>("");
-  const [submitting, setSubmitting]       = useState<boolean>(false);
-  const [submitError, setSubmitError]     = useState<string | null>(null);
-  const [settled, setSettled]             = useState<boolean>(false);
+  const [loading,setLoading]=useState(true);
+  const [payments,setPayments]=useState<any[]>([]);
+  const [lab,setLab]=useState<any>(null);
+  const [method,setMethod]=useState<PaymentMethod>("cash");
+  const [amount,setAmount]=useState("");
+  const [transactionRef,setTransactionRef]=useState("");
+  const [notes,setNotes]=useState("");
+  const [verified,setVerified]=useState(false);
+  const [error,setError]=useState("");
+  const [saving,setSaving]=useState(false);
 
-  // ── Calculate total bill using jsonb data array items ──
   const totalBill = (availableTestsMeta || [])
-    .filter((t: any) => {
-      const name = t?.name || t?.test_name || "";
-      return selectedTests.includes(name);
-    })
-    .reduce((sum: number, t: any) => sum + Number(t?.price || 0), 0);
+    .filter((t:any)=>selectedTests.includes(t?.name || t?.test_name || ""))
+    .reduce((s:number,t:any)=>s+Number(t?.price||0),0);
 
-  useEffect(() => {
-    if (!appointmentId || !labId) return;
+  const collected = useMemo(
+    ()=>payments.reduce((s,p)=>s+Number(p.amount_paid||0),0),
+    [payments]
+  );
 
-    async function checkPriorLedgers() {
-      setLoading(true);
-      setFetchError(null);
-      try {
-        const { data, error } = await supabase
-          .from("payments")
-          .select("amount_paid")
-          .eq("appointment_id", appointmentId)
-          .eq("lab_id", labId);
+  const balance = Math.max(totalBill-collected,0);
 
-        if (error) throw error;
+  const status =
+    collected <= 0 ? "UNPAID" :
+    collected < totalBill ? "PARTIALLY PAID" :
+    "PAID";
 
-        const totalPaid = (data || []).reduce(
-          (sum, p) => sum + Number(p.amount_paid || 0),
-          0
-        );
-        setAdvancePaid(totalPaid);
-      } catch (err: any) {
-        console.error("Billing ledger error:", err);
-        setFetchError("Failed to fetch historical payments ledger row.");
-      } finally {
-        setLoading(false);
-      }
+  useEffect(()=>{
+    load();
+  },[appointmentId,labId]);
+
+  async function load(){
+    setLoading(true);
+
+    const [{data:pay},{data:labData}] = await Promise.all([
+      supabase.from("payments")
+      .select("*")
+      .eq("appointment_id",appointmentId)
+      .eq("lab_id",labId)
+      .order("created_at",{ascending:false}),
+
+      supabase.from("labs")
+      .select("lab_name,upi_id")
+      .eq("id",labId)
+      .single()
+    ]);
+
+    setPayments(pay || []);
+    setLab(labData);
+    setLoading(false);
+  }
+
+  const amountNumber = Number(amount || 0);
+
+  const upiString =
+    method==="upi" && lab?.upi_id
+      ? `upi://pay?pa=${lab.upi_id}&pn=${encodeURIComponent(lab.lab_name)}&am=${amountNumber}&cu=INR`
+      : "";
+
+  async function collectPayment(){
+    setError("");
+
+    if(amountNumber<=0){
+      setError("Enter a valid amount");
+      return;
     }
 
-    checkPriorLedgers();
-  }, [appointmentId, labId]);
-
-  const netDue = Math.max(totalBill - advancePaid, 0);
-
-  async function handleSettlePayment() {
-    setSubmitting(true);
-    setSubmitError(null);
-    try {
-      const { data, error } = await supabase
-        .from("payments")
-        .insert([
-          {
-            lab_id: labId, // uuid
-            appointment_id: appointmentId, // bigint
-            amount_paid: netDue, // numeric
-            payment_method: method, // USER-DEFINED enum match
-            transaction_ref: method !== "cash" && transactionRef.trim() ? transactionRef.trim() : null,
-          },
-        ])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      setSettled(true);
-      if (onPaymentSuccess) onPaymentSuccess(data);
-    } catch (err: any) {
-      setSubmitError(err.message || "Failed to finalize transactions logging mapping entry.");
-    } finally {
-      setSubmitting(false);
+    if(amountNumber > balance){
+      setError("Amount exceeds pending balance");
+      return;
     }
+
+    if(method==="upi" && !verified){
+      setError("Please verify UPI payment first");
+      return;
+    }
+
+    setSaving(true);
+
+    const {data,error} = await supabase
+      .from("payments")
+      .insert([{
+        appointment_id: appointmentId,
+        lab_id: labId,
+        amount_paid: amountNumber,
+        payment_method: method,
+        transaction_ref: transactionRef || null,
+        notes: notes || null,
+        payment_status: "paid"
+      }])
+      .select()
+      .single();
+
+    setSaving(false);
+
+    if(error){
+      setError(error.message);
+      return;
+    }
+
+    setAmount("");
+    setTransactionRef("");
+    setNotes("");
+    setVerified(false);
+
+    await load();
+
+    onPaymentSuccess?.(data);
   }
 
-  const containerStyle = isInline ? s.inlineWrapper : s.card;
-
-  if (loading) {
-    return (
-      <div style={containerStyle}>
-        <div style={s.loadingRow}>
-          <span style={{ ...s.spinner, borderTopColor: themeColor }} />
-          <span style={s.muted}>Loading dynamic calculations ledger…</span>
-        </div>
-      </div>
-    );
+  if(loading){
+    return <div className="p-6 bg-white rounded-2xl border">Loading billing...</div>
   }
-
-  if (fetchError) {
-    return (
-      <div style={containerStyle}>
-        <div style={{ ...s.alert, ...s.alertDanger }}>{fetchError}</div>
-      </div>
-    );
-  }
-
-  if (settled) {
-    return (
-      <div style={{ ...containerStyle, textAlign: "center", padding: "1.5rem 0" }}>
-        <div style={s.successIcon}>✓</div>
-        <h3 style={s.h3}>Payment Securely Processed</h3>
-        <p style={s.muted}>
-          Amount of {fmt(netDue)} received via {METHOD_META[method].label}
-        </p>
-      </div>
-    );
-  }
-
-  const meta = METHOD_META[method];
 
   return (
-    <div style={containerStyle}>
-      <div style={s.metricGrid}>
-        <div style={s.metric}>
-          <div style={s.metricLabel}>Gross Subtotal</div>
-          <div style={s.metricValue}>{fmt(totalBill)}</div>
-        </div>
-        <div style={s.metric}>
-          <div style={s.metricLabel}>Balance Pending</div>
-          <div style={{ ...s.metricValue, color: netDue > 0 ? "#b91c1c" : "#15803d" }}>{fmt(netDue)}</div>
-        </div>
+    <div className="bg-white rounded-2xl border shadow-sm p-5 space-y-5">
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card title="Total Bill" value={fmt(totalBill)} />
+        <Card title="Collected" value={fmt(collected)} />
+        <Card title="Balance" value={fmt(balance)} />
+        <Card title="Status" value={status} />
       </div>
 
-      <div style={s.sectionLabel}>Choose Payment Mode</div>
-      <div style={s.methodGrid}>
-        {(Object.entries(METHOD_META) as [PaymentMethod, MethodMeta][]).map(([key, m]) => {
-          const isActive = method === key;
-          return (
-            <button
-              key={key}
-              type="button"
-              onClick={() => { setMethod(key); setTransactionRef(""); }}
-              style={{ 
-                ...s.methodBtn, 
-                ...(isActive ? {
-                  border: `1.5px solid ${themeColor}`,
-                  background: `${themeColor}0d`,
-                  color: themeColor,
-                } : {}) 
-              }}
-            >
-              <span style={{ fontSize: 20 }}>{m.icon}</span>
-              <span style={{ fontSize: 13, fontWeight: isActive ? 600 : 400 }}>
-                {m.label}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      {balance > 0 && (
+      <div className="border rounded-xl p-4">
+        <h3 className="font-semibold mb-4">Collect Payment</h3>
 
-      {meta.refLabel && (
-        <div style={s.refWrap}>
-          <label style={s.refLabel}>{meta.refLabel}</label>
-          <input
-            type="text"
-            value={transactionRef}
-            onChange={(e) => setTransactionRef(e.target.value)}
-            placeholder={method === "upi" ? "Enter UPI UTR Reference Number" : "Enter Approval Code"}
-            style={s.input}
-          />
+        <input
+          value={amount}
+          onChange={(e)=>setAmount(e.target.value)}
+          placeholder="Amount to collect"
+          type="number"
+          className="w-full border rounded-lg p-3 mb-3"
+        />
+
+        <div className="grid grid-cols-3 gap-2 mb-4">
+          <button onClick={()=>setMethod("cash")} className="border rounded-lg p-2">Cash</button>
+          <button onClick={()=>setMethod("upi")} className="border rounded-lg p-2">UPI</button>
+          <button onClick={()=>setMethod("card_external")} className="border rounded-lg p-2">Card</button>
         </div>
-      )}
 
-      {submitError && (
-        <div style={{ ...s.alert, ...s.alertDanger }}>{submitError}</div>
-      )}
+        {method==="upi" && amountNumber>0 && lab?.upi_id && (
+          <div className="border rounded-xl p-4 text-center mb-4">
+            <QRCode value={upiString} size={180} />
+            <div className="mt-3 text-sm">{lab.upi_id}</div>
+            <div className="font-semibold">Scan & Pay {fmt(amountNumber)}</div>
 
-      <div className="mt-6 pt-2 flex justify-end">
+            <label className="block mt-4 text-sm">
+              <input
+                type="checkbox"
+                checked={verified}
+                onChange={(e)=>setVerified(e.target.checked)}
+                className="mr-2"
+              />
+              Payment received and verified by lab
+            </label>
+          </div>
+        )}
+
+        <input
+          value={transactionRef}
+          onChange={(e)=>setTransactionRef(e.target.value)}
+          placeholder="UTR / Reference"
+          className="w-full border rounded-lg p-3 mb-3"
+        />
+
+        <textarea
+          value={notes}
+          onChange={(e)=>setNotes(e.target.value)}
+          placeholder="Notes"
+          className="w-full border rounded-lg p-3 mb-3"
+        />
+
+        {error && <div className="text-red-600 text-sm mb-3">{error}</div>}
+
         <button
-          type="button"
-          onClick={handleSettlePayment}
-          disabled={submitting || netDue <= 0}
-          className="w-full sm:w-auto px-6 py-3 text-xs font-bold text-white rounded-xl shadow transition-all duration-150 active:scale-95 disabled:opacity-40"
-          style={{ backgroundColor: themeColor }}
+          onClick={collectPayment}
+          disabled={saving}
+          className="w-full text-white rounded-xl p-3 font-semibold"
+          style={{backgroundColor: themeColor}}
         >
-          {submitting ? "Writing ledger item..." : `Finalize & Clear Balance (${fmt(netDue)})`}
+          {saving ? "Saving..." : "Record Payment"}
         </button>
+      </div>
+      )}
+
+      <div>
+        <h3 className="font-semibold mb-3">Payment History</h3>
+
+        <div className="space-y-3">
+          {payments.length===0 && (
+            <div className="text-gray-500">No payments recorded.</div>
+          )}
+
+          {payments.map((p)=>(
+            <div key={p.id} className="border rounded-xl p-3 flex justify-between">
+              <div>
+                <div className="font-medium">{fmt(p.amount_paid)}</div>
+                <div className="text-sm text-gray-500">
+                  {p.payment_method}
+                </div>
+                {p.transaction_ref && (
+                  <div className="text-xs">Ref: {p.transaction_ref}</div>
+                )}
+              </div>
+
+              <div className="text-xs text-gray-500">
+                {new Date(p.created_at).toLocaleString()}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
 }
 
-const s: Record<string, CSSProperties> = {
-  card: { background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: 12, padding: "1.5rem", maxWidth: 520 },
-  inlineWrapper: { width: "100%" },
-  h3: { fontSize: 16, fontWeight: 600, margin: "0 0 4px", color: "#1f2937" },
-  muted: { fontSize: 13, color: "#4b5563", margin: 0 },
-  metricGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: "1rem" },
-  metric: { background: "#f9fafb", border: "1px solid #f3f4f6", borderRadius: 10, padding: "12px 14px" },
-  metricLabel: { fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.02em" },
-  metricValue: { fontSize: 20, fontWeight: 700, color: "#111827", marginTop: 2 },
-  sectionLabel: { fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8, marginTop: "1.25rem" },
-  methodGrid: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: "1rem" },
-  methodBtn: { display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "12px 8px", border: "1px solid #e5e7eb", borderRadius: 10, cursor: "pointer", background: "#fff", color: "#374151" },
-  refWrap: { marginBottom: "1rem" },
-  refLabel: { fontSize: 12, color: "#4b5563", display: "block", marginBottom: 6, fontWeight: 500 },
-  input: { width: "100%", padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 14, color: "#111827", background: "#fff", outline: "none" },
-  alert: { padding: "10px 12px", borderRadius: 8, fontSize: 13, marginBottom: 10 },
-  alertDanger: { background: "#fef2f2", color: "#991b1b", border: "1px solid #fee2e2" },
-  loadingRow: { display: "flex", alignItems: "center", gap: 10, padding: "1.5rem 0", justifyContent: "center" },
-  spinner: { width: 18, height: 18, border: "2px solid #e5e7eb", borderRadius: "50%", display: "inline-block", animation: "spin 0.6s linear infinite" },
-  successIcon: { fontSize: 32, color: "#16a34a", marginBottom: "0.5rem", display: "block" },
-};
+function Card({title,value}:{title:string,value:string}){
+  return(
+    <div className="rounded-xl border p-3">
+      <div className="text-xs text-gray-500">{title}</div>
+      <div className="font-bold mt-1">{value}</div>
+    </div>
+  )
+}
