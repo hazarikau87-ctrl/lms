@@ -281,14 +281,8 @@ export default function Dashboard() {
   }, [selectedTestItem]);
 
   const handleRegistrationSuccess = async () => {
-    // Allow form to complete and show billing screen
-    // Refresh the data in the background
-    await fetchAll();
-    // Close form after a delay to let user see success + billing if needed
-    setTimeout(() => {
-      setIsRegisterOpen(false);
-    }, 2000);
-  };
+  await fetchAll();
+};
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 selection:bg-blue-500 selection:text-white antialiased relative">
