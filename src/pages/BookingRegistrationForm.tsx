@@ -4,13 +4,14 @@ import {
   AlertCircle, CheckCircle, Upload, X,
   Loader2, ChevronRight, ChevronLeft, Stethoscope, Search,
   FileText, Home, Building2, Hash, StickyNote, MessageCircle,
-  RotateCcw, ClipboardCheck, BadgeCheck
+  RotateCcw, ClipboardCheck, BadgeCheck, CreditCard
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import BillingModule from './BillingModule';
 
 // ============== INTERFACES (STRICT DATABASE MATCH) ==============
 export interface AppointmentData {
-  id?: string;
+  id?: string; // bigint database representation type handled as a numeric/string token reference
   name: string;
   mobile: string;
   whatsapp: string;
@@ -48,11 +49,10 @@ interface ValidationErrors {
 interface BookingRegistrationFormProps {
   onSuccess?: (data: AppointmentData) => void;
   onCancel?: () => void;
-  currentLabId?: string;
+  currentLabId?: string; // uuid string representation mapping block
   isOpen?: boolean;
 }
 
-// ============== TIME SLOTS ==============
 const TIME_SLOTS = [
   '07:00', '07:30', '08:00', '08:30', '09:00', '09:30',
   '10:00', '10:30', '11:00', '11:30', '12:00', '12:30',
@@ -68,7 +68,6 @@ const formatSlot = (t: string) => {
   return `${hh}:${m.toString().padStart(2, '0')} ${ampm}`;
 };
 
-// ============== FIELD CLASSES ==============
 const fieldClass =
   'w-full px-3 py-2.5 border border-gray-200 rounded-lg bg-white text-sm text-gray-800 ' +
   'focus:outline-none focus:ring-2 focus:border-transparent transition-all ' +
@@ -81,7 +80,6 @@ const fieldClassError =
 
 const labelClass = 'block text-[11px] font-semibold uppercase tracking-widest text-gray-500 mb-1.5';
 
-// ============== STEP VALIDATORS ==============
 const validateStep1 = (formData: any): ValidationErrors => {
   const e: ValidationErrors = {};
   if (!formData.name.trim()) e.name = 'Patient name is required';
@@ -102,7 +100,7 @@ const validateStep2 = (formData: any, selectedTests: string[]): ValidationErrors
 const validateStep3 = (formData: any): ValidationErrors => {
   const e: ValidationErrors = {};
   if (formData.booking_type === 'home' && !formData.address_line.trim()) {
-    e.address = 'Address is required for home collection';
+    e.address_line = 'Address line is required for home service validation execution checks';
   }
   return e;
 };
@@ -110,7 +108,7 @@ const validateStep3 = (formData: any): ValidationErrors => {
 export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = ({
   onSuccess,
   onCancel,
-  currentLabId = 'LAB-001',
+  currentLabId = 'b07973eb-2591-4993-85f1-3d02773229bc', // Fallback standard uuid string
   isOpen = true,
 }) => {
   const [labInfo, setLabInfo] = useState<LabData | null>(null);
@@ -140,18 +138,20 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
   const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  
   const [savedBookingId, setSavedBookingId] = useState('');
+  const [savedAppointmentId, setSavedAppointmentId] = useState<number | null>(null);
+  
   const [activeStep, setActiveStep] = useState(1);
   const [prescriptionFile, setPrescriptionFile] = useState<File | null>(null);
   const [prescriptionPreview, setPrescriptionPreview] = useState<string | null>(null);
   const [prescriptionFileName, setPrescriptionFileName] = useState('');
+  
+  // Interactive billing toggle dashboard navigation elements
+  const [showBilling, setShowBilling] = useState(false);
 
   const isProcessingPayload = useRef(false);
 
-  // ── Derived: total steps (walk-in skips step 3 logistics but still shows remarks)
-  const totalSteps = formData.booking_type === 'walk-in' ? 3 : 3;
-
-  // ── Safe JSONB test parser (unchanged from original)
   const getTestStringValue = (item: any): string => {
     if (!item) return '';
     if (typeof item === 'string') return item;
@@ -161,7 +161,6 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     return String(item);
   };
 
-  // ── Fetch lab config (ORIGINAL SUPABASE LOGIC — UNTOUCHED)
   useEffect(() => {
     const fetchLabLogics = async () => {
       try {
@@ -179,28 +178,23 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
               .map((item) => getTestStringValue(item))
               .filter((name) => name.trim() !== '');
             setDynamicTests(parsedTests);
-          } else {
-            setDynamicTests([]);
           }
         }
       } catch (err) {
-        console.error('Error fetching available_tests from labs table:', err);
+        console.error('Error fetching configuration metrics maps:', err);
         setLabInfo({ id: currentLabId, lab_name: 'Diagnostic Lab Workspace' });
-        setDynamicTests([]);
       }
     };
 
     if (isOpen) fetchLabLogics();
   }, [currentLabId, isOpen]);
 
-  // ── Sync WhatsApp when "same as mobile" is checked
   useEffect(() => {
     if (whatsappSameAsMobile) {
       setFormData((prev) => ({ ...prev, whatsapp: prev.mobile }));
     }
   }, [formData.mobile, whatsappSameAsMobile]);
 
-  // ── Blur-based inline validation
   const handleBlur = (field: string) => {
     setTouchedFields((prev) => new Set(prev).add(field));
     const step1Errs = validateStep1(formData);
@@ -219,7 +213,6 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     className: errors[key] && touchedFields.has(key) ? fieldClassError : fieldClass,
   });
 
-  // ── File upload handler (PDF-aware, ORIGINAL logic preserved)
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -235,7 +228,6 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     }
   }, []);
 
-  // ── Test toggle
   const toggleTest = (testName: string) => {
     setSelectedTests((prev) =>
       prev.includes(testName) ? prev.filter((t) => t !== testName) : [...prev, testName]
@@ -243,7 +235,6 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     if (errors.tests) setErrors((prev) => ({ ...prev, tests: '' }));
   };
 
-  // ── Per-step validation on Next click
   const handleNext = () => {
     let stepErrors: ValidationErrors = {};
     if (activeStep === 1) stepErrors = validateStep1(formData);
@@ -252,7 +243,6 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
 
     if (Object.keys(stepErrors).length > 0) {
       setErrors((prev) => ({ ...prev, ...stepErrors }));
-      // Mark all fields in the step as touched
       setTouchedFields((prev) => {
         const next = new Set(prev);
         Object.keys(stepErrors).forEach((k) => next.add(k));
@@ -263,7 +253,6 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     setActiveStep((p) => p + 1);
   };
 
-  // ── Full form validation for final submit
   const validateForm = (): boolean => {
     const allErrors = {
       ...validateStep1(formData),
@@ -274,7 +263,6 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     return Object.keys(allErrors).length === 0;
   };
 
-  // ── Submit (ORIGINAL SUPABASE LOGIC — UNTOUCHED)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isProcessingPayload.current || isSubmitting || submitSuccess) return;
@@ -309,23 +297,23 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
         name: formData.name,
         mobile: formData.mobile,
         whatsapp: formData.whatsapp || formData.mobile,
-        email: formData.email,
+        email: formData.email || null,
         age: parseInt(formData.age),
         gender: formData.gender,
         appointment_date: formData.appointment_date,
         time: formData.time,
-        test: selectedTests.join(', '),
+        test: selectedTests.join(', '), // Correct format matching database text definition maps
         booking_id: generatedBookingId,
         status: formData.status,
         is_deleted: false,
         deleted_at: null,
-        remarks: formData.remarks,
-        lab_id: currentLabId,
-        prescription_url: finalPrescriptionUrl,
+        remarks: formData.remarks || null,
+        lab_id: currentLabId, // Dynamic target uuid
+        prescription_url: finalPrescriptionUrl || null,
         booking_type: formData.booking_type,
-        address_line: formData.booking_type === 'home' ? formData.address_line : '',
-        pincode: formData.booking_type === 'home' ? formData.pincode : '',
-        landmark: formData.booking_type === 'home' ? formData.landmark : '',
+        address_line: formData.booking_type === 'home' ? formData.address_line : null,
+        pincode: formData.booking_type === 'home' ? formData.pincode : null,
+        landmark: formData.booking_type === 'home' ? formData.landmark : null,
       };
 
       const { data, error: dbError } = await supabase
@@ -337,6 +325,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
       if (dbError) throw dbError;
 
       setSavedBookingId(generatedBookingId);
+      setSavedAppointmentId(data.id as number); // Tracks returning bigint ID
       setSubmitSuccess(true);
       if (onSuccess) onSuccess(data);
     } catch (err: any) {
@@ -350,7 +339,6 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     }
   };
 
-  // ── Reset for next patient
   const handleReset = () => {
     setFormData({
       name: '', mobile: '', whatsapp: '', email: '', age: '',
@@ -363,12 +351,14 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     setIsSubmitting(false);
     setSubmitSuccess(false);
     setSavedBookingId('');
+    setSavedAppointmentId(null);
     setPrescriptionFile(null);
     setPrescriptionPreview(null);
     setPrescriptionFileName('');
     setWhatsappSameAsMobile(false);
     setTestSearch('');
     setActiveStep(1);
+    setShowBilling(false);
     isProcessingPayload.current = false;
   };
 
@@ -380,13 +370,6 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
 
   const themeColor = labInfo?.theme_color || '#4f46e5';
 
-  const stepHasErrors = (step: number): boolean => {
-    if (step === 1) return Object.keys(validateStep1(formData)).length > 0;
-    if (step === 2) return Object.keys(validateStep2(formData, selectedTests)).length > 0;
-    if (step === 3) return Object.keys(validateStep3(formData)).length > 0;
-    return false;
-  };
-
   const filteredTests = dynamicTests.filter((t) =>
     t.toLowerCase().includes(testSearch.toLowerCase())
   );
@@ -395,10 +378,11 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="relative max-w-2xl w-full mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col"
-        style={{ maxHeight: '92vh' }}>
-
-        {/* ── HEADER ── */}
+      <div
+        className="relative max-w-2xl w-full mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+        style={{ maxHeight: '92vh' }}
+      >
+        {/* Header section panel */}
         <div style={{ backgroundColor: themeColor }} className="relative px-6 py-5 text-white flex-shrink-0">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-3">
@@ -409,18 +393,16 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                 <h2 className="text-base font-bold tracking-tight leading-tight">
                   {labInfo?.lab_name || 'Loading…'}
                 </h2>
-                <p className="text-[11px] text-white/60 mt-0.5 font-mono">ID: {currentLabId}</p>
+                <p className="text-[11px] text-white/60 mt-0.5 font-mono">Lab ID Reference: {currentLabId}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[11px] text-white/50 font-medium">New Appointment</span>
               {onCancel && (
                 <button
                   type="button"
                   onClick={onCancel}
                   disabled={isSubmitting}
                   className="p-1.5 rounded-lg bg-white/10 hover:bg-white/25 transition-colors disabled:opacity-30"
-                  title="Close"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -428,43 +410,38 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
             </div>
           </div>
 
-          {/* Step Indicator */}
-          <div className="flex items-center gap-0 mt-5">
-            {steps.map((step, idx) => {
-              const isActive = activeStep === step.number;
-              const isDone = activeStep > step.number;
-              return (
-                <React.Fragment key={step.number}>
-                  <button
-                    type="button"
-                    disabled={isSubmitting}
-                    onClick={() => {
-                      // only allow navigating back freely; forward requires validation
-                      if (step.number < activeStep) setActiveStep(step.number);
-                    }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all
-                      ${isActive ? 'bg-white shadow text-gray-900'
-                        : isDone ? 'bg-white/25 text-white'
-                        : 'bg-white/10 text-white/60'}
-                      disabled:cursor-default`}
-                  >
-                    {isDone
-                      ? <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
-                      : <step.icon className="w-3.5 h-3.5" />
-                    }
-                    <span className="hidden sm:inline">{step.label}</span>
-                    <span className="sm:hidden">{step.number}</span>
-                  </button>
-                  {idx < steps.length - 1 && (
-                    <div className={`h-px flex-1 mx-1 transition-all ${isDone ? 'bg-white/50' : 'bg-white/15'}`} />
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </div>
+          {!submitSuccess && (
+            <div className="flex items-center gap-0 mt-5">
+              {steps.map((step, idx) => {
+                const isActive = activeStep === step.number;
+                const isDone = activeStep > step.number;
+                return (
+                  <React.Fragment key={step.number}>
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={() => {
+                        if (step.number < activeStep) setActiveStep(step.number);
+                      }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all
+                        ${isActive ? 'bg-white shadow text-gray-900'
+                          : isDone ? 'bg-white/25 text-white'
+                          : 'bg-white/10 text-white/60'}`}
+                    >
+                      {isDone ? <CheckCircle className="w-3.5 h-3.5 text-emerald-500" /> : <step.icon className="w-3.5 h-3.5" />}
+                      <span className="hidden sm:inline">{step.label}</span>
+                      <span className="sm:hidden">{step.number}</span>
+                    </button>
+                    {idx < steps.length - 1 && (
+                      <div className={`h-px flex-1 mx-1 transition-all ${isDone ? 'bg-white/50' : 'bg-white/15'}`} />
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {/* ── GLOBAL ERROR ── */}
         {errors.global && (
           <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-start gap-2 text-sm">
             <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
@@ -472,537 +449,310 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
           </div>
         )}
 
-        {/* ── SUCCESS PANEL ── */}
+        {/* ── CENTRAL SWITCH PANEL STATE VIEW FOR WORKSPACE SUCCESS DRIVER ── */}
         {submitSuccess ? (
-          <div className="flex flex-col items-center justify-center flex-1 px-6 py-10 text-center gap-5">
-            <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center">
-              <BadgeCheck className="w-9 h-9 text-emerald-600" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-gray-800">Appointment Registered</h3>
-              <p className="text-sm text-gray-500 mt-1">Patient has been successfully added to the system.</p>
-            </div>
-            <div className="flex items-center gap-2 bg-gray-100 border border-gray-200 rounded-xl px-5 py-3">
-              <Hash className="w-4 h-4 text-gray-500" />
-              <span className="text-sm text-gray-500 font-medium">Booking ID</span>
-              <span className="font-mono font-bold text-gray-900 text-base ml-1">{savedBookingId}</span>
-            </div>
-            <div className="flex gap-3 mt-2">
-              <button
-                type="button"
-                onClick={handleReset}
-                className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white rounded-xl shadow transition-opacity hover:opacity-90"
-                style={{ backgroundColor: themeColor }}
-              >
-                <RotateCcw className="w-4 h-4" />
-                Register Next Patient
-              </button>
-              {onCancel && (
-                <button
-                  type="button"
-                  onClick={onCancel}
-                  className="px-5 py-2.5 text-sm font-medium text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
-                >
-                  Close
-                </button>
-              )}
-            </div>
+          <div className="flex flex-col flex-1 overflow-y-auto bg-gray-50/50">
+            {!showBilling && (
+              <div className="flex flex-col items-center justify-center px-8 py-12 text-center max-w-md mx-auto my-auto gap-6 animate-in fade-in zoom-in-95 duration-150">
+                <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200/60 flex items-center justify-center shadow-sm">
+                  <BadgeCheck className="w-9 h-9 text-emerald-600" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900 tracking-tight">Appointment Registered</h3>
+                  <p className="text-sm text-gray-500 mt-1.5 leading-relaxed">
+                    The encounter has been securely registered.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3 bg-white border border-gray-100 rounded-xl px-5 py-3.5 shadow-sm w-full justify-center">
+                  <Hash className="w-4 h-4 text-gray-400" />
+                  <span className="text-xs text-gray-400 uppercase font-bold tracking-wider">Booking ID</span>
+                  <span className="font-mono font-bold text-gray-900 text-base border-l border-gray-150 pl-3 ml-1">
+                    {savedBookingId}
+                  </span>
+                </div>
+
+                <div className="w-full bg-white border border-gray-100 rounded-2xl p-5 shadow-sm text-left mt-2">
+                  <h4 className="text-sm font-bold text-gray-900 mb-1">Financial Ledger</h4>
+                  <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+                    Would you like to collect patient payments or log financial balances right now?
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowBilling(true)}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-white rounded-xl shadow-sm transition-all duration-150 hover:opacity-95 active:scale-95"
+                      style={{ backgroundColor: themeColor }}
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      Collect Payment Now
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleReset}
+                      className="flex-1 px-4 py-2.5 text-xs font-semibold text-gray-600 bg-gray-50 border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors"
+                    >
+                      Skip / Defer Billing
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {showBilling && savedAppointmentId !== null && (
+              <div className="px-6 py-6 flex flex-col flex-1 animate-in slide-in-from-bottom-4 duration-200">
+                <div className="flex items-center justify-between pb-4 mb-5 border-b border-gray-100">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-gray-100 rounded-xl text-gray-600">
+                      <CreditCard className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-gray-900">Collections Counter</p>
+                      <p className="text-[11px] font-mono text-gray-400 mt-0.5">Booking Identity: {savedBookingId}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowBilling(false)}
+                    className="text-xs font-semibold text-gray-400 hover:text-gray-600 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" /> Back
+                  </button>
+                </div>
+
+                <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm flex-1 overflow-y-auto">
+                  <BillingModule
+                    appointmentId={savedAppointmentId}
+                    labId={currentLabId}
+                    selectedTests={selectedTests}
+                    availableTestsMeta={labInfo?.available_tests || []}
+                    themeColor={themeColor}
+                    isInline={true}
+                    onPaymentSuccess={() => {}}
+                  />
+                </div>
+
+                <div className="mt-5 pt-4 border-t border-gray-100 flex flex-col sm:flex-row gap-2.5 justify-between items-center bg-transparent">
+                  <p className="text-[11px] text-gray-400 italic">
+                    * Payments write directly down to relational ledger rows.
+                  </p>
+                  <div className="flex gap-2 w-full sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={handleReset}
+                      className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white rounded-xl shadow-sm hover:opacity-95 transition-all transform active:scale-95"
+                      style={{ backgroundColor: themeColor }}
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      Register Next Patient
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
-          /* ── FORM ── */
           <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
             <div className="overflow-y-auto flex-1 px-6 py-5">
-
-              {/* ═══ STEP 1: Patient Info ═══ */}
+              {/* STEP 1 CONTAINER */}
               {activeStep === 1 && (
                 <div className="space-y-4">
-
-                  {/* Name */}
                   <div>
-                    <label className={labelClass}>
-                      <User className="inline w-3 h-3 mr-1 -mt-0.5" />Full Name <span className="text-red-400">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Rahul Sharma"
-                      {...field('name')}
-                      style={{ ['--tw-ring-color' as any]: themeColor }}
-                    />
-                    {errors.name && touchedFields.has('name') && (
-                      <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" />{errors.name}
-                      </p>
-                    )}
+                    <label className={labelClass}>Patient Name *</label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                      <input type="text" placeholder="e.g. Rahul Sharma" {...field('name')} className={`${errors.name && touchedFields.has('name') ? fieldClassError : fieldClass} pl-9`} />
+                    </div>
+                    {errors.name && touchedFields.has('name') && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
                   </div>
 
-                  {/* Mobile + WhatsApp */}
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className={labelClass}>
-                        <Phone className="inline w-3 h-3 mr-1 -mt-0.5" />Mobile <span className="text-red-400">*</span>
-                      </label>
-                      <input type="tel" placeholder="10-digit number" {...field('mobile')} />
-                      {errors.mobile && touchedFields.has('mobile') && (
-                        <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3" />{errors.mobile}
-                        </p>
-                      )}
+                      <label className={labelClass}>Mobile Number *</label>
+                      <div className="relative">
+                        <Phone className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                        <input type="tel" placeholder="10-digit number" {...field('mobile')} className={`${errors.mobile && touchedFields.has('mobile') ? fieldClassError : fieldClass} pl-9`} />
+                      </div>
+                      {errors.mobile && touchedFields.has('mobile') && <p className="text-xs text-red-500 mt-1">{errors.mobile}</p>}
                     </div>
+
                     <div>
-                      <label className={labelClass}>
-                        <MessageCircle className="inline w-3 h-3 mr-1 -mt-0.5" />WhatsApp
-                      </label>
-                      <input
-                        type="tel"
-                        placeholder={whatsappSameAsMobile ? 'Auto-filled' : 'Optional'}
-                        value={whatsappSameAsMobile ? formData.mobile : formData.whatsapp}
-                        disabled={isSubmitting || whatsappSameAsMobile}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, whatsapp: e.target.value }))}
-                        className={fieldClass}
-                      />
-                      <label className="flex items-center gap-1.5 mt-1.5 cursor-pointer w-fit">
-                        <input
-                          type="checkbox"
-                          checked={whatsappSameAsMobile}
-                          onChange={(e) => setWhatsappSameAsMobile(e.target.checked)}
-                          className="rounded border-gray-300 w-3.5 h-3.5"
-                        />
-                        <span className="text-[11px] text-gray-500">Same as mobile</span>
+                      <label className={labelClass}>WhatsApp Number</label>
+                      <div className="relative">
+                        <MessageCircle className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                        <input type="tel" placeholder={whatsappSameAsMobile ? "Auto-filled" : "Optional"} value={whatsappSameAsMobile ? formData.mobile : formData.whatsapp} disabled={isSubmitting || whatsappSameAsMobile} onChange={(e) => setFormData(prev => ({ ...prev, whatsapp: e.target.value }))} className={`${fieldClass} pl-9`} />
+                      </div>
+                      <label className="flex items-center gap-2 mt-2 cursor-pointer text-xs text-gray-500 selection:bg-transparent">
+                        <input type="checkbox" checked={whatsappSameAsMobile} onChange={(e) => setWhatsappSameAsMobile(e.target.checked)} className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5" />
+                        <span>Same as mobile number</span>
                       </label>
                     </div>
                   </div>
 
-                  {/* Email */}
                   <div>
-                    <label className={labelClass}>
-                      <Mail className="inline w-3 h-3 mr-1 -mt-0.5" />Email Address
-                    </label>
-                    <input type="email" placeholder="patient@example.com" {...field('email')} />
+                    <label className={labelClass}>Email Address</label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                      <input type="email" placeholder="patient@example.com" {...field('email')} className={`${fieldClass} pl-9`} />
+                    </div>
                   </div>
 
-                  {/* Age + Gender */}
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className={labelClass}>Age (years) <span className="text-red-400">*</span></label>
-                      <input type="number" min={0} max={120} placeholder="e.g. 34" {...field('age')} />
-                      {errors.age && touchedFields.has('age') && (
-                        <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3" />{errors.age}
-                        </p>
-                      )}
+                      <label className={labelClass}>Age *</label>
+                      <input type="number" placeholder="Years" {...field('age')} />
+                      {errors.age && touchedFields.has('age') && <p className="text-xs text-red-500 mt-1">{errors.age}</p>}
                     </div>
+
                     <div>
-                      <label className={labelClass}>Gender <span className="text-red-400">*</span></label>
+                      <label className={labelClass}>Gender *</label>
                       <select {...field('gender')} style={{ appearance: 'auto' }}>
-                        <option value="">— Select —</option>
+                        <option value="">Select Gender</option>
                         <option value="Male">Male</option>
                         <option value="Female">Female</option>
                         <option value="Other">Other</option>
                       </select>
-                      {errors.gender && touchedFields.has('gender') && (
-                        <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3" />{errors.gender}
-                        </p>
-                      )}
+                      {errors.gender && touchedFields.has('gender') && <p className="text-xs text-red-500 mt-1">{errors.gender}</p>}
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* ═══ STEP 2: Tests & Schedule ═══ */}
+              {/* STEP 2 CONTAINER */}
               {activeStep === 2 && (
-                <div className="space-y-5">
-
-                  {/* Tests */}
+                <div className="space-y-4">
                   <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className={labelClass}>
-                        <Beaker className="inline w-3 h-3 mr-1 -mt-0.5" />
-                        Available Diagnostics <span className="text-red-400">*</span>
-                      </label>
+                    <div className="flex justify-between items-center mb-1.5">
+                      <label className={labelClass}>Select Tests *</label>
                       {selectedTests.length > 0 && (
-                        <span
-                          className="text-[11px] font-semibold px-2 py-0.5 rounded-full text-white"
-                          style={{ backgroundColor: themeColor }}
-                        >
-                          {selectedTests.length} selected
+                        <span style={{ backgroundColor: themeColor }} className="text-[10px] text-white font-bold px-2 py-0.5 rounded-full">
+                          {selectedTests.length} Selected
                         </span>
                       )}
                     </div>
-
-                    {/* Search */}
                     <div className="relative mb-2">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-                      <input
-                        type="text"
-                        placeholder="Search tests…"
-                        value={testSearch}
-                        onChange={(e) => setTestSearch(e.target.value)}
-                        className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 bg-white"
-                        style={{ ['--tw-ring-color' as any]: themeColor + '66' }}
-                      />
+                      <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                      <input type="text" placeholder="Search operational tests catalogue matrix…" value={testSearch} onChange={(e) => setTestSearch(e.target.value)} className={`${fieldClass} pl-9`} />
                     </div>
 
-                    <div className="border border-gray-200 rounded-xl overflow-hidden">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-gray-100 max-h-52 overflow-y-auto">
-                        {filteredTests.length > 0 ? (
-                          filteredTests.map((testName, idx) => {
-                            const isChecked = selectedTests.includes(testName);
-                            return (
-                              <label
-                                key={idx}
-                                className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer text-sm transition-colors
-                                  ${isChecked ? 'bg-indigo-50' : 'bg-white hover:bg-gray-50'}`}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={isChecked}
-                                  disabled={isSubmitting}
-                                  onChange={() => toggleTest(testName)}
-                                  className="w-4 h-4 rounded border-gray-300 flex-shrink-0"
-                                  style={{ accentColor: themeColor }}
-                                />
-                                <span className={`leading-tight ${isChecked ? 'text-gray-900 font-medium' : 'text-gray-700'}`}>
-                                  {testName}
-                                </span>
-                              </label>
-                            );
-                          })
-                        ) : (
-                          <p className="col-span-2 text-center text-sm text-gray-400 italic py-6">
-                            {testSearch ? `No tests matching "${testSearch}"` : 'No tests configured for this lab'}
-                          </p>
+                    <div className="border border-gray-200 rounded-xl overflow-hidden max-h-48 bg-gray-50 overflow-y-auto">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-gray-200/60">
+                        {filteredTests.map((testName, idx) => {
+                          const isChecked = selectedTests.includes(testName);
+                          return (
+                            <label key={idx} className="flex items-center gap-3 px-4 py-3 bg-white hover:bg-gray-50/80 transition-colors cursor-pointer text-sm font-medium text-gray-700">
+                              <input type="checkbox" checked={isChecked} onChange={() => toggleTest(testName)} className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4" />
+                              <span>{testName}</span>
+                            </label>
+                          );
+                        })}
+                        {filteredTests.length === 0 && (
+                          <div className="p-8 text-center text-sm text-gray-400 bg-white col-span-2">No matching tests found.</div>
                         )}
                       </div>
                     </div>
-
-                    {/* Selected tags */}
-                    {selectedTests.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mt-2">
-                        {selectedTests.map((t) => (
-                          <span
-                            key={t}
-                            className="flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-full text-white"
-                            style={{ backgroundColor: themeColor }}
-                          >
-                            {t}
-                            <button type="button" onClick={() => toggleTest(t)} className="ml-0.5 hover:opacity-70">
-                              <X className="w-2.5 h-2.5" />
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    {errors.tests && (
-                      <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" />{errors.tests}
-                      </p>
-                    )}
+                    {errors.tests && <p className="text-xs text-red-500 mt-1">{errors.tests}</p>}
                   </div>
 
-                  {/* Date + Booking Type */}
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className={labelClass}>
-                        <Calendar className="inline w-3 h-3 mr-1 -mt-0.5" />Appointment Date <span className="text-red-400">*</span>
-                      </label>
-                      <input
-                        type="date"
-                        value={formData.appointment_date}
-                        disabled={isSubmitting}
-                        min={new Date().toISOString().split('T')[0]}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, appointment_date: e.target.value }))}
-                        onBlur={() => handleBlur('appointment_date')}
-                        className={errors.appointment_date ? fieldClassError : fieldClass}
-                      />
-                      {errors.appointment_date && (
-                        <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3" />{errors.appointment_date}
-                        </p>
-                      )}
+                      <label className={labelClass}>Appointment Date *</label>
+                      <div className="relative">
+                        <Calendar className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                        <input type="date" min={new Date().toISOString().split('T')[0]} value={formData.appointment_date} onChange={(e) => setFormData(prev => ({ ...prev, appointment_date: e.target.value }))} className={`${fieldClass} pl-9`} />
+                      </div>
                     </div>
+
                     <div>
-                      <label className={labelClass}>
-                        <Building2 className="inline w-3 h-3 mr-1 -mt-0.5" />Booking Type
-                      </label>
-                      <div className="flex rounded-lg border border-gray-200 overflow-hidden h-[42px]">
-                        {(['walk-in', 'home'] as const).map((type) => (
-                          <button
-                            key={type}
-                            type="button"
-                            disabled={isSubmitting}
-                            onClick={() => setFormData((prev) => ({ ...prev, booking_type: type }))}
-                            className={`flex-1 text-xs font-semibold transition-all
-                              ${formData.booking_type === type
-                                ? 'text-white'
-                                : 'bg-white text-gray-500 hover:bg-gray-50'}`}
-                            style={formData.booking_type === type ? { backgroundColor: themeColor } : {}}
-                          >
-                            {type === 'walk-in' ? (
-                              <><Building2 className="inline w-3 h-3 mr-1" />Walk-in</>
-                            ) : (
-                              <><Home className="inline w-3 h-3 mr-1" />Home</>
-                            )}
+                      <label className={labelClass}>Booking Modality Type</label>
+                      <div className="flex rounded-xl border border-gray-200 overflow-hidden bg-gray-100 p-1 gap-1 h-[44px]">
+                        {(['walk-in', 'home'] as const).map((mode) => (
+                          <button key={mode} type="button" onClick={() => setFormData(prev => ({ ...prev, booking_type: mode }))} className={`flex-1 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${formData.booking_type === mode ? 'text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 bg-transparent'}`} style={formData.booking_type === mode ? { backgroundColor: themeColor } : {}}>
+                            {mode}
                           </button>
                         ))}
                       </div>
                     </div>
                   </div>
 
-                  {/* Time slots */}
                   <div>
-                    <label className={labelClass}>
-                      <Clock className="inline w-3 h-3 mr-1 -mt-0.5" />Time Slot <span className="text-red-400">*</span>
-                    </label>
-                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5 max-h-36 overflow-y-auto p-1">
-                      {TIME_SLOTS.map((slot) => (
-                        <button
-                          key={slot}
-                          type="button"
-                          disabled={isSubmitting}
-                          onClick={() => {
-                            setFormData((prev) => ({ ...prev, time: slot }));
-                            if (errors.time) setErrors((prev) => ({ ...prev, time: '' }));
-                          }}
-                          className={`px-1.5 py-1.5 rounded-lg text-[11px] font-medium border transition-all
-                            ${formData.time === slot
-                              ? 'text-white border-transparent shadow-sm'
-                              : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'}`}
-                          style={formData.time === slot ? { backgroundColor: themeColor, borderColor: themeColor } : {}}
-                        >
-                          {formatSlot(slot)}
-                        </button>
-                      ))}
-                    </div>
-                    {errors.time && (
-                      <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" />{errors.time}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Status + Prescription */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className={labelClass}>
-                        <ClipboardCheck className="inline w-3 h-3 mr-1 -mt-0.5" />Status
-                      </label>
-                      <select
-                        value={formData.status}
-                        disabled={isSubmitting}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, status: e.target.value as any }))}
-                        className={fieldClass}
-                        style={{ appearance: 'auto' }}
-                      >
-                        <option value="Pending">Pending</option>
-                        <option value="Confirmed">Confirmed</option>
-                        <option value="Completed">Completed</option>
-                        <option value="Cancelled">Cancelled</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className={labelClass}>
-                        <Upload className="inline w-3 h-3 mr-1 -mt-0.5" />Prescription
-                      </label>
-                      <label className={`flex items-center gap-2 px-3 py-2.5 border-2 border-dashed rounded-lg cursor-pointer transition-colors text-sm
-                        ${isSubmitting ? 'opacity-50 pointer-events-none bg-gray-50' : 'hover:bg-gray-50 border-gray-200 text-gray-500'}`}>
-                        <Upload className="w-3.5 h-3.5 flex-shrink-0" />
-                        <span className="truncate text-xs">
-                          {prescriptionFileName || 'Upload image or PDF'}
-                        </span>
-                        <input
-                          type="file"
-                          accept="image/*,.pdf"
-                          disabled={isSubmitting}
-                          onChange={handleFileUpload}
-                          className="hidden"
-                        />
-                      </label>
-                      {/* Preview: image or PDF badge */}
-                      {prescriptionFile && (
-                        <div className="flex items-center gap-2 mt-1.5">
-                          {prescriptionPreview ? (
-                            <img src={prescriptionPreview} alt="Preview" className="w-8 h-8 object-cover rounded border" />
-                          ) : (
-                            <div className="w-8 h-8 bg-red-50 border border-red-200 rounded flex items-center justify-center">
-                              <FileText className="w-4 h-4 text-red-500" />
-                            </div>
-                          )}
-                          <span className="text-[11px] text-gray-500 truncate flex-1">{prescriptionFileName}</span>
-                          {!isSubmitting && (
-                            <button
-                              type="button"
-                              onClick={() => { setPrescriptionFile(null); setPrescriptionPreview(null); setPrescriptionFileName(''); }}
-                              className="text-gray-400 hover:text-red-500 transition-colors"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      )}
-                      {errors.prescription && (
-                        <p className="text-xs text-red-500 mt-1">{errors.prescription}</p>
-                      )}
+                    <label className={labelClass}>Time Slot *</label>
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 max-h-36 overflow-y-auto border border-gray-100 rounded-xl p-3 bg-gray-50/50">
+                      {TIME_SLOTS.map((slot) => {
+                        const isSelected = formData.time === slot;
+                        return (
+                          <button key={slot} type="button" onClick={() => setFormData(prev => ({ ...prev, time: slot }))} className={`py-2 text-xs font-semibold rounded-lg border transition-all ${isSelected ? 'text-white border-transparent' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`} style={isSelected ? { backgroundColor: themeColor } : {}}>
+                            {formatSlot(slot)}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* ═══ STEP 3: Logistics ═══ */}
+              {/* STEP 3 CONTAINER */}
               {activeStep === 3 && (
                 <div className="space-y-4">
                   {formData.booking_type === 'home' && (
-                    <>
-                      <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                        <Home className="w-3.5 h-3.5 flex-shrink-0" />
-                        Home collection — address details required
-                      </div>
-
+                    <div className="space-y-4 p-4 border border-dashed border-gray-200 rounded-xl bg-gray-50/40">
                       <div>
-                        <label className={labelClass}>
-                          <MapPin className="inline w-3 h-3 mr-1 -mt-0.5" />Address Line <span className="text-red-400">*</span>
-                        </label>
-                        <textarea
-                          rows={2}
-                          value={formData.address_line}
-                          disabled={isSubmitting}
-                          onChange={(e) => setFormData((prev) => ({ ...prev, address_line: e.target.value }))}
-                          className={errors.address ? fieldClassError : fieldClass}
-                          placeholder="House no., street, area…"
-                        />
-                        {errors.address && (
-                          <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                            <AlertCircle className="w-3 h-3" />{errors.address}
-                          </p>
-                        )}
+                        <label className={labelClass}>Collection Address Line *</label>
+                        <textarea rows={2} placeholder="Complete physical logistics address details…" value={formData.address_line} onChange={(e) => setFormData(prev => ({ ...prev, address_line: e.target.value }))} className={fieldClass} />
+                        {errors.address_line && <p className="text-xs text-red-500 mt-1">{errors.address_line}</p>}
                       </div>
-
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label className={labelClass}>Pincode</label>
-                          <input
-                            type="text"
-                            value={formData.pincode}
-                            disabled={isSubmitting}
-                            maxLength={6}
-                            onChange={(e) => setFormData((prev) => ({ ...prev, pincode: e.target.value }))}
-                            className={fieldClass}
-                            placeholder="e.g. 781001"
-                          />
+                          <input type="text" placeholder="6-digit PIN" value={formData.pincode} onChange={(e) => setFormData(prev => ({ ...prev, pincode: e.target.value }))} className={fieldClass} />
                         </div>
                         <div>
                           <label className={labelClass}>Landmark</label>
-                          <input
-                            type="text"
-                            value={formData.landmark}
-                            disabled={isSubmitting}
-                            onChange={(e) => setFormData((prev) => ({ ...prev, landmark: e.target.value }))}
-                            className={fieldClass}
-                            placeholder="Nearby reference"
-                          />
+                          <input type="text" placeholder="Nearby reference item" value={formData.landmark} onChange={(e) => setFormData(prev => ({ ...prev, landmark: e.target.value }))} className={fieldClass} />
                         </div>
                       </div>
-                    </>
-                  )}
-
-                  {formData.booking_type === 'walk-in' && (
-                    <div className="flex items-center gap-2 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
-                      <Building2 className="w-3.5 h-3.5 flex-shrink-0" />
-                      Walk-in booking — no address required
                     </div>
                   )}
 
                   <div>
-                    <label className={labelClass}>
-                      <StickyNote className="inline w-3 h-3 mr-1 -mt-0.5" />Remarks & Internal Notes
-                    </label>
-                    <textarea
-                      rows={3}
-                      value={formData.remarks}
-                      disabled={isSubmitting}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, remarks: e.target.value }))}
-                      className={fieldClass}
-                      placeholder="e.g. Fasting required, patient is diabetic…"
-                    />
+                    <label className={labelClass}>Prescription Attachment File</label>
+                    <div className="border-2 border-dashed border-gray-200 rounded-xl p-4 text-center bg-gray-50 hover:bg-gray-100/50 transition-colors relative">
+                      <input type="file" accept="image/*,application/pdf" onChange={handleFileUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" disabled={isSubmitting} />
+                      <div className="space-y-1.5">
+                        <Upload className="w-6 h-6 text-gray-400 mx-auto" />
+                        <p className="text-xs text-gray-500 font-medium">Click to select files or drag-drop</p>
+                        <p className="text-[10px] text-gray-400">PDF, PNG, JPG format (Max size: 5MB)</p>
+                      </div>
+                    </div>
+                    {prescriptionFileName && (
+                      <div className="mt-2.5 flex items-center justify-between p-2 text-xs bg-gray-100 text-gray-700 rounded-lg">
+                        <span className="truncate font-medium max-w-[80%]">{prescriptionFileName}</span>
+                        <button type="button" onClick={() => { setPrescriptionFile(null); setPrescriptionPreview(null); setPrescriptionFileName(''); }} className="text-gray-400 hover:text-red-500"><X className="w-4 h-4" /></button>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Summary card */}
-                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-2.5 text-sm">
-                    <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 mb-3">Booking Summary</p>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Patient</span>
-                      <span className="font-semibold text-gray-800">{formData.name || '—'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Mobile</span>
-                      <span className="font-medium text-gray-700">{formData.mobile || '—'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Tests</span>
-                      <span className="font-medium text-gray-700 text-right max-w-[55%]">
-                        {selectedTests.length > 0 ? selectedTests.join(', ') : '—'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Date & Time</span>
-                      <span className="font-medium text-gray-700">
-                        {formData.appointment_date
-                          ? `${formData.appointment_date}${formData.time ? ' · ' + formatSlot(formData.time) : ''}`
-                          : '—'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Type</span>
-                      <span className="font-medium text-gray-700 capitalize">{formData.booking_type}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Status</span>
-                      <span className={`font-semibold text-xs px-2 py-0.5 rounded-full
-                        ${formData.status === 'Confirmed' ? 'bg-green-100 text-green-700'
-                          : formData.status === 'Pending' ? 'bg-yellow-100 text-yellow-700'
-                          : formData.status === 'Cancelled' ? 'bg-red-100 text-red-700'
-                          : 'bg-blue-100 text-blue-700'}`}>
-                        {formData.status}
-                      </span>
-                    </div>
+                  <div>
+                    <label className={labelClass}>Internal Office Remarks</label>
+                    <textarea rows={2} placeholder="Any specific execution observations or patient parameters requests…" value={formData.remarks} onChange={(e) => setFormData(prev => ({ ...prev, remarks: e.target.value }))} className={fieldClass} />
                   </div>
                 </div>
               )}
             </div>
 
-            {/* ── FOOTER NAV ── */}
+            {/* Footer triggers */}
             <div className="flex justify-between items-center px-6 py-4 border-t border-gray-100 bg-white flex-shrink-0">
-              <button
-                type="button"
-                disabled={activeStep === 1 || isSubmitting}
-                onClick={() => setActiveStep((p) => p - 1)}
-                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-30"
-              >
+              <button type="button" disabled={activeStep === 1 || isSubmitting} onClick={() => setActiveStep((p) => p - 1)} className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-30">
                 <ChevronLeft className="w-4 h-4" />Back
               </button>
 
               {activeStep < 3 ? (
-                <button
-                  type="button"
-                  onClick={handleNext}
-                  className="flex items-center gap-1.5 px-5 py-2 text-sm font-semibold text-white rounded-lg transition-opacity hover:opacity-90"
-                  style={{ backgroundColor: themeColor }}
-                >
+                <button type="button" onClick={handleNext} className="flex items-center gap-1.5 px-5 py-2 text-sm font-semibold text-white rounded-lg transition-opacity hover:opacity-90" style={{ backgroundColor: themeColor }}>
                   Next <ChevronRight className="w-4 h-4" />
                 </button>
               ) : (
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="flex items-center gap-2 px-6 py-2 text-sm font-bold text-white rounded-lg shadow transition-opacity hover:opacity-90 disabled:opacity-60"
-                  style={{ backgroundColor: themeColor }}
-                >
-                  {isSubmitting ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" />Saving…</>
-                  ) : (
-                    <><CheckCircle className="w-4 h-4" />Register Appointment</>
-                  )}
+                <button type="submit" disabled={isSubmitting} className="flex items-center gap-2 px-6 py-2 text-sm font-bold text-white rounded-lg shadow transition-opacity hover:opacity-90 disabled:opacity-60" style={{ backgroundColor: themeColor }}>
+                  {isSubmitting ? <><Loader2 className="w-4 h-4 animate-spin" />Saving Record…</> : <><CheckCircle className="w-4 h-4" />Register Appointment</>}
                 </button>
               )}
             </div>
