@@ -580,10 +580,10 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                       <label className={labelClass}>WhatsApp Number</label>
                       <div className="relative">
                         <MessageCircle className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                        <input type="tel" placeholder={whatsappSameAsMobile ? "Auto-filled" : "Optional"} value={whatsappSameAsMobile ? formData.mobile : formData.whatsapp} disabled={isSubmitting || whatsappSameAsMobile} onChange={(e) => setFormData(prev => ({ ...prev, whatsapp: e.target.value }))} className={`${fieldClass} pl-9`} />
+                        <input type="tel" placeholder={whatsappSameAsMobile ? "Auto-filled" : "Optional"} value={whatsappSameAsMobile ? formData.mobile : formData.whatsapp} disabled={isSubmitting || submitSuccess} onChange={(e) => setFormData(prev => ({ ...prev, whatsapp: e.target.value }))} className={`${fieldClass} pl-9`} />
                       </div>
                       <label className="flex items-center gap-2 mt-2 cursor-pointer text-xs text-gray-500 selection:bg-transparent">
-                        <input type="checkbox" checked={whatsappSameAsMobile} onChange={(e) => setWhatsappSameAsMobile(e.target.checked)} className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5" />
+                        <input type="checkbox" checked={whatsappSameAsMobile} onChange={(e) => setWhatsappSameAsMobile(e.target.checked)} className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4" />
                         <span>Same as mobile number</span>
                       </label>
                     </div>
@@ -667,7 +667,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                       <label className={labelClass}>Booking Modality Type</label>
                       <div className="flex rounded-xl border border-gray-200 overflow-hidden bg-gray-100 p-1 gap-1 h-[44px]">
                         {(['walk-in', 'home'] as const).map((mode) => (
-                          <button key={mode} type="button" onClick={() => setFormData(prev => ({ ...prev, booking_type: mode }))} className={`flex-1 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${formData.booking_type === mode ? 'text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 bg-transparent'}`} style={formData.booking_type === mode ? { backgroundColor: themeColor } : {}}>
+                          <button key={mode} type="button" onClick={() => setFormData(prev => ({ ...prev, booking_type: mode }))} className={`flex-1 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${formData.booking_type === mode ? 'bg-white text-gray-900 shadow' : 'text-gray-500'}`}>
                             {mode}
                           </button>
                         ))}
@@ -681,7 +681,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                       {TIME_SLOTS.map((slot) => {
                         const isSelected = formData.time === slot;
                         return (
-                          <button key={slot} type="button" onClick={() => setFormData(prev => ({ ...prev, time: slot }))} className={`py-2 text-xs font-semibold rounded-lg border transition-all ${isSelected ? 'text-white border-transparent' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`} style={isSelected ? { backgroundColor: themeColor } : {}}>
+                          <button key={slot} type="button" onClick={() => setFormData(prev => ({ ...prev, time: slot }))} className={`py-2 text-xs font-semibold rounded-lg border transition-all ${isSelected ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-gray-200 text-gray-600'}`}>
                             {formatSlot(slot)}
                           </button>
                         );
@@ -727,7 +727,9 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                     {prescriptionFileName && (
                       <div className="mt-2.5 flex items-center justify-between p-2 text-xs bg-gray-100 text-gray-700 rounded-lg">
                         <span className="truncate font-medium max-w-[80%]">{prescriptionFileName}</span>
-                        <button type="button" onClick={() => { setPrescriptionFile(null); setPrescriptionPreview(null); setPrescriptionFileName(''); }} className="text-gray-400 hover:text-red-500"><X className="w-4 h-4" /></button>
+                        <button type="button" onClick={() => { setPrescriptionFile(null); setPrescriptionPreview(null); setPrescriptionFileName(''); }} className="text-gray-400 hover:text-red-500 transition-colors">
+                          <X className="w-4 h-4" />
+                        </button>
                       </div>
                     )}
                   </div>
@@ -742,7 +744,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
 
             {/* Footer triggers */}
             <div className="flex justify-between items-center px-6 py-4 border-t border-gray-100 bg-white flex-shrink-0">
-              <button type="button" disabled={activeStep === 1 || isSubmitting} onClick={() => setActiveStep((p) => p - 1)} className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-30">
+              <button type="button" disabled={activeStep === 1 || isSubmitting} onClick={() => setActiveStep((p) => p - 1)} className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 disabled:opacity-30">
                 <ChevronLeft className="w-4 h-4" />Back
               </button>
 
