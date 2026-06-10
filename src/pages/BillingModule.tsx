@@ -56,7 +56,6 @@ export default function BillingModule({
 }: BillingModuleProps) {
   const [loading, setLoading] = useState(true);
   const [payments, setPayments] = useState<any[]>([]);
-  const [lab, setLab] = useState<any>(null);
   const [method, setMethod] = useState<PaymentMethod>("cash");
   const [amount, setAmount] = useState("");
   const [transactionRef, setTransactionRef] = useState("");
@@ -64,11 +63,11 @@ export default function BillingModule({
   const [verified, setVerified] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [upiQrData, setUpiQrData] = useState<{ upiString: string; labName: string } | null>(null);
+  const [loadingUpi, setLoadingUpi] = useState(false);
 
   const totalBill = (availableTestsMeta || [])
-    .filter((t: any) =>
-      selectedTests.includes(t?.name || t?.test_name || "")
-    )
+    .filter((t: any) => selectedTests.includes(t?.name || t?.test_name || ""))
     .reduce((s: number, t: any) => s + Number(t?.price || 0), 0);
 
   const collected = useMemo(
@@ -89,63 +88,105 @@ export default function BillingModule({
 
   async function load() {
     setLoading(true);
-    const [{ data: pay }, { data: labData }] = await Promise.all([
-      supabase
+    try {
+      const { data: pay, error: payError } = await supabase
         .from("payments")
         .select("*")
         .eq("appointment_id", appointmentId)
         .eq("lab_id", labId)
-        .order("created_at", { ascending: false }),
-      supabase.from("labs").select("lab_name,upi_id").eq("id", labId).single(),
-    ]);
-    setPayments(pay || []);
-    setLab(labData);
+        .order("created_at", { ascending: false });
+
+      if (payError) throw payError;
+      setPayments(pay || []);
+    } catch (err: any) {
+      setError("Failed to load payment history: " + err.message);
+    }
     setLoading(false);
   }
 
   const amountNumber = Number(amount || 0);
 
-  const upiString =
-    method === "upi" && lab?.upi_id
-      ? `upi://pay?pa=${lab.upi_id}&pn=${encodeURIComponent(lab.lab_name)}&am=${amountNumber}&cu=INR`
-      : "";
+  // ✅ NEW: Fetch UPI QR from Edge Function (never exposes raw upi_id)
+  async function generateUpiQr() {
+    if (method !== "upi" || amountNumber <= 0) return;
 
+    setLoadingUpi(true);
+    setError("");
+
+    try {
+      const response = await supabase.functions.invoke("generate-upi-string", {
+        body: {
+          appointmentId,
+          labId,
+          amount: amountNumber,
+        },
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+
+      setUpiQrData(response.data);
+    } catch (err: any) {
+      setError("Could not generate UPI QR: " + err.message);
+      setUpiQrData(null);
+    }
+
+    setLoadingUpi(false);
+  }
+
+  // Regenerate QR when amount or method changes
+  useEffect(() => {
+    if (method === "upi" && amountNumber > 0) {
+      generateUpiQr();
+    } else {
+      setUpiQrData(null);
+    }
+  }, [method, amountNumber]);
+
+  // ✅ NEW: Verify payment server-side before recording
   async function collectPayment() {
     setError("");
+
     if (amountNumber <= 0) return setError("Enter a valid amount.");
     if (amountNumber > balance) return setError("Amount exceeds the pending balance.");
     if (method === "upi" && !verified)
       return setError("Confirm that the UPI payment was received before recording.");
 
     setSaving(true);
-    const { data, error } = await supabase
-      .from("payments")
-      .insert([
-        {
-          appointment_id: appointmentId,
-          lab_id: labId,
-          amount_paid: amountNumber,
-          payment_method: method,
-          transaction_ref: transactionRef || null,
-          notes: notes || null,
-          payment_status: "paid",
+
+    try {
+      // Call Edge Function to verify and insert payment
+      const response = await supabase.functions.invoke("verify-payment", {
+        body: {
+          appointmentId,
+          labId,
+          amount: amountNumber,
+          paymentMethod: method,
+          transactionRef: transactionRef || null,
         },
-      ])
-      .select()
-      .single();
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+
+      // Success
+      setAmount("");
+      setTransactionRef("");
+      setNotes("");
+      setVerified(false);
+      setUpiQrData(null);
+
+      await load();
+      onPaymentSuccess?.(response.data);
+    } catch (err: any) {
+      setError(err.message);
+    }
+
     setSaving(false);
-
-    if (error) return setError(error.message);
-
-    setAmount("");
-    setTransactionRef("");
-    setNotes("");
-    setVerified(false);
-    await load();
-    onPaymentSuccess?.(data);
   }
 
-  // ─── Loading skeleton ─────────────────────────────────────────────────────
   if (loading) {
     return (
       <div style={styles.shell}>
@@ -158,11 +199,8 @@ export default function BillingModule({
     );
   }
 
-  // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div style={styles.shell}>
-
-      {/* Status banner */}
       <div
         style={{
           ...styles.statusBanner,
@@ -170,9 +208,7 @@ export default function BillingModule({
           border: `1px solid ${statusCfg.border}`,
         }}
       >
-        <span
-          style={{ ...styles.statusDot, background: statusCfg.dot }}
-        />
+        <span style={{ ...styles.statusDot, background: statusCfg.dot }} />
         <span style={{ ...styles.statusText, color: statusCfg.text }}>
           {statusCfg.label}
         </span>
@@ -183,7 +219,6 @@ export default function BillingModule({
         )}
       </div>
 
-      {/* Summary cards */}
       <div style={styles.cardGrid}>
         <SummaryCard label="Total Bill" value={fmt(totalBill)} accent="#64748B" />
         <SummaryCard
@@ -200,15 +235,13 @@ export default function BillingModule({
         />
       </div>
 
-      <Divider />
+      <hr style={styles.divider} />
 
-      {/* Collect payment form */}
       {balance > 0 && (
         <section style={styles.section}>
-          <SectionHeading>Collect Payment</SectionHeading>
+          <h3 style={styles.sectionHeading}>Collect Payment</h3>
 
-          {/* Amount */}
-          <FieldLabel>Amount</FieldLabel>
+          <label style={styles.fieldLabel}>Amount</label>
           <div style={styles.amountRow}>
             <span style={styles.currencyPrefix}>₹</span>
             <input
@@ -221,15 +254,18 @@ export default function BillingModule({
               style={styles.amountInput}
             />
             <button
-              style={{ ...styles.quickFill, borderColor: themeColor, color: themeColor }}
+              style={{
+                ...styles.quickFill,
+                borderColor: themeColor,
+                color: themeColor,
+              }}
               onClick={() => setAmount(String(balance))}
             >
               Full balance
             </button>
           </div>
 
-          {/* Method selector */}
-          <FieldLabel>Payment method</FieldLabel>
+          <label style={styles.fieldLabel}>Payment method</label>
           <div style={styles.methodRow}>
             {(["cash", "upi", "card_external"] as PaymentMethod[]).map((m) => {
               const active = method === m;
@@ -249,42 +285,54 @@ export default function BillingModule({
                       : {}),
                   }}
                 >
-                  <span style={styles.methodIcon}>{METHOD_LABELS[m].icon}</span>
+                  <span style={styles.methodIcon}>
+                    {METHOD_LABELS[m].icon}
+                  </span>
                   {METHOD_LABELS[m].label}
                 </button>
               );
             })}
           </div>
 
-          {/* UPI QR */}
-          {method === "upi" && amountNumber > 0 && lab?.upi_id && (
+          {/* ✅ NEW: UPI QR from Edge Function */}
+          {method === "upi" && amountNumber > 0 && (
             <div style={styles.upiCard}>
-              <div style={styles.upiQrWrap}>
-                <QRCode value={upiString} size={160} />
-              </div>
-              <div style={styles.upiInfo}>
-                <div style={styles.upiAmount}>{fmt(amountNumber)}</div>
-                <div style={styles.upiId}>{lab.upi_id}</div>
-                <div style={styles.upiHint}>
-                  Scan with any UPI app to pay
-                </div>
-              </div>
-              <label style={styles.verifyRow}>
-                <input
-                  type="checkbox"
-                  checked={verified}
-                  onChange={(e) => setVerified(e.target.checked)}
-                  style={styles.checkbox}
-                />
-                <span style={styles.verifyLabel}>
-                  Payment received and verified
-                </span>
-              </label>
+              {loadingUpi ? (
+                <div style={styles.upiLoading}>Generating QR...</div>
+              ) : upiQrData ? (
+                <>
+                  <div style={styles.upiQrWrap}>
+                    <QRCode value={upiQrData.upiString} size={160} />
+                  </div>
+                  <div style={styles.upiInfo}>
+                    <div style={styles.upiAmount}>{fmt(amountNumber)}</div>
+                    <div style={styles.upiLabName}>{upiQrData.labName}</div>
+                    <div style={styles.upiHint}>Scan with any UPI app to pay</div>
+                  </div>
+                  <label style={styles.verifyRow}>
+                    <input
+                      type="checkbox"
+                      checked={verified}
+                      onChange={(e) => setVerified(e.target.checked)}
+                      style={styles.checkbox}
+                    />
+                    <span style={styles.verifyLabel}>
+                      Payment received and verified
+                    </span>
+                  </label>
+                </>
+              ) : (
+                <div style={styles.upiError}>Could not load UPI details</div>
+              )}
             </div>
           )}
 
-          {/* Ref & notes */}
-          <FieldLabel>Transaction reference <Muted>(optional)</Muted></FieldLabel>
+          <label style={styles.fieldLabel}>
+            Transaction reference{" "}
+            <span style={{ color: "#94A3B8", fontWeight: 400 }}>
+              (optional)
+            </span>
+          </label>
           <input
             value={transactionRef}
             onChange={(e) => setTransactionRef(e.target.value)}
@@ -292,7 +340,12 @@ export default function BillingModule({
             style={styles.input}
           />
 
-          <FieldLabel>Notes <Muted>(optional)</Muted></FieldLabel>
+          <label style={styles.fieldLabel}>
+            Notes{" "}
+            <span style={{ color: "#94A3B8", fontWeight: 400 }}>
+              (optional)
+            </span>
+          </label>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -301,7 +354,12 @@ export default function BillingModule({
             style={{ ...styles.input, resize: "vertical" }}
           />
 
-          {error && <ErrorBox>{error}</ErrorBox>}
+          {error && (
+            <div style={styles.errorBox}>
+              <span style={styles.errorIcon}>⚠</span>
+              {error}
+            </div>
+          )}
 
           <button
             onClick={collectPayment}
@@ -313,8 +371,19 @@ export default function BillingModule({
             }}
           >
             {saving ? (
-              <span style={styles.savingInner}>
-                <Spinner /> Saving…
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <span
+                  style={{
+                    display: "inline-block",
+                    width: 14,
+                    height: 14,
+                    border: "2px solid rgba(255,255,255,0.4)",
+                    borderTopColor: "#fff",
+                    borderRadius: "50%",
+                    animation: "spin 0.7s linear infinite",
+                  }}
+                />
+                Saving…
               </span>
             ) : (
               "Record Payment"
@@ -323,34 +392,24 @@ export default function BillingModule({
         </section>
       )}
 
-      {balance > 0 && <Divider />}
+      {balance > 0 && <hr style={styles.divider} />}
 
-      {/* Payment history */}
       <section style={styles.section}>
-        <SectionHeading>Payment History</SectionHeading>
+        <h3 style={styles.sectionHeading}>Payment History</h3>
 
         {payments.length === 0 ? (
-          <EmptyState>No payments recorded yet.</EmptyState>
+          <p style={styles.emptyState}>No payments recorded yet.</p>
         ) : (
           <div style={styles.historyList}>
             {payments.map((p, idx) => (
               <div key={p.id} style={styles.historyItem}>
                 <div style={styles.historyTimeline}>
-                  <div
-                    style={{
-                      ...styles.historyDot,
-                      background: themeColor,
-                    }}
-                  />
-                  {idx < payments.length - 1 && (
-                    <div style={styles.historyLine} />
-                  )}
+                  <div style={{ ...styles.historyDot, background: themeColor }} />
+                  {idx < payments.length - 1 && <div style={styles.historyLine} />}
                 </div>
                 <div style={styles.historyContent}>
                   <div style={styles.historyTop}>
-                    <span style={styles.historyAmount}>
-                      {fmt(p.amount_paid)}
-                    </span>
+                    <span style={styles.historyAmount}>{fmt(p.amount_paid)}</span>
                     <span style={styles.historyMethod}>
                       {METHOD_LABELS[p.payment_method as PaymentMethod]?.icon}{" "}
                       {METHOD_LABELS[p.payment_method as PaymentMethod]?.label ||
@@ -382,8 +441,6 @@ export default function BillingModule({
   );
 }
 
-// ─── Sub-components ─────────────────────────────────────────────────────────
-
 function SummaryCard({
   label,
   value,
@@ -398,64 +455,23 @@ function SummaryCard({
   return (
     <div
       style={{
-        ...styles.summaryCard,
+        background: "#fff",
         borderTop: `3px solid ${accent}`,
+        padding: "16px 20px",
         ...(highlight ? { background: "#FAFAFA" } : {}),
       }}
     >
-      <div style={styles.summaryLabel}>{label}</div>
-      <div style={{ ...styles.summaryValue, color: accent }}>{value}</div>
+      <div style={{ fontSize: 11, fontWeight: 500, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 20, fontWeight: 700, fontVariantNumeric: "tabular-nums", letterSpacing: -0.5, color: accent }}>
+        {value}
+      </div>
     </div>
   );
 }
 
-function SectionHeading({ children }: { children: React.ReactNode }) {
-  return <h3 style={styles.sectionHeading}>{children}</h3>;
-}
-
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <label style={styles.fieldLabel}>{children}</label>;
-}
-
-function Muted({ children }: { children: React.ReactNode }) {
-  return <span style={{ color: "#94A3B8", fontWeight: 400 }}>{children}</span>;
-}
-
-function ErrorBox({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={styles.errorBox}>
-      <span style={styles.errorIcon}>⚠</span>
-      {children}
-    </div>
-  );
-}
-
-function EmptyState({ children }: { children: React.ReactNode }) {
-  return <p style={styles.emptyState}>{children}</p>;
-}
-
-function Divider() {
-  return <hr style={styles.divider} />;
-}
-
-function Spinner() {
-  return (
-    <span
-      style={{
-        display: "inline-block",
-        width: 14,
-        height: 14,
-        border: "2px solid rgba(255,255,255,0.4)",
-        borderTopColor: "#fff",
-        borderRadius: "50%",
-        animation: "spin 0.7s linear infinite",
-      }}
-    />
-  );
-}
-
-// ─── Styles ──────────────────────────────────────────────────────────────────
-
+// ─── Styles (keep from previous version)
 const BASE_FONT: React.CSSProperties = {
   fontFamily:
     "Inter, 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
@@ -472,8 +488,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 14,
     color: "#0F172A",
   },
-
-  // ── Status banner
   statusBanner: {
     display: "flex",
     alignItems: "center",
@@ -497,8 +511,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontVariantNumeric: "tabular-nums",
     fontSize: 13,
   },
-
-  // ── Summary cards
   cardGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(3, 1fr)",
@@ -506,33 +518,11 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#E2E8F0",
     margin: 0,
   },
-  summaryCard: {
-    background: "#fff",
-    padding: "16px 20px",
-  },
-  summaryLabel: {
-    fontSize: 11,
-    fontWeight: 500,
-    color: "#94A3B8",
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-    marginBottom: 6,
-  },
-  summaryValue: {
-    fontSize: 20,
-    fontWeight: 700,
-    fontVariantNumeric: "tabular-nums",
-    letterSpacing: -0.5,
-  },
-
-  // ── Divider
   divider: {
     margin: 0,
     border: "none",
     borderTop: "1px solid #F1F5F9",
   },
-
-  // ── Section
   section: {
     padding: "20px 24px",
     display: "flex",
@@ -548,8 +538,6 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: 0.8,
     margin: "0 0 4px",
   },
-
-  // ── Form fields
   fieldLabel: {
     fontSize: 13,
     fontWeight: 500,
@@ -568,10 +556,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#F8FAFC",
     outline: "none",
     boxSizing: "border-box",
-    transition: "border-color 0.15s",
   },
-
-  // ── Amount row
   amountRow: {
     display: "flex",
     alignItems: "center",
@@ -609,8 +594,6 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     whiteSpace: "nowrap" as const,
   },
-
-  // ── Method buttons
   methodRow: {
     display: "flex",
     gap: 8,
@@ -630,13 +613,10 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#374151",
     background: "#F8FAFC",
     cursor: "pointer",
-    transition: "all 0.15s",
   },
   methodIcon: {
     fontSize: 16,
   },
-
-  // ── UPI card
   upiCard: {
     border: "1px solid #E2E8F0",
     borderRadius: 12,
@@ -654,6 +634,14 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid #E2E8F0",
     display: "inline-flex",
   },
+  upiLoading: {
+    color: "#94A3B8",
+    fontSize: 13,
+  },
+  upiError: {
+    color: "#EF4444",
+    fontSize: 13,
+  },
   upiInfo: {
     textAlign: "center" as const,
   },
@@ -663,7 +651,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#0F172A",
     fontVariantNumeric: "tabular-nums",
   },
-  upiId: {
+  upiLabName: {
     fontSize: 13,
     color: "#64748B",
     marginTop: 2,
@@ -697,8 +685,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 500,
     color: "#14532D",
   },
-
-  // ── Error box
   errorBox: {
     display: "flex",
     alignItems: "center",
@@ -715,8 +701,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 15,
     flexShrink: 0,
   },
-
-  // ── Primary button
   primaryBtn: {
     ...BASE_FONT,
     width: "100%",
@@ -729,13 +713,6 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: 4,
     letterSpacing: 0.2,
   },
-  savingInner: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-  },
-
-  // ── History
   historyList: {
     display: "flex",
     flexDirection: "column",
@@ -806,8 +783,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#94A3B8",
     marginTop: 4,
   },
-
-  // ── Skeleton
   skeletonWrap: {
     padding: 24,
     display: "flex",
@@ -821,8 +796,6 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundSize: "200% 100%",
     animation: "shimmer 1.4s infinite",
   },
-
-  // ── Empty
   emptyState: {
     fontSize: 13,
     color: "#94A3B8",
@@ -831,7 +804,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-// Inject keyframe animations once
 if (typeof document !== "undefined") {
   const styleId = "billing-module-animations";
   if (!document.getElementById(styleId)) {
