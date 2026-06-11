@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  User, Phone, Mail, Calendar, Clock, Beaker, MapPin,
+  User, Phone, Mail, Calendar, Beaker, MapPin,
   AlertCircle, CheckCircle, Upload, X,
   Loader2, ChevronRight, ChevronLeft, Stethoscope, Search,
-  FileText, Home, Building2, Hash, StickyNote, MessageCircle,
-  RotateCcw, ClipboardCheck, BadgeCheck, CreditCard
+  FileText, Hash, MessageCircle, BadgeCheck, CreditCard,
+  Home, Building2, StickyNote,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import BillingModule from './BillingModule';
 
-// ============== INTERFACES (STRICT DATABASE MATCH) ==============
+// ============== INTERFACES ==============
 export interface AppointmentData {
   id?: string;
   name: string;
@@ -54,11 +54,11 @@ interface BookingRegistrationFormProps {
 }
 
 const TIME_SLOTS = [
-  '07:00', '07:30', '08:00', '08:30', '09:00', '09:30',
-  '10:00', '10:30', '11:00', '11:30', '12:00', '12:30',
-  '13:00', '13:30', '14:00', '14:30', '15:00', '15:30',
-  '16:00', '16:30', '17:00', '17:30', '18:00', '18:30',
-  '19:00', '19:30', '20:00',
+  '07:00','07:30','08:00','08:30','09:00','09:30',
+  '10:00','10:30','11:00','11:30','12:00','12:30',
+  '13:00','13:30','14:00','14:30','15:00','15:30',
+  '16:00','16:30','17:00','17:30','18:00','18:30',
+  '19:00','19:30','20:00',
 ];
 
 const formatSlot = (t: string) => {
@@ -68,43 +68,78 @@ const formatSlot = (t: string) => {
   return `${hh}:${m.toString().padStart(2, '0')} ${ampm}`;
 };
 
-const fieldClass =
-  'w-full px-3 py-2.5 border border-gray-200 rounded-lg bg-white text-sm text-gray-800 ' +
-  'focus:outline-none focus:ring-2 focus:border-transparent transition-all ' +
-  'disabled:bg-gray-50 disabled:text-gray-400 placeholder:text-gray-400';
-
-const fieldClassError =
-  'w-full px-3 py-2.5 border border-red-400 rounded-lg bg-white text-sm text-gray-800 ' +
-  'focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-transparent transition-all ' +
-  'disabled:bg-gray-50';
-
-const labelClass = 'block text-[11px] font-semibold uppercase tracking-widest text-gray-500 mb-1.5';
-
+// ============== VALIDATION ==============
 const validateStep1 = (formData: any): ValidationErrors => {
   const e: ValidationErrors = {};
   if (!formData.name.trim()) e.name = 'Patient name is required';
-  if (!formData.mobile.match(/^[0-9]{10}$/)) e.mobile = 'Valid 10-digit mobile number required';
-  if (!formData.age || parseInt(formData.age) < 0 || parseInt(formData.age) > 120) e.age = 'Valid age (0–120) required';
-  if (!formData.gender) e.gender = 'Please select a gender';
+  if (!formData.mobile.match(/^[0-9]{10}$/)) e.mobile = 'Enter a valid 10-digit number';
+  if (!formData.age || parseInt(formData.age) < 0 || parseInt(formData.age) > 120)
+    e.age = 'Enter age between 0 and 120';
+  if (!formData.gender) e.gender = 'Select a gender';
   return e;
 };
 
 const validateStep2 = (formData: any, selectedTests: string[]): ValidationErrors => {
   const e: ValidationErrors = {};
-  if (selectedTests.length === 0) e.tests = 'Select at least one diagnostic test';
+  if (selectedTests.length === 0) e.tests = 'Select at least one test';
   if (!formData.appointment_date) e.appointment_date = 'Appointment date is required';
-  if (!formData.time) e.time = 'Please select a time slot';
+  if (!formData.time) e.time = 'Select a time slot';
   return e;
 };
 
 const validateStep3 = (formData: any): ValidationErrors => {
   const e: ValidationErrors = {};
-  if (formData.booking_type === 'home' && !formData.address_line.trim()) {
-    e.address_line = 'Address line is required for home service validation execution checks';
-  }
+  if (formData.booking_type === 'home' && !formData.address_line.trim())
+    e.address_line = 'Address is required for home collection';
   return e;
 };
 
+// ============== SHARED STYLE TOKENS ==============
+const input =
+  'w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 ' +
+  'placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 ' +
+  'focus:border-indigo-400 transition-all disabled:bg-slate-50 disabled:text-slate-400';
+
+const inputError =
+  'w-full px-3.5 py-2.5 bg-white border border-red-400 rounded-xl text-sm text-slate-800 ' +
+  'placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-300/30 ' +
+  'focus:border-red-400 transition-all';
+
+const label = 'block text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-1.5';
+
+// ============== SUB-COMPONENTS ==============
+
+function FieldError({ msg }: { msg?: string }) {
+  if (!msg) return null;
+  return (
+    <p className="flex items-center gap-1 text-xs text-red-500 mt-1.5 font-medium">
+      <AlertCircle className="w-3 h-3 flex-shrink-0" />
+      {msg}
+    </p>
+  );
+}
+
+function InputWrapper({ children }: { children: React.ReactNode }) {
+  return <div className="relative">{children}</div>;
+}
+
+function InputIcon({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+      {children}
+    </span>
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">
+      {children}
+    </p>
+  );
+}
+
+// ============== MAIN COMPONENT ==============
 export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = ({
   onSuccess,
   onCancel,
@@ -138,15 +173,14 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
   const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
-  
+
   const [savedBookingId, setSavedBookingId] = useState('');
   const [savedAppointmentId, setSavedAppointmentId] = useState<number | null>(null);
-  
+
   const [activeStep, setActiveStep] = useState(1);
   const [prescriptionFile, setPrescriptionFile] = useState<File | null>(null);
-  const [prescriptionPreview, setPrescriptionPreview] = useState<string | null>(null);
   const [prescriptionFileName, setPrescriptionFileName] = useState('');
-  
+
   const [showBilling, setShowBilling] = useState(false);
   const [billingComplete, setBillingComplete] = useState(false);
 
@@ -155,97 +189,89 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
   const getTestStringValue = (item: any): string => {
     if (!item) return '';
     if (typeof item === 'string') return item;
-    if (typeof item === 'object') {
+    if (typeof item === 'object')
       return item.name || item.test_name || item.title || JSON.stringify(item);
-    }
     return String(item);
   };
 
   useEffect(() => {
-    const fetchLabLogics = async () => {
+    if (!isOpen) return;
+    (async () => {
       try {
         const { data, error } = await supabase
           .from('labs')
           .select('id, lab_name, theme_color, available_tests')
           .eq('id', currentLabId)
           .single();
-
         if (error) throw error;
         if (data) {
           setLabInfo(data);
           if (Array.isArray(data.available_tests)) {
-            const parsedTests = data.available_tests
-              .map((item) => getTestStringValue(item))
-              .filter((name) => name.trim() !== '');
-            setDynamicTests(parsedTests);
+            setDynamicTests(
+              data.available_tests
+                .map(getTestStringValue)
+                .filter((n) => n.trim() !== '')
+            );
           }
         }
-      } catch (err) {
-        console.error('Error fetching configuration metrics maps:', err);
-        setLabInfo({ id: currentLabId, lab_name: 'Diagnostic Lab Workspace' });
+      } catch {
+        setLabInfo({ id: currentLabId, lab_name: 'Diagnostic Lab' });
       }
-    };
-
-    if (isOpen) fetchLabLogics();
+    })();
   }, [currentLabId, isOpen]);
 
   useEffect(() => {
-    if (whatsappSameAsMobile) {
-      setFormData((prev) => ({ ...prev, whatsapp: prev.mobile }));
-    }
+    if (whatsappSameAsMobile)
+      setFormData((p) => ({ ...p, whatsapp: p.mobile }));
   }, [formData.mobile, whatsappSameAsMobile]);
 
-  const handleBlur = (field: string) => {
-    setTouchedFields((prev) => new Set(prev).add(field));
-    const step1Errs = validateStep1(formData);
-    setErrors((prev) => ({
-      ...prev,
-      [field]: step1Errs[field] || '',
-    }));
+  const touch = (field: string) => {
+    setTouchedFields((p) => new Set(p).add(field));
+    setErrors((p) => ({ ...p, [field]: validateStep1(formData)[field] || '' }));
   };
 
-  const field = (key: string) => ({
+  // Field prop helper
+  const f = (key: string) => ({
+    id: key,
+    name: key,
     value: (formData as any)[key],
     disabled: isSubmitting || submitSuccess,
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
-      setFormData((prev) => ({ ...prev, [key]: e.target.value })),
-    onBlur: () => handleBlur(key),
-    className: errors[key] && touchedFields.has(key) ? fieldClassError : fieldClass,
+      setFormData((p) => ({ ...p, [key]: e.target.value })),
+    onBlur: () => touch(key),
+    className: errors[key] && touchedFields.has(key) ? inputError : input,
   });
 
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setErrors((prev) => ({ ...prev, prescription: 'File size must be under 5MB' }));
-        return;
-      }
-      const isPdf = file.type === 'application/pdf';
-      setPrescriptionFileName(file.name);
-      setPrescriptionPreview(isPdf ? null : URL.createObjectURL(file));
-      setPrescriptionFile(file);
-      setErrors((prev) => ({ ...prev, prescription: '' }));
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setErrors((p) => ({ ...p, prescription: 'File must be under 5 MB' }));
+      return;
     }
+    setPrescriptionFileName(file.name);
+    setPrescriptionFile(file);
+    setErrors((p) => ({ ...p, prescription: '' }));
   }, []);
 
-  const toggleTest = (testName: string) => {
-    setSelectedTests((prev) =>
-      prev.includes(testName) ? prev.filter((t) => t !== testName) : [...prev, testName]
+  const toggleTest = (name: string) => {
+    setSelectedTests((p) =>
+      p.includes(name) ? p.filter((t) => t !== name) : [...p, name]
     );
-    if (errors.tests) setErrors((prev) => ({ ...prev, tests: '' }));
+    if (errors.tests) setErrors((p) => ({ ...p, tests: '' }));
   };
 
   const handleNext = () => {
-    let stepErrors: ValidationErrors = {};
-    if (activeStep === 1) stepErrors = validateStep1(formData);
-    if (activeStep === 2) stepErrors = validateStep2(formData, selectedTests);
-    if (activeStep === 3) stepErrors = validateStep3(formData);
+    const errs =
+      activeStep === 1 ? validateStep1(formData)
+      : activeStep === 2 ? validateStep2(formData, selectedTests)
+      : validateStep3(formData);
 
-    if (Object.keys(stepErrors).length > 0) {
-      setErrors((prev) => ({ ...prev, ...stepErrors }));
-      setTouchedFields((prev) => {
-        const next = new Set(prev);
-        Object.keys(stepErrors).forEach((k) => next.add(k));
+    if (Object.keys(errs).length > 0) {
+      setErrors((p) => ({ ...p, ...errs }));
+      setTouchedFields((p) => {
+        const next = new Set(p);
+        Object.keys(errs).forEach((k) => next.add(k));
         return next;
       });
       return;
@@ -253,17 +279,16 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     setActiveStep((p) => p + 1);
   };
 
-  const validateForm = (): boolean => {
-    const allErrors = {
+  const validateForm = () => {
+    const all = {
       ...validateStep1(formData),
       ...validateStep2(formData, selectedTests),
       ...validateStep3(formData),
     };
-    setErrors(allErrors);
-    return Object.keys(allErrors).length === 0;
+    setErrors(all);
+    return Object.keys(all).length === 0;
   };
 
-  // Save appointment to database IMMEDIATELY after form validation
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isProcessingPayload.current || isSubmitting || submitSuccess) return;
@@ -275,26 +300,18 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
 
     try {
       if (prescriptionFile) {
-        const fileExt = prescriptionFile.name.split('.').pop();
-        const fileName = `${Date.now()}.${fileExt}`;
-        const filePath = `${currentLabId}/${fileName}`;
-
-        const { error: uploadError } = await supabase.storage
+        const ext = prescriptionFile.name.split('.').pop();
+        const path = `${currentLabId}/${Date.now()}.${ext}`;
+        const { error: upErr } = await supabase.storage
           .from('prescriptions')
-          .upload(filePath, prescriptionFile);
-
-        if (uploadError) throw uploadError;
-
-        const { data: urlData } = supabase.storage
-          .from('prescriptions')
-          .getPublicUrl(filePath);
-
+          .upload(path, prescriptionFile);
+        if (upErr) throw upErr;
+        const { data: urlData } = supabase.storage.from('prescriptions').getPublicUrl(path);
         finalPrescriptionUrl = urlData.publicUrl;
       }
 
       const generatedBookingId = `BK-${Date.now().toString().slice(-6)}`;
-
-      const targetPayload = {
+      const payload = {
         name: formData.name,
         mobile: formData.mobile,
         whatsapp: formData.whatsapp || formData.mobile,
@@ -317,46 +334,36 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
         landmark: formData.booking_type === 'home' ? formData.landmark : null,
       };
 
-      // Save appointment to database FIRST (with real ID)
       const { data, error: dbError } = await supabase
         .from('appointments')
-        .insert([targetPayload])
+        .insert([payload])
         .select()
         .single();
 
       if (dbError) throw dbError;
 
       setSavedBookingId(generatedBookingId);
-      setSavedAppointmentId(data.id as number); // NOW has real ID from DB
+      setSavedAppointmentId(data.id as number);
       setSubmitSuccess(true);
       setIsSubmitting(false);
-      if (onSuccess) onSuccess(data);
+      onSuccess?.(data);
     } catch (err: any) {
-      console.error('Database Save Error:', err);
-      setErrors((prev) => ({
-        ...prev,
-        global: err.message || 'Failed to save appointment. Please try again.',
-      }));
+      setErrors((p) => ({ ...p, global: err.message || 'Failed to save. Please try again.' }));
       isProcessingPayload.current = false;
       setIsSubmitting(false);
     }
   };
 
-  // Called after billing is completed or skipped
   const handleBillingComplete = () => {
     setBillingComplete(true);
-    // Wait 2 seconds to show success message, then close
-    setTimeout(() => {
-      handleReset();
-      if (onCancel) onCancel();
-    }, 2000);
+    setTimeout(() => { handleReset(); onCancel?.(); }, 2000);
   };
 
   const handleReset = () => {
     setFormData({
-      name: '', mobile: '', whatsapp: '', email: '', age: '',
-      gender: '', appointment_date: '', time: '', status: 'Pending',
-      remarks: '', booking_type: 'walk-in', address_line: '', pincode: '', landmark: '',
+      name: '', mobile: '', whatsapp: '', email: '', age: '', gender: '',
+      appointment_date: '', time: '', status: 'Pending', remarks: '',
+      booking_type: 'walk-in', address_line: '', pincode: '', landmark: '',
     });
     setSelectedTests([]);
     setErrors({});
@@ -366,7 +373,6 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     setSavedBookingId('');
     setSavedAppointmentId(null);
     setPrescriptionFile(null);
-    setPrescriptionPreview(null);
     setPrescriptionFileName('');
     setWhatsappSameAsMobile(false);
     setTestSearch('');
@@ -376,56 +382,63 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     isProcessingPayload.current = false;
   };
 
-  const steps = [
-    { number: 1, label: 'Patient Info', icon: User },
-    { number: 2, label: 'Tests & Schedule', icon: Beaker },
-    { number: 3, label: 'Logistics', icon: MapPin },
-  ];
-
   const themeColor = labInfo?.theme_color || '#4f46e5';
-
   const filteredTests = dynamicTests.filter((t) =>
     t.toLowerCase().includes(testSearch.toLowerCase())
   );
 
+  const steps = [
+    { number: 1, label: 'Patient', icon: User },
+    { number: 2, label: 'Tests', icon: Beaker },
+    { number: 3, label: 'Details', icon: MapPin },
+  ];
+
   if (!isOpen) return null;
 
+  // ── PROGRESS BAR width ──
+  const progressPct = ((activeStep - 1) / (steps.length - 1)) * 100;
+
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
       <div
-        className="relative max-w-2xl w-full mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col"
-        style={{ maxHeight: '92vh' }}
+        className="relative w-full max-w-xl bg-white rounded-2xl shadow-2xl shadow-slate-900/20 flex flex-col overflow-hidden"
+        style={{ maxHeight: '94vh' }}
       >
-        {/* Header section panel */}
-        <div style={{ backgroundColor: themeColor }} className="relative px-6 py-5 text-white flex-shrink-0">
-          <div className="flex justify-between items-center">
+
+        {/* ── HEADER ── */}
+        <div
+          className="flex-shrink-0 px-6 pt-5 pb-0 text-white"
+          style={{ backgroundColor: themeColor }}
+        >
+          {/* Top row */}
+          <div className="flex items-start justify-between mb-5">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-white/15">
-                <Stethoscope className="w-5 h-5 text-white" />
+              <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center flex-shrink-0">
+                <Stethoscope className="w-4.5 h-4.5 text-white" />
               </div>
               <div>
-                <h2 className="text-base font-bold tracking-tight leading-tight">
+                <h2 className="text-sm font-bold tracking-tight leading-snug">
                   {labInfo?.lab_name || 'Loading…'}
                 </h2>
-                <p className="text-[11px] text-white/60 mt-0.5 font-mono">Lab ID Reference: {currentLabId}</p>
+                <p className="text-[11px] text-white/50 mt-0.5">New patient registration</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {onCancel && submitSuccess === false && (
-                <button
-                  type="button"
-                  onClick={onCancel}
-                  disabled={isSubmitting}
-                  className="p-1.5 rounded-lg bg-white/10 hover:bg-white/25 transition-colors disabled:opacity-30"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
+            {onCancel && !submitSuccess && (
+              <button
+                type="button"
+                onClick={onCancel}
+                disabled={isSubmitting}
+                className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-30 flex-shrink-0 mt-0.5"
+                aria-label="Close"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
+          {/* Step pills */}
           {!submitSuccess && (
-            <div className="flex items-center gap-0 mt-5">
+            <div className="flex items-center gap-1 mb-0">
               {steps.map((step, idx) => {
                 const isActive = activeStep === step.number;
                 const isDone = activeStep > step.number;
@@ -433,256 +446,421 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                   <React.Fragment key={step.number}>
                     <button
                       type="button"
-                      disabled={isSubmitting}
-                      onClick={() => {
-                        if (step.number < activeStep) setActiveStep(step.number);
-                      }}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all
-                        ${isActive ? 'bg-white shadow text-gray-900'
-                          : isDone ? 'bg-white/25 text-white'
-                          : 'bg-white/10 text-white/60'}`}
+                      disabled={isSubmitting || step.number >= activeStep}
+                      onClick={() => { if (step.number < activeStep) setActiveStep(step.number); }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all select-none
+                        ${isActive
+                          ? 'bg-white text-slate-800 shadow-sm'
+                          : isDone
+                          ? 'bg-white/20 text-white cursor-pointer hover:bg-white/30'
+                          : 'bg-white/8 text-white/50 cursor-default'}`}
                     >
-                      {isDone ? <CheckCircle className="w-3.5 h-3.5 text-emerald-500" /> : <step.icon className="w-3.5 h-3.5" />}
-                      <span className="hidden sm:inline">{step.label}</span>
-                      <span className="sm:hidden">{step.number}</span>
+                      {isDone
+                        ? <CheckCircle className="w-3 h-3 text-emerald-400 flex-shrink-0" />
+                        : <step.icon className="w-3 h-3 flex-shrink-0" />}
+                      {step.label}
                     </button>
                     {idx < steps.length - 1 && (
-                      <div className={`h-px flex-1 mx-1 transition-all ${isDone ? 'bg-white/50' : 'bg-white/15'}`} />
+                      <div className="flex-1 h-px bg-white/15 mx-0.5" />
                     )}
                   </React.Fragment>
                 );
               })}
             </div>
           )}
+
+          {/* Animated progress bar */}
+          {!submitSuccess && (
+            <div className="mt-4 h-0.5 bg-white/15 -mx-6">
+              <div
+                className="h-full bg-white/60 transition-all duration-500 ease-out"
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+          )}
         </div>
 
+        {/* ── GLOBAL ERROR ── */}
         {errors.global && (
-          <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-start gap-2 text-sm">
+          <div className="mx-5 mt-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-start gap-2.5 text-xs font-medium">
             <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-            <span>{errors.global}</span>
+            {errors.global}
           </div>
         )}
 
-        {/* ── CENTRAL SWITCH PANEL STATE VIEW FOR WORKSPACE SUCCESS DRIVER ── */}
+        {/* ── SUCCESS / BILLING PANEL ── */}
         {submitSuccess && savedAppointmentId !== null ? (
-          <div className="flex flex-col flex-1 overflow-y-auto bg-gray-50/50">
+          <div className="flex flex-col flex-1 overflow-y-auto">
+
+            {/* Appointment saved — offer billing */}
             {!showBilling && !billingComplete && (
-              <div className="flex flex-col items-center justify-center px-8 py-12 text-center max-w-md mx-auto my-auto gap-6 animate-in fade-in zoom-in-95 duration-150">
-                <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200/60 flex items-center justify-center shadow-sm">
-                  <BadgeCheck className="w-9 h-9 text-emerald-600" />
+              <div className="flex flex-col items-center px-8 py-10 text-center gap-5">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+                  <BadgeCheck className="w-8 h-8 text-emerald-500" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-gray-900 tracking-tight">Appointment Registered ✓</h3>
-                  <p className="text-sm text-gray-500 mt-1.5 leading-relaxed">
-                    The encounter has been saved. Now collect payment if needed.
-                  </p>
+                  <h3 className="text-lg font-bold text-slate-900">Appointment saved</h3>
+                  <p className="text-sm text-slate-500 mt-1">Collect payment now or skip to close.</p>
                 </div>
 
-                <div className="flex items-center gap-3 bg-white border border-gray-100 rounded-xl px-5 py-3.5 shadow-sm w-full justify-center">
-                  <Hash className="w-4 h-4 text-gray-400" />
-                  <span className="text-xs text-gray-400 uppercase font-bold tracking-wider">Booking ID</span>
-                  <span className="font-mono font-bold text-gray-900 text-base border-l border-gray-150 pl-3 ml-1">
+                {/* Booking ID chip */}
+                <div className="flex items-center gap-2.5 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 w-full justify-center">
+                  <Hash className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Booking ID</span>
+                  <span className="font-mono font-bold text-slate-900 text-sm pl-3 border-l border-slate-200 ml-1">
                     {savedBookingId}
                   </span>
                 </div>
 
-                <div className="w-full bg-white border border-gray-100 rounded-2xl p-5 shadow-sm text-left mt-2">
-                  <h4 className="text-sm font-bold text-gray-900 mb-1">Financial Ledger</h4>
-                  <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-                    Would you like to collect patient payments or log financial balances right now?
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowBilling(true)}
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-white rounded-xl shadow-sm transition-all duration-150 hover:opacity-95 active:scale-95"
-                      style={{ backgroundColor: themeColor }}
-                    >
-                      <CreditCard className="w-4 h-4" />
-                      Collect Payment Now
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleBillingComplete}
-                      className="flex-1 px-4 py-2.5 text-xs font-semibold text-gray-600 bg-gray-50 border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors"
-                    >
-                      Skip & Close
-                    </button>
+                {/* Summary card */}
+                <div className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-5 text-left space-y-4">
+                  <div>
+                    <p className="text-xs font-bold text-slate-700 mb-0.5">Patient</p>
+                    <p className="text-sm text-slate-600">{formData.name} · {formData.age}Y · {formData.gender}</p>
                   </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-700 mb-0.5">Tests selected</p>
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {selectedTests.map((t) => (
+                        <span key={t} className="px-2 py-0.5 bg-white border border-slate-200 rounded-md text-[11px] font-medium text-slate-600">
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                    <p className="text-xs text-slate-600">{formData.appointment_date} at {formatSlot(formData.time)}</p>
+                  </div>
+                </div>
+
+                {/* CTA buttons */}
+                <div className="flex flex-col sm:flex-row gap-2.5 w-full">
+                  <button
+                    type="button"
+                    onClick={() => setShowBilling(true)}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-bold text-white rounded-xl transition-opacity hover:opacity-90 active:scale-[0.98]"
+                    style={{ backgroundColor: themeColor }}
+                  >
+                    <CreditCard className="w-3.5 h-3.5" />
+                    Collect payment
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleBillingComplete}
+                    className="flex-1 py-2.5 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
+                  >
+                    Skip & close
+                  </button>
                 </div>
               </div>
             )}
 
-            {showBilling && savedAppointmentId !== null && !billingComplete && (
-              <div className="px-6 py-6 flex flex-col flex-1 animate-in slide-in-from-bottom-4 duration-200">
-                <div className="flex items-center justify-between pb-4 mb-5 border-b border-gray-100">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-gray-100 rounded-xl text-gray-600">
-                      <CreditCard className="w-4 h-4" />
+            {/* Billing module */}
+            {showBilling && !billingComplete && (
+              <div className="flex flex-col flex-1 px-5 py-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center">
+                      <CreditCard className="w-4 h-4 text-slate-600" />
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-gray-900">Collections Counter</p>
-                      <p className="text-[11px] font-mono text-gray-400 mt-0.5">Booking Identity: {savedBookingId}</p>
+                      <p className="text-sm font-bold text-slate-900 leading-tight">Payment</p>
+                      <p className="text-[11px] font-mono text-slate-400">{savedBookingId}</p>
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => setShowBilling(false)}
-                    className="text-xs font-semibold text-gray-400 hover:text-gray-600 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                    className="flex items-center gap-1 text-xs font-semibold text-slate-400 hover:text-slate-700 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
                   >
                     <ChevronLeft className="w-3.5 h-3.5" /> Back
                   </button>
                 </div>
-
-                <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm flex-1 overflow-y-auto">
+                <div className="flex-1 overflow-y-auto">
                   <BillingModule
                     appointmentId={savedAppointmentId}
                     labId={currentLabId}
                     selectedTests={selectedTests}
                     availableTestsMeta={labInfo?.available_tests || []}
                     themeColor={themeColor}
-                    isInline={true}
                     onPaymentSuccess={handleBillingComplete}
                   />
                 </div>
               </div>
             )}
 
+            {/* All done */}
             {billingComplete && (
-              <div className="flex flex-col items-center justify-center px-8 py-12 text-center max-w-md mx-auto my-auto gap-6 animate-in fade-in zoom-in-95 duration-150">
-                <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200/60 flex items-center justify-center shadow-sm animate-pulse">
-                  <CheckCircle className="w-9 h-9 text-emerald-600" />
+              <div className="flex flex-col items-center justify-center px-8 py-14 text-center gap-5">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+                  <CheckCircle className="w-8 h-8 text-emerald-500" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-gray-900 tracking-tight">Complete! ✓</h3>
-                  <p className="text-sm text-gray-500 mt-1.5 leading-relaxed">
-                    Appointment and payment processed successfully.
-                  </p>
+                  <h3 className="text-lg font-bold text-slate-900">All done!</h3>
+                  <p className="text-sm text-slate-500 mt-1">Appointment and payment recorded.</p>
                 </div>
-                <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-5 py-3.5 w-full justify-center">
-                  <Hash className="w-4 h-4 text-emerald-600" />
-                  <span className="text-xs text-emerald-700 font-bold">{savedBookingId}</span>
+                <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-2.5">
+                  <Hash className="w-3.5 h-3.5 text-emerald-500" />
+                  <span className="font-mono text-sm font-bold text-emerald-700">{savedBookingId}</span>
                 </div>
               </div>
             )}
           </div>
+
         ) : (
-          <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
-            <div className="overflow-y-auto flex-1 px-6 py-5">
-              {/* STEP 1 CONTAINER */}
+          /* ── MULTI-STEP FORM ── */
+          <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden" autoComplete="on">
+            <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
+
+              {/* ═══ STEP 1: PATIENT INFO ═══ */}
               {activeStep === 1 && (
                 <div className="space-y-4">
+                  <SectionLabel>Patient details</SectionLabel>
+
+                  {/* Name */}
                   <div>
-                    <label className={labelClass}>Patient Name *</label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                      <input type="text" placeholder="e.g. Rahul Sharma" {...field('name')} className={`${errors.name && touchedFields.has('name') ? fieldClassError : fieldClass} pl-9`} />
-                    </div>
-                    {errors.name && touchedFields.has('name') && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
+                    <label htmlFor="name" className={label}>Full name <span className="text-red-400 normal-case tracking-normal">*</span></label>
+                    <InputWrapper>
+                      <InputIcon><User className="w-4 h-4" /></InputIcon>
+                      <input
+                        id="name"
+                        name="name"
+                        type="text"
+                        autoComplete="name"
+                        placeholder="e.g. Rahul Sharma"
+                        {...f('name')}
+                        className={`${errors.name && touchedFields.has('name') ? inputError : input} pl-10`}
+                      />
+                    </InputWrapper>
+                    <FieldError msg={touchedFields.has('name') ? errors.name : ''} />
                   </div>
 
+                  {/* Mobile + WhatsApp */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className={labelClass}>Mobile Number *</label>
-                      <div className="relative">
-                        <Phone className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                        <input type="tel" placeholder="10-digit number" {...field('mobile')} className={`${errors.mobile && touchedFields.has('mobile') ? fieldClassError : fieldClass} pl-9`} />
-                      </div>
-                      {errors.mobile && touchedFields.has('mobile') && <p className="text-xs text-red-500 mt-1">{errors.mobile}</p>}
+                      <label htmlFor="mobile" className={label}>Mobile <span className="text-red-400 normal-case tracking-normal">*</span></label>
+                      <InputWrapper>
+                        <InputIcon><Phone className="w-4 h-4" /></InputIcon>
+                        <input
+                          id="mobile"
+                          name="mobile"
+                          type="tel"
+                          autoComplete="tel"
+                          placeholder="10-digit number"
+                          {...f('mobile')}
+                          className={`${errors.mobile && touchedFields.has('mobile') ? inputError : input} pl-10`}
+                        />
+                      </InputWrapper>
+                      <FieldError msg={touchedFields.has('mobile') ? errors.mobile : ''} />
                     </div>
 
                     <div>
-                      <label className={labelClass}>WhatsApp Number</label>
-                      <div className="relative">
-                        <MessageCircle className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                        <input type="tel" placeholder={whatsappSameAsMobile ? "Auto-filled" : "Optional"} value={whatsappSameAsMobile ? formData.mobile : formData.whatsapp} disabled={isSubmitting || submitSuccess} onChange={(e) => setFormData(prev => ({ ...prev, whatsapp: e.target.value }))} className={`${fieldClass} pl-9`} />
-                      </div>
-                      <label className="flex items-center gap-2 mt-2 cursor-pointer text-xs text-gray-500 selection:bg-transparent">
-                        <input type="checkbox" checked={whatsappSameAsMobile} onChange={(e) => setWhatsappSameAsMobile(e.target.checked)} className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4" />
-                        <span>Same as mobile number</span>
+                      <label htmlFor="whatsapp" className={label}>WhatsApp</label>
+                      <InputWrapper>
+                        <InputIcon><MessageCircle className="w-4 h-4" /></InputIcon>
+                        <input
+                          id="whatsapp"
+                          name="whatsapp"
+                          type="tel"
+                          autoComplete="tel"
+                          placeholder={whatsappSameAsMobile ? 'Copied from mobile' : 'Optional'}
+                          value={whatsappSameAsMobile ? formData.mobile : formData.whatsapp}
+                          disabled={isSubmitting || submitSuccess || whatsappSameAsMobile}
+                          onChange={(e) => setFormData((p) => ({ ...p, whatsapp: e.target.value }))}
+                          className={`${input} pl-10 ${whatsappSameAsMobile ? 'bg-slate-50 text-slate-400' : ''}`}
+                        />
+                      </InputWrapper>
+                      <label htmlFor="whatsapp-same" className="flex items-center gap-2 mt-2 cursor-pointer select-none">
+                        <input
+                          id="whatsapp-same"
+                          type="checkbox"
+                          checked={whatsappSameAsMobile}
+                          onChange={(e) => setWhatsappSameAsMobile(e.target.checked)}
+                          className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <span className="text-[11px] text-slate-500 font-medium">Same as mobile</span>
                       </label>
                     </div>
                   </div>
 
+                  {/* Email */}
                   <div>
-                    <label className={labelClass}>Email Address</label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                      <input type="email" placeholder="patient@example.com" {...field('email')} className={`${fieldClass} pl-9`} />
-                    </div>
+                    <label htmlFor="email" className={label}>Email</label>
+                    <InputWrapper>
+                      <InputIcon><Mail className="w-4 h-4" /></InputIcon>
+                      <input
+                        id="email"
+                        name="email"
+                        type="email"
+                        autoComplete="email"
+                        placeholder="patient@example.com"
+                        {...f('email')}
+                        className={`${input} pl-10`}
+                      />
+                    </InputWrapper>
                   </div>
 
+                  {/* Age + Gender */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className={labelClass}>Age *</label>
-                      <input type="number" placeholder="Years" {...field('age')} />
-                      {errors.age && touchedFields.has('age') && <p className="text-xs text-red-500 mt-1">{errors.age}</p>}
+                      <label htmlFor="age" className={label}>Age <span className="text-red-400 normal-case tracking-normal">*</span></label>
+                      <input
+                        id="age"
+                        name="age"
+                        type="number"
+                        autoComplete="off"
+                        placeholder="Years"
+                        min={0}
+                        max={120}
+                        {...f('age')}
+                      />
+                      <FieldError msg={touchedFields.has('age') ? errors.age : ''} />
                     </div>
 
                     <div>
-                      <label className={labelClass}>Gender *</label>
-                      <select {...field('gender')} style={{ appearance: 'auto' }}>
-                        <option value="">Select Gender</option>
+                      <label htmlFor="gender" className={label}>Gender <span className="text-red-400 normal-case tracking-normal">*</span></label>
+                      <select
+                        id="gender"
+                        name="gender"
+                        autoComplete="sex"
+                        {...f('gender')}
+                        style={{ appearance: 'auto' }}
+                      >
+                        <option value="">Select…</option>
                         <option value="Male">Male</option>
                         <option value="Female">Female</option>
                         <option value="Other">Other</option>
                       </select>
-                      {errors.gender && touchedFields.has('gender') && <p className="text-xs text-red-500 mt-1">{errors.gender}</p>}
+                      <FieldError msg={touchedFields.has('gender') ? errors.gender : ''} />
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* STEP 2 CONTAINER */}
+              {/* ═══ STEP 2: TESTS & SCHEDULE ═══ */}
               {activeStep === 2 && (
-                <div className="space-y-4">
+                <div className="space-y-5">
+
+                  {/* Test selector */}
                   <div>
-                    <div className="flex justify-between items-center mb-1.5">
-                      <label className={labelClass}>Select Tests *</label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <SectionLabel>Select tests</SectionLabel>
                       {selectedTests.length > 0 && (
-                        <span style={{ backgroundColor: themeColor }} className="text-[10px] text-white font-bold px-2 py-0.5 rounded-full">
-                          {selectedTests.length} Selected
+                        <span
+                          className="text-[10px] font-bold text-white px-2 py-0.5 rounded-full"
+                          style={{ backgroundColor: themeColor }}
+                        >
+                          {selectedTests.length} selected
                         </span>
                       )}
                     </div>
-                    <div className="relative mb-2">
-                      <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                      <input type="text" placeholder="Search operational tests catalogue matrix…" value={testSearch} onChange={(e) => setTestSearch(e.target.value)} className={`${fieldClass} pl-9`} />
-                    </div>
 
-                    <div className="border border-gray-200 rounded-xl overflow-hidden max-h-48 bg-gray-50 overflow-y-auto">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-gray-200/60">
-                        {filteredTests.map((testName, idx) => {
-                          const isChecked = selectedTests.includes(testName);
-                          return (
-                            <label key={idx} className="flex items-center gap-3 px-4 py-3 bg-white hover:bg-gray-50/80 transition-colors cursor-pointer text-sm font-medium text-gray-700">
-                              <input type="checkbox" checked={isChecked} onChange={() => toggleTest(testName)} className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4" />
-                              <span>{testName}</span>
-                            </label>
-                          );
-                        })}
-                        {filteredTests.length === 0 && (
-                          <div className="p-8 text-center text-sm text-gray-400 bg-white col-span-2">No matching tests found.</div>
-                        )}
+                    {/* Search */}
+                    <InputWrapper>
+                      <InputIcon><Search className="w-4 h-4" /></InputIcon>
+                      <input
+                        id="test-search"
+                        type="text"
+                        autoComplete="off"
+                        placeholder="Search tests…"
+                        value={testSearch}
+                        onChange={(e) => setTestSearch(e.target.value)}
+                        className={`${input} pl-10 mb-2`}
+                      />
+                    </InputWrapper>
+
+                    {/* Selected chips */}
+                    {selectedTests.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mb-2">
+                        {selectedTests.map((t) => (
+                          <span
+                            key={t}
+                            className="inline-flex items-center gap-1 pl-2.5 pr-1.5 py-0.5 text-[11px] font-semibold text-white rounded-full"
+                            style={{ backgroundColor: themeColor }}
+                          >
+                            {t}
+                            <button
+                              type="button"
+                              onClick={() => toggleTest(t)}
+                              className="w-4 h-4 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center transition-colors"
+                              aria-label={`Remove ${t}`}
+                            >
+                              <X className="w-2.5 h-2.5" />
+                            </button>
+                          </span>
+                        ))}
                       </div>
+                    )}
+
+                    {/* Test list */}
+                    <div className="border border-slate-200 rounded-xl overflow-hidden bg-white max-h-44 overflow-y-auto">
+                      {filteredTests.length === 0 ? (
+                        <div className="py-8 text-center text-sm text-slate-400">No tests match your search.</div>
+                      ) : (
+                        <div className="divide-y divide-slate-100">
+                          {filteredTests.map((testName, idx) => {
+                            const checked = selectedTests.includes(testName);
+                            return (
+                              <label
+                                key={idx}
+                                className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors text-sm
+                                  ${checked ? 'bg-indigo-50/60' : 'hover:bg-slate-50'}`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => toggleTest(testName)}
+                                  className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 flex-shrink-0"
+                                />
+                                <span className={`font-medium ${checked ? 'text-indigo-700' : 'text-slate-700'}`}>
+                                  {testName}
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                    {errors.tests && <p className="text-xs text-red-500 mt-1">{errors.tests}</p>}
+                    <FieldError msg={errors.tests} />
                   </div>
 
+                  {/* Date + Booking type */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className={labelClass}>Appointment Date *</label>
-                      <div className="relative">
-                        <Calendar className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                        <input type="date" min={new Date().toISOString().split('T')[0]} value={formData.appointment_date} onChange={(e) => setFormData(prev => ({ ...prev, appointment_date: e.target.value }))} className={`${fieldClass} pl-9`} />
-                      </div>
+                      <label htmlFor="appointment_date" className={label}>
+                        Date <span className="text-red-400 normal-case tracking-normal">*</span>
+                      </label>
+                      <InputWrapper>
+                        <InputIcon><Calendar className="w-4 h-4" /></InputIcon>
+                        <input
+                          id="appointment_date"
+                          name="appointment_date"
+                          type="date"
+                          autoComplete="off"
+                          min={new Date().toISOString().split('T')[0]}
+                          value={formData.appointment_date}
+                          onChange={(e) => setFormData((p) => ({ ...p, appointment_date: e.target.value }))}
+                          className={`${errors.appointment_date ? inputError : input} pl-10`}
+                        />
+                      </InputWrapper>
+                      <FieldError msg={errors.appointment_date} />
                     </div>
 
                     <div>
-                      <label className={labelClass}>Booking Modality Type</label>
-                      <div className="flex rounded-xl border border-gray-200 overflow-hidden bg-gray-100 p-1 gap-1 h-[44px]">
+                      <label className={label}>Collection type</label>
+                      <div className="flex rounded-xl border border-slate-200 overflow-hidden bg-slate-50 p-1 gap-1 h-[44px]">
                         {(['walk-in', 'home'] as const).map((mode) => (
-                          <button key={mode} type="button" onClick={() => setFormData(prev => ({ ...prev, booking_type: mode }))} className={`flex-1 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${formData.booking_type === mode ? 'bg-white text-gray-900 shadow' : 'text-gray-500'}`}>
+                          <button
+                            key={mode}
+                            type="button"
+                            onClick={() => setFormData((p) => ({ ...p, booking_type: mode }))}
+                            className={`flex-1 flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-wider rounded-lg transition-all
+                              ${formData.booking_type === mode
+                                ? 'bg-white text-slate-900 shadow-sm'
+                                : 'text-slate-400 hover:text-slate-600'}`}
+                          >
+                            {mode === 'walk-in' ? <Building2 className="w-3 h-3" /> : <Home className="w-3 h-3" />}
                             {mode}
                           </button>
                         ))}
@@ -690,86 +868,215 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                     </div>
                   </div>
 
+                  {/* Time slots */}
                   <div>
-                    <label className={labelClass}>Time Slot *</label>
-                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 max-h-36 overflow-y-auto border border-gray-100 rounded-xl p-3 bg-gray-50/50">
+                    <label className={label}>
+                      Time slot <span className="text-red-400 normal-case tracking-normal">*</span>
+                    </label>
+                    <div className="grid grid-cols-4 sm:grid-cols-5 gap-1.5 max-h-40 overflow-y-auto p-0.5">
                       {TIME_SLOTS.map((slot) => {
-                        const isSelected = formData.time === slot;
+                        const selected = formData.time === slot;
                         return (
-                          <button key={slot} type="button" onClick={() => setFormData(prev => ({ ...prev, time: slot }))} className={`py-2 text-xs font-semibold rounded-lg border transition-all ${isSelected ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-gray-200 text-gray-600'}`}>
+                          <button
+                            key={slot}
+                            type="button"
+                            onClick={() => setFormData((p) => ({ ...p, time: slot }))}
+                            className={`py-2 text-[11px] font-semibold rounded-lg border transition-all
+                              ${selected
+                                ? 'text-white border-transparent shadow-sm'
+                                : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50'}`}
+                            style={selected ? { backgroundColor: themeColor, borderColor: themeColor } : {}}
+                          >
                             {formatSlot(slot)}
                           </button>
                         );
                       })}
                     </div>
+                    <FieldError msg={errors.time} />
                   </div>
                 </div>
               )}
 
-              {/* STEP 3 CONTAINER */}
+              {/* ═══ STEP 3: LOGISTICS ═══ */}
               {activeStep === 3 && (
-                <div className="space-y-4">
+                <div className="space-y-5">
+
+                  {/* Home collection address */}
                   {formData.booking_type === 'home' && (
-                    <div className="space-y-4 p-4 border border-dashed border-gray-200 rounded-xl bg-gray-50/40">
-                      <div>
-                        <label className={labelClass}>Collection Address Line *</label>
-                        <textarea rows={2} placeholder="Complete physical logistics address details…" value={formData.address_line} onChange={(e) => setFormData(prev => ({ ...prev, address_line: e.target.value }))} className={fieldClass} />
-                        {errors.address_line && <p className="text-xs text-red-500 mt-1">{errors.address_line}</p>}
+                    <div className="space-y-4 p-4 rounded-xl bg-amber-50/60 border border-amber-200/60">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Home className="w-3.5 h-3.5 text-amber-600" />
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-amber-700">
+                          Home collection address
+                        </p>
                       </div>
+
+                      <div>
+                        <label htmlFor="address_line" className={label}>
+                          Address <span className="text-red-400 normal-case tracking-normal">*</span>
+                        </label>
+                        <textarea
+                          id="address_line"
+                          name="address_line"
+                          autoComplete="street-address"
+                          rows={2}
+                          placeholder="House / flat no., street, area…"
+                          value={formData.address_line}
+                          onChange={(e) => setFormData((p) => ({ ...p, address_line: e.target.value }))}
+                          className={errors.address_line ? inputError : input}
+                        />
+                        <FieldError msg={errors.address_line} />
+                      </div>
+
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className={labelClass}>Pincode</label>
-                          <input type="text" placeholder="6-digit PIN" value={formData.pincode} onChange={(e) => setFormData(prev => ({ ...prev, pincode: e.target.value }))} className={fieldClass} />
+                          <label htmlFor="pincode" className={label}>Pincode</label>
+                          <input
+                            id="pincode"
+                            name="pincode"
+                            type="text"
+                            autoComplete="postal-code"
+                            placeholder="6-digit PIN"
+                            value={formData.pincode}
+                            onChange={(e) => setFormData((p) => ({ ...p, pincode: e.target.value }))}
+                            className={input}
+                          />
                         </div>
                         <div>
-                          <label className={labelClass}>Landmark</label>
-                          <input type="text" placeholder="Nearby reference item" value={formData.landmark} onChange={(e) => setFormData(prev => ({ ...prev, landmark: e.target.value }))} className={fieldClass} />
+                          <label htmlFor="landmark" className={label}>Landmark</label>
+                          <input
+                            id="landmark"
+                            name="landmark"
+                            type="text"
+                            autoComplete="off"
+                            placeholder="Near / opposite…"
+                            value={formData.landmark}
+                            onChange={(e) => setFormData((p) => ({ ...p, landmark: e.target.value }))}
+                            className={input}
+                          />
                         </div>
                       </div>
                     </div>
                   )}
 
+                  {/* Prescription upload */}
                   <div>
-                    <label className={labelClass}>Prescription Attachment File</label>
-                    <div className="border-2 border-dashed border-gray-200 rounded-xl p-4 text-center bg-gray-50 hover:bg-gray-100/50 transition-colors relative">
-                      <input type="file" accept="image/*,application/pdf" onChange={handleFileUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" disabled={isSubmitting} />
-                      <div className="space-y-1.5">
-                        <Upload className="w-6 h-6 text-gray-400 mx-auto" />
-                        <p className="text-xs text-gray-500 font-medium">Click to select files or drag-drop</p>
-                        <p className="text-[10px] text-gray-400">PDF, PNG, JPG format (Max size: 5MB)</p>
-                      </div>
-                    </div>
-                    {prescriptionFileName && (
-                      <div className="mt-2.5 flex items-center justify-between p-2 text-xs bg-gray-100 text-gray-700 rounded-lg">
-                        <span className="truncate font-medium max-w-[80%]">{prescriptionFileName}</span>
-                        <button type="button" onClick={() => { setPrescriptionFile(null); setPrescriptionPreview(null); setPrescriptionFileName(''); }} className="text-gray-400 hover:text-red-500 transition-colors">
-                          <X className="w-4 h-4" />
+                    <SectionLabel>Prescription</SectionLabel>
+                    {!prescriptionFileName ? (
+                      <label
+                        htmlFor="prescription-upload"
+                        className="flex flex-col items-center justify-center gap-2.5 p-6 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50 hover:bg-slate-100/60 hover:border-slate-300 transition-all cursor-pointer"
+                      >
+                        <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center shadow-sm">
+                          <Upload className="w-5 h-5 text-slate-400" />
+                        </div>
+                        <div className="text-center">
+                          <p className="text-sm font-semibold text-slate-600">Upload prescription</p>
+                          <p className="text-xs text-slate-400 mt-0.5">PDF, PNG, JPG · max 5 MB</p>
+                        </div>
+                        <input
+                          id="prescription-upload"
+                          type="file"
+                          accept="image/*,application/pdf"
+                          onChange={handleFileUpload}
+                          className="hidden"
+                          disabled={isSubmitting}
+                        />
+                      </label>
+                    ) : (
+                      <div className="flex items-center gap-3 px-4 py-3 bg-indigo-50 border border-indigo-200/80 rounded-xl">
+                        <FileText className="w-4 h-4 text-indigo-500 flex-shrink-0" />
+                        <span className="flex-1 text-xs font-semibold text-indigo-700 truncate">
+                          {prescriptionFileName}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => { setPrescriptionFile(null); setPrescriptionFileName(''); }}
+                          className="w-6 h-6 flex items-center justify-center rounded-lg bg-white border border-indigo-200 text-indigo-400 hover:text-red-500 hover:border-red-200 transition-colors"
+                          aria-label="Remove file"
+                        >
+                          <X className="w-3 h-3" />
                         </button>
                       </div>
                     )}
+                    <FieldError msg={errors.prescription} />
                   </div>
 
+                  {/* Remarks */}
                   <div>
-                    <label className={labelClass}>Internal Office Remarks</label>
-                    <textarea rows={2} placeholder="Any specific execution observations or patient parameters requests…" value={formData.remarks} onChange={(e) => setFormData(prev => ({ ...prev, remarks: e.target.value }))} className={fieldClass} />
+                    <label htmlFor="remarks" className={label}>Remarks</label>
+                    <div className="relative">
+                      <StickyNote className="absolute left-3.5 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                      <textarea
+                        id="remarks"
+                        name="remarks"
+                        autoComplete="off"
+                        rows={2}
+                        placeholder="Internal notes for lab staff…"
+                        value={formData.remarks}
+                        onChange={(e) => setFormData((p) => ({ ...p, remarks: e.target.value }))}
+                        className={`${input} pl-10 resize-none`}
+                      />
+                    </div>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Footer triggers */}
-            <div className="flex justify-between items-center px-6 py-4 border-t border-gray-100 bg-white flex-shrink-0">
-              <button type="button" disabled={activeStep === 1 || isSubmitting} onClick={() => setActiveStep((p) => p - 1)} className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 disabled:opacity-30">
-                <ChevronLeft className="w-4 h-4" />Back
+            {/* ── FOOTER ── */}
+            <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-white">
+              <button
+                type="button"
+                disabled={activeStep === 1 || isSubmitting}
+                onClick={() => setActiveStep((p) => p - 1)}
+                className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-slate-500 hover:text-slate-800 disabled:opacity-30 transition-colors rounded-lg hover:bg-slate-100"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Back
               </button>
 
+              {/* Step dots */}
+              <div className="flex items-center gap-1.5">
+                {steps.map((s) => (
+                  <div
+                    key={s.number}
+                    className={`rounded-full transition-all duration-300 ${
+                      s.number === activeStep
+                        ? 'w-5 h-1.5'
+                        : s.number < activeStep
+                        ? 'w-1.5 h-1.5'
+                        : 'w-1.5 h-1.5 bg-slate-200'
+                    }`}
+                    style={
+                      s.number <= activeStep
+                        ? { backgroundColor: themeColor }
+                        : {}
+                    }
+                  />
+                ))}
+              </div>
+
               {activeStep < 3 ? (
-                <button type="button" onClick={handleNext} className="flex items-center gap-1.5 px-5 py-2 text-sm font-semibold text-white rounded-lg transition-opacity hover:opacity-90" style={{ backgroundColor: themeColor }}>
+                <button
+                  type="button"
+                  onClick={handleNext}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white rounded-xl transition-opacity hover:opacity-90 active:scale-[0.98]"
+                  style={{ backgroundColor: themeColor }}
+                >
                   Next <ChevronRight className="w-4 h-4" />
                 </button>
               ) : (
-                <button type="submit" disabled={isSubmitting} className="flex items-center gap-2 px-6 py-2 text-sm font-bold text-white rounded-lg shadow transition-opacity hover:opacity-90 disabled:opacity-60" style={{ backgroundColor: themeColor }}>
-                  {isSubmitting ? <><Loader2 className="w-4 h-4 animate-spin" />Saving…</> : <><CheckCircle className="w-4 h-4" />Save & Proceed to Billing</>}
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex items-center gap-2 px-5 py-2 text-sm font-bold text-white rounded-xl transition-opacity hover:opacity-90 active:scale-[0.98] disabled:opacity-60"
+                  style={{ backgroundColor: themeColor }}
+                >
+                  {isSubmitting ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</>
+                  ) : (
+                    <><CheckCircle className="w-4 h-4" /> Save & bill</>
+                  )}
                 </button>
               )}
             </div>
