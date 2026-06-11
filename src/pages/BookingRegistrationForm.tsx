@@ -680,18 +680,6 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                   </div>
                 </div>
               )}
-
-              <div>
-                <label htmlFor="remarks" className={label}>Remarks</label>
-                <div className="relative">
-                  <StickyNote className="absolute left-3.5 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
-                  <textarea id="remarks" name="remarks" autoComplete="off" rows={2}
-                    placeholder="Internal notes for lab staff…"
-                    value={formData.remarks}
-                    onChange={(e) => setFormData((p) => ({ ...p, remarks: e.target.value }))}
-                    className={`${input} pl-10 resize-none`} />
-                </div>
-              </div>
             </div>
           )}
         </div>
