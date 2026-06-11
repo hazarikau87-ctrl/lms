@@ -281,8 +281,8 @@ export default function Dashboard() {
   }, [selectedTestItem]);
 
   const handleRegistrationSuccess = async () => {
-  await fetchAll();
-};
+    await fetchAll();
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 selection:bg-blue-500 selection:text-white antialiased relative">
@@ -706,6 +706,20 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
     return item.test.split(',').map((t: string) => t.trim()).filter(Boolean).length;
   }, [item.test]);
 
+  // Safely extract the public URL layout context for image files
+  const prescriptionTargetUrl = useMemo(() => {
+    if (!item.prescription_url) return null;
+    if (item.prescription_url.startsWith('http://') || item.prescription_url.startsWith('https://')) {
+      return item.prescription_url;
+    }
+    try {
+      return supabase.storage.from('prescriptions').getPublicUrl(item.prescription_url).data.publicUrl;
+    } catch (e) {
+      console.error("Error formatting storage bucket item path signature: ", e);
+      return null;
+    }
+  }, [item.prescription_url]);
+
   return (
     <>
       <tr className={`hover:bg-slate-50/40 transition-colors ${selected ? 'bg-blue-50/20' : ''} ${isExpanded ? 'bg-slate-50/80' : ''}`}>
@@ -814,8 +828,8 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
               {/* 2. Prescription */}
               <div className="bg-white p-4 rounded-xl border border-slate-200/70 shadow-2xs">
                 <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-2.5">Prescription Doc</span>
-                {item.prescription_url ? ( 
-                  <a href={item.prescription_url.startsWith('http') ? item.prescription_url : supabase.storage.from('prescriptions').getPublicUrl(item.prescription_url).data.publicUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-2 py-1 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-600 rounded-lg text-[10px] font-bold">
+                {prescriptionTargetUrl ? ( 
+                  <a href={prescriptionTargetUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-2 py-1 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-600 rounded-lg text-[10px] font-bold">
                     <FileText className="w-3.5 h-3.5" /> View Prescription (Rx)
                   </a> 
                 ) : (
