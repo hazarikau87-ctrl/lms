@@ -230,25 +230,39 @@ export const SampleBarcodeLabel: React.FC<BarcodeLabelProps> = ({ appointment })
         ))}
       </div>
 
-      {/* ── GLOBAL STYLE SYSTEM OVERRIDES ── */}
+     {/* ── GLOBAL STYLE SYSTEM OVERRIDES ── */}
       <style>{`
         #lis-isolated-print-zone {
           display: none;
         }
 
         @media print {
-          /* Clean layout slate reset */
-          body * {
-            visibility: hidden !important;
-          }
-          
-          /* Suppress workspace web panels */
-          .ml-16, .lis-dashboard-vials-row, #root, .lis-preview-card-view {
-            display: none !important;
-            visibility: hidden !important;
+          /* 1. Reset base page configurations */
+          html, body {
+            background: #ffffff !important;
+            margin: 0 !important;
+            padding: 0 !important;
           }
 
-          /* Remap print layer to viewport boundaries */
+          /* 2. Hide common layout containers safely WITHOUT nuking the #root DOM */
+          header, footer, nav, sidebar, aside, button,
+          .lis-dashboard-vials-row, 
+          .no-print {
+            display: none !important;
+          }
+
+          /* 
+             If you are using a standard dashboard layout, you likely have wrappers.
+             Instead of display:none, we hide the visual appearance of your dashboard page 
+             so the layout engine retains the DOM node for printing.
+          */
+          #root > div:not(#lis-isolated-print-zone) {
+            opacity: 0 !important;
+            height: 0 !important;
+            overflow: hidden !important;
+          }
+
+          /* 3. Force expose and absolute position the isolated print strip */
           #lis-isolated-print-zone {
             display: block !important;
             position: absolute !important;
@@ -257,16 +271,19 @@ export const SampleBarcodeLabel: React.FC<BarcodeLabelProps> = ({ appointment })
             width: 51mm !important;
             margin: 0 !important;
             padding: 0 !important;
-            background: #ffffff !important;
+            z-index: 9999999 !important;
           }
 
+          /* 4. Enforce strict visible styles to the barcode nodes and all sub-children */
+          #lis-isolated-print-zone,
           #lis-isolated-print-zone *,
           .lis-physical-print-view,
           .lis-physical-print-view * {
             visibility: visible !important;
+            opacity: 1 !important;
           }
 
-          /* Force precise layout sizing onto the printer rolls */
+          /* 5. Precision dimensional mapping for the thermal engine */
           .lis-physical-print-view {
             display: flex !important;
             flex-direction: column !important;
