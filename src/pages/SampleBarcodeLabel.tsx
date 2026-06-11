@@ -230,39 +230,34 @@ export const SampleBarcodeLabel: React.FC<BarcodeLabelProps> = ({ appointment })
         ))}
       </div>
 
-     {/* ── GLOBAL STYLE SYSTEM OVERRIDES ── */}
+      {/* ── GLOBAL STYLE SYSTEM OVERRIDES ── */}
       <style>{`
         #lis-isolated-print-zone {
           display: none;
         }
 
         @media print {
-          /* 1. Reset base page configurations */
+          /* 1. Reset baseline canvas conditions */
           html, body {
             background: #ffffff !important;
             margin: 0 !important;
             padding: 0 !important;
           }
 
-          /* 2. Hide common layout containers safely WITHOUT nuking the #root DOM */
-          header, footer, nav, sidebar, aside, button,
-          .lis-dashboard-vials-row, 
-          .no-print {
-            display: none !important;
+          /* 2. Hide everything in the body workspace wrapper by default */
+          body * {
+            visibility: hidden !important;
           }
 
-          /* 
-             If you are using a standard dashboard layout, you likely have wrappers.
-             Instead of display:none, we hide the visual appearance of your dashboard page 
-             so the layout engine retains the DOM node for printing.
-          */
-          #root > div:not(#lis-isolated-print-zone) {
-            opacity: 0 !important;
-            height: 0 !important;
-            overflow: hidden !important;
+          /* 3. Re-expose only the specific print zone container and its sub-nodes */
+          #lis-isolated-print-zone,
+          #lis-isolated-print-zone *,
+          .lis-physical-print-view,
+          .lis-physical-print-view * {
+            visibility: visible !important;
           }
 
-          /* 3. Force expose and absolute position the isolated print strip */
+          /* 4. Pull the printing canvas out of the dashboard tree flow cleanly */
           #lis-isolated-print-zone {
             display: block !important;
             position: absolute !important;
@@ -274,16 +269,14 @@ export const SampleBarcodeLabel: React.FC<BarcodeLabelProps> = ({ appointment })
             z-index: 9999999 !important;
           }
 
-          /* 4. Enforce strict visible styles to the barcode nodes and all sub-children */
-          #lis-isolated-print-zone,
-          #lis-isolated-print-zone *,
-          .lis-physical-print-view,
-          .lis-physical-print-view * {
-            visibility: visible !important;
-            opacity: 1 !important;
+          /* 5. Micro-target and break dashboard panel elements to eliminate ghost white screens */
+          .lis-dashboard-vials-row,
+          .lis-preview-card-view,
+          header, footer, nav, sidebar, aside, button {
+            display: none !important;
           }
 
-          /* 5. Precision dimensional mapping for the thermal engine */
+          /* 6. Precision layout measurements for continuous thermal tracking */
           .lis-physical-print-view {
             display: flex !important;
             flex-direction: column !important;
@@ -337,7 +330,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     border: '1px solid #e2e8f0',
     borderRadius: '6px',
     padding: '5px',
-    flex: '1 1 calc(25% - 6px)', // Adapts responsibly as you append 3 or 4 more status containers
+    flex: '1 1 calc(25% - 6px)',
     minWidth: '68px',
     maxWidth: '110px',
     display: 'flex',
@@ -371,7 +364,6 @@ const styles: { [key: string]: React.CSSProperties } = {
     padding: '2px',
     boxSizing: 'border-box'
   },
-  // High-density screen canvas layout structure
   dashboardPreviewCanvas: {
     width: '100%',
     display: 'flex',
@@ -381,7 +373,6 @@ const styles: { [key: string]: React.CSSProperties } = {
     overflow: 'hidden',
     boxSizing: 'border-box'
   },
-  // True physical dimensions parsed only by thermal print engine
   printCanvas: {
     width: '2in',
     height: '1in',
