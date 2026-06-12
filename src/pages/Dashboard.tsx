@@ -12,6 +12,7 @@ import ActionBar from './ActionBar';
 import { SlidoverSettings } from './SlidoverSettings';
 import { BookingRegistrationForm } from './BookingRegistrationForm';
 import { SampleBarcodeLabel } from './SampleBarcodeLabel';
+import RevenueDashboard from './RevenueDashboard';
 
 const RECORDS_PER_PAGE = 10;
 
@@ -37,7 +38,7 @@ interface AppointmentRowProps {
 
 export default function Dashboard() {
   const { user, signOut } = useAuth();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'settings'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'revenue' | 'settings'>('dashboard');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [lab, setLab] = useState<Lab | null>(null);
   const [loading, setLoading] = useState(true);
@@ -358,11 +359,16 @@ export default function Dashboard() {
           </div>
 
           {currentView === 'settings' ? (
-            <div className="animate-[fadeIn_0.2s_ease]"><Settings /></div>
-          ) : (
-            <>
-              {/* Clickable Stats */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  <div className="animate-[fadeIn_0.2s_ease]"><Settings /></div>
+) : currentView === 'revenue' ? (
+  <div className="animate-[fadeIn_0.2s_ease]">
+    {/* Explicitly passing down the active lab string from your local state */}
+    <RevenueDashboard labId={lab?.id ? String(lab.id) : ""} />
+  </div>
+) : (
+  <>
+    {/* Clickable Stats */}
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                 <StatCard 
                   icon={<CalendarCheck className="w-4 h-4 text-blue-600" />} 
                   iconBg="bg-blue-50" 
