@@ -8,21 +8,26 @@ import {
   RefreshCw, 
   Search,
   Filter,
-  ArrowUpRight
+  ArrowUpRight,
+  RotateCcw
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
-type PaymentMethod = "cash" | "upi" | "card_external" | "all";
+type PaymentMethod = "cash" | "upi" | "card_external" | "all" | "refunded";
 
 interface PaymentRecord {
   id: string | number;
   appointment_id: number;
+  booking_id: string; 
   lab_id: string;
   amount_paid: number;
   payment_method: "cash" | "upi" | "card_external";
   transaction_ref?: string;
   notes?: string;
   created_at: string;
+  is_refunded?: boolean;
+  refunded_amount?: number;
+  refund_method?: "upi" | "cash" | "bank_transfer";
 }
 
 const fmt = (n: number) =>
@@ -34,6 +39,13 @@ const METHOD_DETAILS = {
   card_external: { label: "Card", icon: CreditCard, color: "#3B82F6", bg: "#EFF6FF" },
 };
 
+const getTodayString = () => {
+  const d = new Date();
+  const offset = d.getTimezoneOffset();
+  const localDate = new Date(d.getTime() - (offset * 60 * 1000));
+  return localDate.toISOString().split('T')[0];
+};
+
 export default function RevenueDashboard({ labId }: { labId: string }) {
   const [loading, setLoading] = useState(true);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
@@ -41,9 +53,16 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
   
   // Filters
   const [methodFilter, setMethodFilter] = useState<PaymentMethod>("all");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [startDate, setStartDate] = useState(getTodayString());
+  const [endDate, setEndDate] = useState(getTodayString());
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Refund Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState<PaymentRecord | null>(null);
+  const [refundType, setRefundType] = useState<"full" | "custom">("full");
+  const [customAmount, setCustomAmount] = useState("");
+  const [refundThrough, setRefundThrough] = useState<"upi" | "cash" | "bank_transfer">("upi");
 
   useEffect(() => {
     if (labId) {
@@ -57,12 +76,29 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
     try {
       const { data, error: payError } = await supabase
         .from("payments")
-        .select("*")
+        .select(`
+          *,
+          appointments (
+            booking_id
+          )
+        `)
         .eq("lab_id", labId)
         .order("created_at", { ascending: false });
 
       if (payError) throw payError;
-      setPayments(data || []);
+
+      const formattedData: PaymentRecord[] = (data || []).map((item: any) => {
+        const appointmentObj = Array.isArray(item.appointments) 
+          ? item.appointments[0] 
+          : item.appointments;
+
+        return {
+          ...item,
+          booking_id: appointmentObj?.booking_id || `N/A (Appt #${item.appointment_id})`
+        };
+      });
+
+      setPayments(formattedData);
     } catch (err: any) {
       setError("Failed to fetch operational metrics: " + err.message);
     } finally {
@@ -70,13 +106,70 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
     }
   }
 
+  async function handleProcessRefund() {
+    if (!selectedPayment) return;
+
+    const finalRefundAmount = refundType === "full" 
+      ? selectedPayment.amount_paid 
+      : Number(customAmount);
+
+    if (isNaN(finalRefundAmount) || finalRefundAmount <= 0 || finalRefundAmount > selectedPayment.amount_paid) {
+      alert("Please enter a valid refund amount not exceeding the paid volume.");
+      return;
+    }
+
+    try {
+      const { error: updateError } = await supabase
+        .from("payments")
+        .update({
+          is_refunded: true,
+          refunded_amount: finalRefundAmount,
+          refund_method: refundThrough
+        })
+        .eq("id", selectedPayment.id);
+
+      if (updateError) throw updateError;
+
+      setPayments(prev => prev.map(p => {
+        if (p.id === selectedPayment.id) {
+          return {
+            ...p,
+            is_refunded: true,
+            refunded_amount: finalRefundAmount,
+            refund_method: refundThrough
+          };
+        }
+        return p;
+      }));
+
+      closeRefundModal();
+    } catch (err: any) {
+      alert("Could not process refund status: " + err.message);
+    }
+  }
+
+  const openRefundModal = (payment: PaymentRecord) => {
+    setSelectedPayment(payment);
+    setRefundType("full");
+    setCustomAmount("");
+    setRefundThrough("upi");
+    setIsModalOpen(true);
+  };
+
+  const closeRefundModal = () => {
+    setIsModalOpen(false);
+    setSelectedPayment(null);
+  };
+
   // Pure filtering logic
   const filteredPayments = useMemo(() => {
     return payments.filter((p) => {
-      // 1. Payment Method Filter
-      if (methodFilter !== "all" && p.payment_method !== methodFilter) return false;
+      if (methodFilter === "refunded") {
+        if (!p.is_refunded) return false;
+      } else if (methodFilter !== "all" && p.payment_method !== methodFilter) {
+        return false;
+      }
 
-      // 2. Date Range Filter
       if (startDate) {
         const start = new Date(startDate);
         start.setHours(0, 0, 0, 0);
@@ -88,20 +181,19 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
         if (new Date(p.created_at) > end) return false;
       }
 
-      // 3. Search Query Filter (Ref or Appointment ID)
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
         const matchesRef = p.transaction_ref?.toLowerCase().includes(query);
-        const matchesAppt = String(p.appointment_id).includes(query);
+        const matchesBooking = p.booking_id?.toLowerCase().includes(query);
         const matchesNotes = p.notes?.toLowerCase().includes(query);
-        if (!matchesRef && !matchesAppt && !matchesNotes) return false;
+        if (!matchesRef && !matchesBooking && !matchesNotes) return false;
       }
 
       return true;
     });
   }, [payments, methodFilter, startDate, endDate, searchQuery]);
 
-  // Aggregate Metrics derived from filtered data
+  // Dynamic Aggregate Metrics Layout Handler
   const metrics = useMemo(() => {
     let total = 0;
     let cash = 0;
@@ -109,20 +201,32 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
     let card = 0;
 
     filteredPayments.forEach((p) => {
-      const amt = Number(p.amount_paid || 0);
-      total += amt;
-      if (p.payment_method === "cash") cash += amt;
-      if (p.payment_method === "upi") upi += amt;
-      if (p.payment_method === "card_external") card += amt;
+      if (methodFilter === "refunded") {
+        // When showing explicitly refunded records, compile total capital lost to refunds
+        const refundAmt = p.refunded_amount || 0;
+        total += refundAmt;
+        if (p.payment_method === "cash") cash += refundAmt;
+        if (p.payment_method === "upi") upi += refundAmt;
+        if (p.payment_method === "card_external") card += refundAmt;
+      } else {
+        // Standard net operational calculation mode
+        const activeRefund = p.is_refunded ? (p.refunded_amount || 0) : 0;
+        const netAmount = Number(p.amount_paid || 0) - activeRefund;
+        
+        total += netAmount;
+        if (p.payment_method === "cash") cash += netAmount;
+        if (p.payment_method === "upi") upi += netAmount;
+        if (p.payment_method === "card_external") card += netAmount;
+      }
     });
 
     return { total, cash, upi, card };
-  }, [filteredPayments]);
+  }, [filteredPayments, methodFilter]);
 
   const clearFilters = () => {
     setMethodFilter("all");
-    setStartDate("");
-    setEndDate("");
+    setStartDate(getTodayString());
+    setEndDate(getTodayString());
     setSearchQuery("");
   };
 
@@ -158,48 +262,48 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
 
       {/* Dynamic Summary Cards */}
       <div style={styles.metricsGrid}>
-        <div style={{ ...styles.metricCard, borderTop: "4px solid #4F46E5" }}>
+        <div style={{ ...styles.metricCard, borderTop: methodFilter === "refunded" ? "4px solid #EF4444" : "4px solid #4F46E5" }}>
           <div style={styles.metricHeader}>
-            <span style={styles.metricLabel}>Total Revenue</span>
-            <div style={{ ...styles.iconWrapper, background: "#EEF2FF", color: "#4F46E5" }}>
+            <span style={styles.metricLabel}>{methodFilter === "refunded" ? "Total Refund Outflows" : "Total Revenue"}</span>
+            <div style={{ ...styles.iconWrapper, background: methodFilter === "refunded" ? "#FEF2F2" : "#EEF2FF", color: methodFilter === "refunded" ? "#EF4444" : "#4F46E5" }}>
               <TrendingUp size={20} />
             </div>
           </div>
           <div style={styles.metricValue}>{fmt(metrics.total)}</div>
-          <div style={styles.metricSubtext}>Aggregate net processed flow</div>
+          <div style={styles.metricSubtext}>{methodFilter === "refunded" ? "Sum of total processed refunds" : "Aggregate net processed flow"}</div>
         </div>
 
         <div style={{ ...styles.metricCard, borderTop: `4px solid ${METHOD_DETAILS.cash.color}` }}>
           <div style={styles.metricHeader}>
-            <span style={styles.metricLabel}>Cash Payments</span>
+            <span style={styles.metricLabel}>{methodFilter === "refunded" ? "Cash Refunded" : "Cash Payments"}</span>
             <div style={{ ...styles.iconWrapper, background: METHOD_DETAILS.cash.bg, color: METHOD_DETAILS.cash.color }}>
               <DollarSign size={20} />
             </div>
           </div>
           <div style={styles.metricValue}>{fmt(metrics.cash)}</div>
-          <div style={styles.metricSubtext}>Physical cash register balance</div>
+          <div style={styles.metricSubtext}>{methodFilter === "refunded" ? "Cash drawer deductions" : "Physical cash register balance"}</div>
         </div>
 
         <div style={{ ...styles.metricCard, borderTop: `4px solid ${METHOD_DETAILS.upi.color}` }}>
           <div style={styles.metricHeader}>
-            <span style={styles.metricLabel}>UPI Volume</span>
+            <span style={styles.metricLabel}>{methodFilter === "refunded" ? "UPI Refunded" : "UPI Volume"}</span>
             <div style={{ ...styles.iconWrapper, background: METHOD_DETAILS.upi.bg, color: METHOD_DETAILS.upi.color }}>
               <Smartphone size={20} />
             </div>
           </div>
           <div style={styles.metricValue}>{fmt(metrics.upi)}</div>
-          <div style={styles.metricSubtext}>Direct instant bank settlements</div>
+          <div style={styles.metricSubtext}>{methodFilter === "refunded" ? "Digital reversed volume" : "Direct instant bank settlements"}</div>
         </div>
 
         <div style={{ ...styles.metricCard, borderTop: `4px solid ${METHOD_DETAILS.card_external.color}` }}>
           <div style={styles.metricHeader}>
-            <span style={styles.metricLabel}>Card Terminals</span>
+            <span style={styles.metricLabel}>{methodFilter === "refunded" ? "Card Reversals" : "Card Terminals"}</span>
             <div style={{ ...styles.iconWrapper, background: METHOD_DETAILS.card_external.bg, color: METHOD_DETAILS.card_external.color }}>
               <CreditCard size={20} />
             </div>
           </div>
           <div style={styles.metricValue}>{fmt(metrics.card)}</div>
-          <div style={styles.metricSubtext}>External card merchant volume</div>
+          <div style={styles.metricSubtext}>{methodFilter === "refunded" ? "External terminal rollbacks" : "External card merchant volume"}</div>
         </div>
       </div>
 
@@ -209,7 +313,7 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
           <Search size={18} style={styles.searchIcon} />
           <input
             type="text"
-            placeholder="Search Reference, Appt ID..."
+            placeholder="Search Reference, Booking ID..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={styles.searchInput}
@@ -217,7 +321,6 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
         </div>
 
         <div style={styles.filtersGroup}>
-          {/* Method Selector */}
           <div style={styles.filterField}>
             <Filter size={14} style={{ color: "#64748B" }} />
             <select
@@ -229,10 +332,10 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
               <option value="cash">Cash Ledger Only</option>
               <option value="upi">UPI Dynamic Node</option>
               <option value="card_external">Card POS Terminal</option>
+              <option value="refunded">Refunded Entries Only</option>
             </select>
           </div>
 
-          {/* Date Parameters */}
           <div style={styles.dateFieldGroup}>
             <Calendar size={14} style={{ color: "#64748B" }} />
             <input
@@ -250,7 +353,7 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
             />
           </div>
 
-          {(startDate || endDate || methodFilter !== "all" || searchQuery) && (
+          {(startDate !== getTodayString() || endDate !== getTodayString() || methodFilter !== "all" || searchQuery) && (
             <button onClick={clearFilters} style={styles.clearFiltersBtn}>
               Reset Filters
             </button>
@@ -270,18 +373,19 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
             <thead>
               <tr style={styles.thRow}>
                 <th style={styles.th}>Timestamp</th>
-                <th style={styles.th}>Appointment ID</th>
+                <th style={styles.th}>Booking ID</th>
                 <th style={styles.th}>Channel Method</th>
                 <th style={styles.th}>Reference Identification</th>
                 <th style={styles.th}>Notes / Remarks</th>
                 <th style={{ ...styles.th, textAlign: "right" }}>Flow Volume</th>
+                <th style={{ ...styles.th, textAlign: "center" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredPayments.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={styles.emptyStateTd}>
-                    No specific payments found aligning with the active telemetry criteria.
+                  <td colSpan={7} style={styles.emptyStateTd}>
+                    No specific records found aligning with the active telemetry criteria.
                   </td>
                 </tr>
               ) : (
@@ -293,9 +397,13 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
                     bg: "#F1F5F9",
                   };
                   const IconComponent = methodCfg.icon;
+                  
+                  const rowStyle = p.is_refunded 
+                    ? { ...styles.tr, backgroundColor: "#FEF2F2" } 
+                    : styles.tr;
 
                   return (
-                    <tr key={p.id} style={styles.tr}>
+                    <tr key={p.id} style={rowStyle}>
                       <td style={styles.td}>
                         <div style={{ fontWeight: 500, color: "#0F172A" }}>
                           {new Date(p.created_at).toLocaleDateString("en-IN", {
@@ -312,7 +420,7 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
                         </div>
                       </td>
                       <td style={styles.td}>
-                        <span style={styles.idBadge}>#{p.appointment_id}</span>
+                        <span style={styles.idBadge}>{p.booking_id}</span>
                       </td>
                       <td style={styles.td}>
                         <span
@@ -332,8 +440,29 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
                       <td style={{ ...styles.td, color: "#64748B", fontSize: 13, fontStyle: p.notes ? "normal" : "italic" }}>
                         {p.notes ? p.notes : "No remarks configured"}
                       </td>
-                      <td style={{ ...styles.td, textAlign: "right", fontWeight: 700, color: "#0F172A", fontSize: 15 }}>
-                        {fmt(p.amount_paid)}
+                      <td style={{ ...styles.td, textAlign: "right", fontWeight: 700, color: p.is_refunded ? "#DC2626" : "#0F172A", fontSize: 15 }}>
+                        {p.is_refunded ? (
+                          <div>
+                            {/* FIXED: Replaced invalid style key 'blockRule' with standard valid CSS 'display: "block"' */}
+                            <span style={{ fontSize: 12, fontWeight: 500, color: "#EF4444", display: "block", marginBottom: 2 }}>
+                              (Refunded {fmt(p.refunded_amount || 0)})
+                            </span>
+                            <span style={{ textDecoration: "line-through", color: "#94A3B8", fontSize: 13 }}>
+                              {fmt(p.amount_paid)}
+                            </span>
+                          </div>
+                        ) : (
+                          fmt(p.amount_paid)
+                        )}
+                      </td>
+                      <td style={{ ...styles.td, textAlign: "center" }}>
+                        {p.is_refunded ? (
+                          <span style={styles.refundedLabelTag}>Refunded</span>
+                        ) : (
+                          <button onClick={() => openRefundModal(p)} style={styles.refundActionBtn}>
+                            <RotateCcw size={12} /> Refund
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -343,18 +472,88 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
           </table>
         </div>
       </div>
+
+      {/* Dynamic Modal Window */}
+      {isModalOpen && selectedPayment && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modalContent}>
+            <h3 style={styles.modalTitle}>Initiate Action Ledger Refund</h3>
+            <p style={styles.modalDescription}>
+              Processing workflow for Booking Reference ID: <strong style={{ color: "#0F172A" }}>{selectedPayment.booking_id}</strong>
+            </p>
+
+            <div style={{ marginBottom: 18 }}>
+              <label style={styles.modalLabel}>Refund Dimensions</label>
+              <div style={{ display: "flex", gap: 12, marginTop: 6 }}>
+                <label style={styles.radioLabel}>
+                  <input 
+                    type="radio" 
+                    name="refundType" 
+                    checked={refundType === "full"} 
+                    onChange={() => setRefundType("full")} 
+                  />
+                  Full Refund ({fmt(selectedPayment.amount_paid)})
+                </label>
+                <label style={styles.radioLabel}>
+                  <input 
+                    type="radio" 
+                    name="refundType" 
+                    checked={refundType === "custom"} 
+                    onChange={() => setRefundType("custom")} 
+                  />
+                  Custom Allocation
+                </label>
+              </div>
+            </div>
+
+            {refundType === "custom" && (
+              <div style={{ marginBottom: 18 }}>
+                <label style={styles.modalLabel}>Allocation Custom Value (₹)</label>
+                <input 
+                  type="number" 
+                  max={selectedPayment.amount_paid}
+                  placeholder="Enter explicit refund value flow"
+                  value={customAmount}
+                  onChange={(e) => setCustomAmount(e.target.value)}
+                  style={styles.modalTextInput}
+                />
+              </div>
+            )}
+
+            <div style={{ marginBottom: 24 }}>
+              <label style={styles.modalLabel}>Refund Method Channel Path</label>
+              <select 
+                value={refundThrough} 
+                onChange={(e) => setRefundThrough(e.target.value as any)}
+                style={styles.modalSelectInput}
+              >
+                <option value="upi">UPI Operational Node</option>
+                <option value="cash">Cash Ledger Settlement</option>
+                <option value="bank_transfer">Direct Corporate Bank Transfer</option>
+              </select>
+            </div>
+
+            <div style={styles.modalActionsRow}>
+              <button onClick={closeRefundModal} style={styles.modalCancelBtn}>
+                Abort Window
+              </button>
+              <button onClick={handleProcessRefund} style={styles.modalConfirmBtn}>
+                Confirm Process flow
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-// Help component fallback
 function HelpCircle(props: any) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
   );
 }
 
-// Premium Production Stylesheet
 const BASE_FONT = "Inter, 'Segoe UI', system-ui, -apple-system, sans-serif";
 
 const styles: Record<string, React.CSSProperties> = {
@@ -642,9 +841,138 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#94A3B8",
     fontSize: 14,
   },
+  refundActionBtn: {
+    fontFamily: BASE_FONT,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    background: "#EF4444",
+    color: "#FFFFFF",
+    border: "none",
+    borderRadius: 8,
+    padding: "6px 14px",
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: "pointer",
+    boxShadow: "0 1px 2px rgba(239, 68, 68, 0.2)",
+    transition: "background 0.2s ease",
+  },
+  refundedLabelTag: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: "#B91C1C",
+    backgroundColor: "#FEE2E2",
+    padding: "4px 12px",
+    borderRadius: 12,
+    textTransform: "uppercase",
+    letterSpacing: "0.025em",
+  },
+  modalOverlay: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(15, 23, 42, 0.4)",
+    backdropFilter: "blur(4px)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 9999,
+  },
+  modalContent: {
+    fontFamily: BASE_FONT,
+    background: "#FFFFFF",
+    borderRadius: 16,
+    width: "100%",
+    maxWidth: "460px",
+    padding: "28px",
+    boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 700,
+    color: "#0F172A",
+    margin: "0 0 6px 0",
+  },
+  modalDescription: {
+    fontSize: 14,
+    color: "#64748B",
+    margin: "0 0 20px 0",
+  },
+  modalLabel: {
+    display: "block",
+    fontSize: 12,
+    fontWeight: 600,
+    color: "#475569",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    marginBottom: 6,
+  },
+  radioLabel: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    fontSize: 14,
+    color: "#334155",
+    cursor: "pointer",
+  },
+  modalTextInput: {
+    fontFamily: BASE_FONT,
+    width: "100%",
+    padding: "10px 14px",
+    borderRadius: 10,
+    border: "1px solid #E2E8F0",
+    background: "#F8FAFC",
+    fontSize: 14,
+    color: "#0F172A",
+    outline: "none",
+    boxSizing: "border-box",
+  },
+  modalSelectInput: {
+    fontFamily: BASE_FONT,
+    width: "100%",
+    padding: "10px 14px",
+    borderRadius: 10,
+    border: "1px solid #E2E8F0",
+    background: "#F8FAFC",
+    fontSize: 14,
+    color: "#334155",
+    outline: "none",
+    cursor: "pointer",
+    boxSizing: "border-box",
+  },
+  modalActionsRow: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 12,
+    marginTop: 28,
+  },
+  modalCancelBtn: {
+    fontFamily: BASE_FONT,
+    background: "#FFFFFF",
+    border: "1px solid #E2E8F0",
+    color: "#475569",
+    padding: "10px 16px",
+    borderRadius: 10,
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+  modalConfirmBtn: {
+    fontFamily: BASE_FONT,
+    background: "#EF4444",
+    border: "none",
+    color: "#FFFFFF",
+    padding: "10px 18px",
+    borderRadius: 10,
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: "pointer",
+    boxShadow: "0 1px 2px rgba(239, 68, 68, 0.1)",
+  },
 };
 
-// Injection of animations for loader element
 if (typeof document !== "undefined") {
   const styleId = "revenue-module-animations";
   if (!document.getElementById(styleId)) {
