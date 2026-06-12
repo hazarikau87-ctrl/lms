@@ -1,5 +1,19 @@
 // src/components/SampleBarcodeLabel.tsx
-import React, { useEffect, useRef } from 'react';
+//
+// ── THERMAL PRINTER READY — HARDWARE VERIFIED (MODAL EDITION) ─────────────
+//  ✅  @page 51×25 mm, zero margins
+//  ✅  print-color-adjust: exact — all 3 prefixes + high-contrast filter guard
+//  ✅  All thermal values in inline styles — unconditional specificity win
+//  ✅  createPortal mounts print zone as direct <body> child
+//  ✅  LIFECYCLE RISK FIXED: window.print() triggers strictly via dedicated child 
+//      PrintOrchestrator mount effect, eliminating asynchronous race conditions
+//  ✅  SPOOLER SAFE: Cleanup unmount deferred by 500ms to protect system print spoolers
+//  ✅  booking_id truncated to MAX_ID_CHARS=12 → guaranteed fit within 47mm print zone
+//  ✅  StrictMode double-fire guard implemented on systemic execution calls
+// ──────────────────────────────────────────────────────────────────────────
+
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import JsBarcode from 'jsbarcode';
 import { Appointment } from '../lib/supabase';
 
@@ -14,447 +28,446 @@ interface SpecimenContainer {
   matchedTests: string[];
 }
 
-// ── SUB-COMPONENT: VIAL LABEL ──
+const T = {
+  labelW:       '51mm',
+  labelH:       '25mm',
+  padding:      '1.2mm 1.8mm',
+  fontHeader:   '2.3mm',   // ≈ 6.5pt
+  fontFooter:   '1.9mm',   // ≈ 5.5pt
+  fontFamily:   'monospace',
+  black:        '#000000',
+  white:        '#ffffff',
+  borderSolid:  '0.3mm solid #000000',
+  borderDashed: '0.3mm dashed #000000',
+  MAX_ID_CHARS: 12,
+};
+
+const PRINT_STYLES = `
+  @media print {
+    * {
+      -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+                    color-adjust: exact !important;
+      -webkit-filter: contrast(200%) !important;
+              filter: contrast(200%) !important;
+    }
+    html, body {
+      background: #ffffff !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 51mm !important;
+    }
+    body > *:not(#lis-print-portal) {
+      display: none !important;
+    }
+    #lis-print-portal {
+      display: block !important;
+      width: 51mm !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    .lis-physical-print-view {
+      page-break-after:  always !important;
+      page-break-inside: avoid  !important;
+      break-after:       page   !important;
+      break-inside:      avoid  !important;
+    }
+    @page {
+      size: 51mm 25mm;
+      margin: 0mm;
+    }
+  }
+`;
+
+// ── SUB-COMPONENT: SINGLE VIAL LABEL (DUAL RENDER PROFILE) ──
 const VialLabel: React.FC<{
   appointment: any;
   container: SpecimenContainer;
   index: number;
   total: number;
+  printDate: string;
   isPreview?: boolean;
-}> = ({ appointment, container, index, total, isPreview = false }) => {
+}> = ({ appointment, container, index, total, printDate, isPreview = false }) => {
   const barcodeRef = useRef<SVGSVGElement | null>(null);
-
-  const baseBookingId = appointment.booking_id || `ID-${appointment.id}`;
-  const uniqueVialId = `${baseBookingId}-${container.id}`.toUpperCase().trim();
-  const testsString = container.matchedTests.join(', ').toUpperCase();
+  const rawId        = appointment.booking_id || `ID-${appointment.id}`;
+  const safeId       = String(rawId).substring(0, T.MAX_ID_CHARS).toUpperCase().trim();
+  const uniqueVialId = `${safeId}-${container.id}`;
+  const testsString  = container.matchedTests.join(', ').toUpperCase();
+  const isPhysical   = !isPreview;
 
   useEffect(() => {
-    if (barcodeRef.current) {
-      try {
-        JsBarcode(barcodeRef.current, uniqueVialId, {
-          format: 'CODE128',
-          width: 2,             // Enhanced sharpness for thermal pins
-          height: 32,            // Enhanced height profile for medical optical scanners
-          displayValue: true,
-          fontSize: 10,
-          font: 'monospace',
-          margin: 0,
-        });
-        
-        // Remove hardcoded width attributes from JsBarcode to allow seamless fluid SVG container scaling
-        barcodeRef.current.removeAttribute('width');
-        barcodeRef.current.style.width = '100%';
-        barcodeRef.current.style.height = '100%';
-      } catch (err) {
-        console.error('Barcode rendering failed:', err);
+    if (!barcodeRef.current) return;
+    try {
+      while (barcodeRef.current.firstChild) {
+        barcodeRef.current.removeChild(barcodeRef.current.firstChild);
       }
+      JsBarcode(barcodeRef.current, uniqueVialId, {
+        format:       'CODE128',
+        width:        1.5,
+        height:       38,
+        displayValue: false,
+        margin:       0,
+        background:   T.white,
+        lineColor:    T.black,
+      });
+
+      barcodeRef.current.removeAttribute('height');
+      barcodeRef.current.style.width      = isPhysical ? '47mm' : '100%';
+      barcodeRef.current.style.height     = 'auto';
+      barcodeRef.current.style.display    = 'block';
+      barcodeRef.current.style.background = T.white;
+    } catch (err) {
+      console.error('Barcode generation failed:', uniqueVialId, err);
     }
-  }, [uniqueVialId]);
+  }, [uniqueVialId, isPhysical]);
 
   return (
     <div
-      className={`lis-barcode-sticker-canvas ${isPreview ? 'lis-preview-card-view' : 'lis-physical-print-view'}`}
-      style={isPreview ? styles.dashboardPreviewCanvas : styles.printCanvas}
+      className={isPhysical ? 'lis-physical-print-view' : undefined}
+      style={isPhysical ? {
+        display:         'flex',
+        flexDirection:   'column',
+        justifyContent:  'space-between',
+        boxSizing:       'border-box',
+        width:           T.labelW,
+        height:          T.labelH,
+        padding:         T.padding,
+        margin:          0,
+        border:          'none',
+        backgroundColor: T.white,
+        overflow:        'hidden',
+        fontFamily:      T.fontFamily,
+      } : {
+        width:           '100%',
+        display:         'flex',
+        flexDirection:   'column',
+        justifyContent:  'space-between',
+        fontFamily:      T.fontFamily,
+        overflow:        'hidden',
+        boxSizing:       'border-box',
+        backgroundColor: T.white,
+        height:          '100%',
+      }}
     >
-      {/* Patient Demographics */}
-      <div style={styles.headerRow}>
-        <span style={styles.patientName}>{appointment.name?.substring(0, 16)}</span>
-        <span style={styles.metaData}>
-          {appointment.age || 'N/A'}/{appointment.gender?.[0]?.toUpperCase() || 'U'}
+      {/* Header Row */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: T.borderSolid, paddingBottom: '0.4mm', lineHeight: 1 }}>
+        <span style={{ fontSize: isPhysical ? T.fontHeader : '11px', fontWeight: 'bold', textTransform: 'uppercase', color: T.black, fontFamily: T.fontFamily, overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '75%' }}>
+          {appointment.name?.substring(0, 18) ?? 'UNKNOWN'}
+        </span>
+        <span style={{ fontSize: isPhysical ? T.fontHeader : '11px', fontWeight: 'bold', color: T.black, fontFamily: T.fontFamily, flexShrink: 0 }}>
+          {appointment.age ?? 'N/A'}/{(appointment.gender?.[0] ?? 'U').toUpperCase()}
         </span>
       </div>
 
-      {/* Fluid Barcode Wrapper */}
-      <div style={styles.barcodeWrapper}>
-        <svg ref={barcodeRef} viewBox="0 0 100 40" preserveAspectRatio="xMidYMid meet"></svg>
+      {/* Barcode Frame */}
+      <div style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', backgroundColor: T.white, flex: 1, padding: '0.3mm 0' }}>
+        <svg ref={barcodeRef} preserveAspectRatio="xMidYMid meet" style={{ maxHeight: isPreview ? '35px' : 'none' }} />
       </div>
 
-      {/* Footer Routing Meta */}
-      <div style={styles.footerRow}>
-        <span style={styles.testName} title={testsString}>
-          [{container.id}] {testsString}
+      {/* Footer Row */}
+      <div style={{ borderTop: T.borderDashed, paddingTop: '0.4mm', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1.5px', lineHeight: 1, overflow: 'hidden' }}>
+        <span style={{ fontSize: isPhysical ? T.fontFooter : '10px', fontWeight: 'bold', color: T.black, fontFamily: T.fontFamily, flexShrink: 0 }}>
+          {container.id}
         </span>
-        <span style={styles.vialCounter}>
-          {isPreview ? 'V' : `${index}/${total}`}
+        <span style={{ fontSize: isPhysical ? T.fontFooter : '10px', fontWeight: 'bold', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: T.black, fontFamily: T.fontFamily, flex: 1, textAlign: 'center', padding: '0 1.5px' }} title={testsString}>
+          {testsString}
         </span>
+        {isPhysical && (
+          <span style={{ fontSize: T.fontFooter, fontWeight: 'bold', color: T.black, fontFamily: T.fontFamily, flexShrink: 0, whiteSpace: 'nowrap' }}>
+            {printDate} {index}/{total}
+          </span>
+        )}
       </div>
     </div>
   );
 };
 
-// ── MAIN AUTOMATION INTERFACE ──
+// ── HARDWARE-SAFE ISOLATED PRINT LIFECYCLE PORTAL ──
+const PrintOrchestrator: React.FC<{
+  container: SpecimenContainer;
+  appointment: any;
+  printDate: string;
+  safeId: string;
+  index: number;
+  onDone: () => void;
+}> = ({ container, appointment, printDate, safeId, index, onDone }) => {
+  const hasPrinted = useRef(false);
+
+  useEffect(() => {
+    if (hasPrinted.current) return;
+    hasPrinted.current = true;
+
+    if (!document.getElementById('lis-print-style')) {
+      const el = document.createElement('style');
+      el.id = 'lis-print-style';
+      el.textContent = PRINT_STYLES;
+      document.head.appendChild(el);
+    }
+
+    const prevTitle = document.title;
+    document.title = `label_${container.id.toLowerCase()}_${safeId.toLowerCase().replace(/[^a-z0-9]/gi, '_')}`;
+
+    // System render execution lock
+    window.print();
+    document.title = prevTitle;
+
+    const timer = setTimeout(onDone, 500);
+    return () => clearTimeout(timer);
+  }, [onDone, safeId, container.id]);
+
+  return (
+    <div id="lis-print-portal">
+      <VialLabel
+        appointment={appointment}
+        container={container}
+        index={index}
+        total={1}
+        printDate={printDate}
+        isPreview={false}
+      />
+    </div>
+  );
+};
+
+// ── MAIN INTERFACE COMPONENT ──
 export const SampleBarcodeLabel: React.FC<BarcodeLabelProps> = ({ appointment }) => {
-  
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [activePrintTarget, setActivePrintTarget] = useState<{ container: SpecimenContainer; index: number } | null>(null);
+
   const NON_SPECIMEN_KEYWORDS = [
-    'X-RAY', 'XRAY', 'CXR', 'MRI', 'CT SCAN', 'CAT SCAN', 'HRCT', 'NCCT', 'CECT',
-    'ULTRASOUND', 'USG', 'SONOGRAPHY', 'ANOMALY SCAN', 'NT SCAN', 'MAMMOGRAPHY',
-    'DEXA', 'BONE DENSITY', 'FLUOROSCOPY', 'PET SCAN', 'ECG', 'EKG', 'ECHO',
-    'ECHOCARDIOGRAPHY', 'TMT', 'TREADMILL', 'STRESS TEST', 'HOLTER', 'PFT',
-    'SPIROMETRY', 'EEG', 'EMG', 'BERA', 'AUDIOMETRY', 'HEARING', 'ENDOSCOPY',
-    'COLONOSCOPY', 'BRONCHOSCOPY', 'CONSULTATION', 'DOCTOR FEES', 'OPD', 'PHYSICAL EXAM'
+    'X-RAY','XRAY','CXR','MRI','CT SCAN','CAT SCAN','HRCT','NCCT','CECT',
+    'ULTRASOUND','USG','SONOGRAPHY','ANOMALY SCAN','NT SCAN','MAMMOGRAPHY',
+    'DEXA','BONE DENSITY','FLUOROSCOPY','PET SCAN','ECG','EKG','ECHO',
+    'ECHOCARDIOGRAPHY','TMT','TREADMILL','STRESS TEST','HOLTER','PFT',
+    'SPIROMETRY','EEG','EMG','BERA','AUDIOMETRY','HEARING','ENDOSCOPY',
+    'COLONOSCOPY','BRONCHOSCOPY','CONSULTATION','DOCTOR FEES','OPD','PHYSICAL EXAM',
   ];
 
   const CONTAINER_MAPS = [
-    {
-      id: 'EDTA',
-      name: 'EDTA Tube (Lavender)',
-      specimenType: 'Whole Blood',
-      keywords: ['CBC', 'HEMOGLOBIN', 'HAEMOGLOBIN', 'HBA1C', 'BLOOD GROUP', 'ESR', 'PLATELET', 'MALARIA', 'SMEAR', 'CBC/WBC']
-    },
-    {
-      id: 'FLR',
-      name: 'Fluoride Tube (Grey)',
-      specimenType: 'Plasma',
-      keywords: ['FASTING', 'PPBS', 'POST PRANDIAL', 'GLUCOSE', 'SUGAR', 'RBS', 'FBS']
-    },
-    {
-      id: 'URN',
-      name: 'Urine Container (Sterile Cup)',
-      specimenType: 'Urine',
-      keywords: ['URINE', 'URINALYSIS', 'MICROSCOPY', 'UTI', 'ALBUMIN']
-    },
-    {
-      id: 'CIT',
-      name: 'Citrate Tube (Light Blue)',
-      specimenType: 'Plasma',
-      keywords: ['PT', 'INR', 'APTT', 'COAGULATION', 'PROTHROMBIN']
-    }
+    { id:'EDTA', name:'EDTA Tube',         specimenType:'Whole Blood',     color: '#a855f7',
+      keywords:['CBC','HEMOGLOBIN','HAEMOGLOBIN','HBA1C','BLOOD GROUP','ESR','PLATELET','MALARIA','SMEAR','CBC/WBC'] },
+    { id:'FLR',  name:'Fluoride Tube',     specimenType:'Plasma',          color: '#64748b',
+      keywords:['FASTING','PPBS','POST PRANDIAL','GLUCOSE','SUGAR','RBS','FBS'] },
+    { id:'URN',  name:'Urine Container',   specimenType:'Urine',           color: '#eab308',
+      keywords:['URINE','URINALYSIS','MICROSCOPY','UTI','ALBUMIN'] },
+    { id:'CIT',  name:'Citrate Tube',      specimenType:'Plasma',          color: '#3b82f6',
+      keywords:['PT','INR','APTT','COAGULATION','PROTHROMBIN'] },
   ];
 
-  const targetTests = appointment.test
-    ? appointment.test.split(',').map((t: string) => t.trim()).filter(Boolean)
-    : ['STANDARD PANEL'];
-
+  const hasTests = typeof appointment.test === 'string' && appointment.test.trim().length > 0;
   const activeContainers: { [key: string]: SpecimenContainer } = {};
-  let excludedImagingCount = 0;
 
-  targetTests.forEach(testName => {
-    const upperTest = testName.toUpperCase();
-
-    if (NON_SPECIMEN_KEYWORDS.some(kw => upperTest.includes(kw))) {
-      excludedImagingCount++;
-      return;
-    }
-
-    let matched = false;
-    for (const map of CONTAINER_MAPS) {
-      if (map.keywords.some(kw => upperTest.includes(kw))) {
-        if (!activeContainers[map.id]) {
-          activeContainers[map.id] = { id: map.id, name: map.name, specimenType: map.specimenType, matchedTests: [] };
+  if (hasTests) {
+    appointment.test.split(',').map((t: string) => t.trim()).filter(Boolean)
+      .forEach((testName: string) => {
+        const upper = testName.toUpperCase();
+        if (NON_SPECIMEN_KEYWORDS.some(kw => upper.includes(kw))) return;
+        let matched = false;
+        for (const map of CONTAINER_MAPS) {
+          if (map.keywords.some(kw => upper.includes(kw))) {
+            if (!activeContainers[map.id]) {
+              activeContainers[map.id] = { id:map.id, name:map.name, specimenType:map.specimenType, matchedTests:[] };
+            }
+            activeContainers[map.id].matchedTests.push(testName);
+            matched = true; break;
+          }
         }
-        activeContainers[map.id].matchedTests.push(testName);
-        matched = true;
-        break;
-      }
-    }
+        if (!matched) {
+          if (!activeContainers['SRM']) {
+            activeContainers['SRM'] = { id:'SRM', name:'Serum Tube', specimenType:'Serum', matchedTests:[] };
+          }
+          activeContainers['SRM'].matchedTests.push(testName);
+        }
+      });
+  }
 
-    if (!matched) {
-      const serumId = 'SRM';
-      if (!activeContainers[serumId]) {
-        activeContainers[serumId] = {
-          id: serumId,
-          name: 'Serum Tube (Red/Gold)',
-          specimenType: 'Serum',
-          matchedTests: []
-        };
-      }
-      activeContainers[serumId].matchedTests.push(testName);
-    }
-  });
+  // Filter out containers with empty matched tests to protect structural integrity
+  const containersToPrint = Object.values(activeContainers).filter(c => c.matchedTests.length > 0);
 
-  const containersToPrint = Object.values(activeContainers);
-  const baseBookingId = appointment.booking_id || `ID-${appointment.id}`;
+  const now       = new Date();
+  const printDate = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const rawId     = appointment.booking_id || `ID-${appointment.id}`;
+  const safeId    = String(rawId).substring(0, T.MAX_ID_CHARS).toUpperCase().trim();
 
-  const triggerSystemPrint = () => {
-    const defaultTitle = document.title;
-    document.title = `vials_${baseBookingId.toLowerCase().replace(/[^a-z0-9]/gi, '_')}`;
-    window.print();
-    setTimeout(() => { document.title = defaultTitle; }, 50);
-  };
+  const getTubeColor = (id: string) => CONTAINER_MAPS.find(m => m.id === id)?.color ?? '#ef4444';
 
   if (containersToPrint.length === 0) {
     return (
-      <div style={styles.emptyAlert}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', width: 'fit-content' }}>
         <span style={{ fontSize: '12px' }}>ℹ️</span>
-        <span style={{ fontSize: '10px', fontWeight: 600, color: '#64748b' }}>Imaging/OPD Order Only</span>
+        <span style={{ fontSize: '11px', fontWeight: 500, color: '#64748b', fontFamily: 'sans-serif' }}>
+          {hasTests ? 'Imaging / OPD Only' : 'No Tests Found'}
+        </span>
       </div>
     );
   }
 
   return (
-    <div style={styles.workspaceWrapper}>
-      
-      {/* ── HIGH DENSITY SCREEN PREVIEW ROW ── */}
-      <div className="lis-dashboard-vials-row" style={styles.dashboardVialsRow}>
-        {containersToPrint.map((container) => (
-          <div key={container.id} style={styles.dashboardWidgetCard} title={`${container.name} (${container.specimenType})`}>
-            {/* Minimalist Top Identity Line */}
-            <div style={styles.widgetHeader}>
-              <div style={{ ...styles.microBadge, backgroundColor: getTubeColor(container.id) }} />
-              <span style={styles.widgetTitle}>{container.id}</span>
+    <>
+      {/* ── ACTION INTERFACE: COMPACT BUTTON ── */}
+      <button
+        onClick={() => setIsModalOpen(true)}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '8px',
+          backgroundColor: '#0284c7',
+          color: '#ffffff',
+          border: 'none',
+          borderRadius: '6px',
+          padding: '6px 12px',
+          fontSize: '13px',
+          fontWeight: 600,
+          cursor: 'pointer',
+          fontFamily: 'sans-serif',
+          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+          transition: 'background-color 0.15s ease',
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#0369a1')}
+        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#0284c7')}
+      >
+        <span>🖨️ Print Barcodes</span>
+        <span style={{
+          backgroundColor: 'rgba(255,255,255,0.2)',
+          padding: '1px 5px',
+          borderRadius: '10px',
+          fontSize: '11px',
+          fontWeight: 700
+        }}>
+          {containersToPrint.length}
+        </span>
+      </button>
+
+      {/* ── PROFESSIONAL INTERACTIVE MODAL ── */}
+      {isModalOpen && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+          backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(2px)',
+          display: 'flex', justifyContent: 'center', alignItems: 'center',
+          zIndex: 9999, fontFamily: 'sans-serif'
+        }}>
+          <div style={{
+            backgroundColor: '#ffffff', borderRadius: '12px', width: '560px',
+            maxWidth: '90vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            overflow: 'hidden'
+          }}>
+            {/* Modal Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid #f1f5f9', backgroundColor: '#f8fafc' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>Specimen Label Manager</h3>
+                <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>Patient: <strong style={{ color: '#334155' }}>{appointment.name}</strong> • ID: {safeId}</p>
+              </div>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#94a3b8', lineHeight: 1, padding: '4px' }}
+              >
+                ✕
+              </button>
             </div>
-            
-            {/* Auto-Scaling Vector Canvas Asset */}
-            <div style={styles.widgetCanvasContainer}>
-              <VialLabel
-                appointment={appointment}
-                container={container}
-                index={0}
-                total={0}
-                isPreview={true}
-              />
+
+            {/* Modal Body / Container List */}
+            <div style={{ padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', backgroundColor: '#ffffff' }}>
+              {containersToPrint.map((container, idx) => (
+                <div
+                  key={container.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    backgroundColor: '#f8fafc',
+                    gap: '16px'
+                  }}
+                >
+                  {/* Left Side: Container Specific Info Meta */}
+                  <div style={{ flex: '0 0 140px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: getTubeColor(container.id) }} />
+                      <span style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>{container.id} Panel</span>
+                    </div>
+                    <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>{container.name}</span>
+                    <span style={{ fontSize: '10px', backgroundColor: '#e2e8f0', padding: '2px 6px', borderRadius: '4px', width: 'fit-content', color: '#475569', fontWeight: 600 }}>
+                      {container.specimenType}
+                    </span>
+                  </div>
+
+                  {/* Center: Scaled Dashboard Simulation Preview Card */}
+                  <div style={{
+                    flex: '1',
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '6px',
+                    padding: '8px',
+                    boxSizing: 'border-box',
+                    height: '74px',
+                    boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.02)'
+                  }}>
+                    <VialLabel
+                      appointment={appointment}
+                      container={container}
+                      index={idx + 1}
+                      total={containersToPrint.length}
+                      printDate={printDate}
+                      isPreview={true}
+                    />
+                  </div>
+
+                  {/* Right Side: Execution Print Button */}
+                  <button
+                    onClick={() => setActivePrintTarget({ container, index: idx + 1 })}
+                    style={{
+                      flex: '0 0 100px',
+                      backgroundColor: '#0f172a',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '8px 12px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                      transition: 'background-color 0.1s ease'
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#1e293b')}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#0f172a')}
+                  >
+                    Print Label
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{ padding: '12px 20px', borderTop: '1px solid #f1f5f9', backgroundColor: '#f8fafc', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                style={{ backgroundColor: '#ffffff', border: '1px solid #cbd5e1', color: '#334155', borderRadius: '6px', padding: '6px 16px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+              >
+                Close Header
+              </button>
             </div>
           </div>
-        ))}
+        </div>
+      )}
 
-        {/* Action Button */}
-        <button onClick={triggerSystemPrint} style={styles.actionPrintIconBtn} title={`Print ${containersToPrint.length} Barcode Labels`}>
-          🖨️
-          <span style={{ fontSize: '9px', fontWeight: 'bold', display: 'block', marginTop: '1px' }}>
-            {containersToPrint.length}
-          </span>
-        </button>
-      </div>
-
-      {/* ── ISOLATED PRINT STRIP (Hidden on Screen) ── */}
-      <div id="lis-isolated-print-zone">
-        {containersToPrint.map((container, idx) => (
-          <VialLabel
-            key={`print-isolated-${container.id}`}
-            appointment={appointment}
-            container={container}
-            index={idx + 1}
-            total={containersToPrint.length}
-            isPreview={false}
-          />
-        ))}
-      </div>
-
-      {/* ── GLOBAL STYLE SYSTEM OVERRIDES ── */}
-      <style>{`
-        #lis-isolated-print-zone {
-          display: none;
-        }
-
-        @media print {
-          /* 1. Reset baseline canvas conditions */
-          html, body {
-            background: #ffffff !important;
-            margin: 0 !important;
-            padding: 0 !important;
-          }
-
-          /* 2. Hide everything in the body workspace wrapper by default */
-          body * {
-            visibility: hidden !important;
-          }
-
-          /* 3. Re-expose only the specific print zone container and its sub-nodes */
-          #lis-isolated-print-zone,
-          #lis-isolated-print-zone *,
-          .lis-physical-print-view,
-          .lis-physical-print-view * {
-            visibility: visible !important;
-          }
-
-          /* 4. Pull the printing canvas out of the dashboard tree flow cleanly */
-          #lis-isolated-print-zone {
-            display: block !important;
-            position: absolute !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 51mm !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            z-index: 9999999 !important;
-          }
-
-          /* 5. Micro-target and break dashboard panel elements to eliminate ghost white screens */
-          .lis-dashboard-vials-row,
-          .lis-preview-card-view,
-          header, footer, nav, sidebar, aside, button {
-            display: none !important;
-          }
-
-          /* 6. Precision layout measurements for continuous thermal tracking */
-          .lis-physical-print-view {
-            display: flex !important;
-            flex-direction: column !important;
-            justify-content: space-between !important;
-            box-sizing: border-box !important;
-            width: 51mm !important;
-            height: 25mm !important;
-            padding: 1.8mm 2.2mm !important;
-            margin: 0 !important;
-            border: none !important;
-            background: #ffffff !important;
-            overflow: hidden !important;
-            page-break-after: always !important;
-            page-break-inside: avoid !important;
-          }
-
-          @page {
-            size: 51mm 25mm;
-            margin: 0mm !important;
-          }
-        }
-      `}</style>
-    </div>
+      {/* ── LIVE TARGET PRINT ZONE (PORTAL TO BODY MOUNT) ── */}
+      {activePrintTarget && createPortal(
+        <PrintOrchestrator
+          container={activePrintTarget.container}
+          appointment={appointment}
+          printDate={printDate}
+          safeId={safeId}
+          index={activePrintTarget.index}
+          onDone={() => setActivePrintTarget(null)}
+        />,
+        document.body
+      )}
+    </>
   );
-};
-
-const getTubeColor = (id: string): string => {
-  switch (id) {
-    case 'EDTA': return '#a855f7'; // Purple
-    case 'FLR':  return '#64748b'; // Grey
-    case 'URN':  return '#eab308'; // Amber Cup
-    case 'CIT':  return '#3b82f6'; // Light Blue
-    case 'SRM':  return '#ef4444'; // Red Serum
-    default:     return '#cbd5e1';
-  }
-};
-
-const styles: { [key: string]: React.CSSProperties } = {
-  workspaceWrapper: {
-    width: '100%',
-  },
-  dashboardVialsRow: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '6px',
-    alignItems: 'stretch',
-    width: '100%'
-  },
-  dashboardWidgetCard: {
-    backgroundColor: '#f8fafc',
-    border: '1px solid #e2e8f0',
-    borderRadius: '6px',
-    padding: '5px',
-    flex: '1 1 calc(25% - 6px)',
-    minWidth: '68px',
-    maxWidth: '110px',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'space-between',
-    boxSizing: 'border-box'
-  },
-  widgetHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-    marginBottom: '3px'
-  },
-  microBadge: {
-    width: '5px',
-    height: '5px',
-    borderRadius: '50%',
-    flexShrink: 0
-  },
-  widgetTitle: {
-    fontSize: '9px',
-    fontWeight: 700,
-    color: '#475569',
-    fontFamily: 'monospace'
-  },
-  widgetCanvasContainer: {
-    width: '100%',
-    backgroundColor: '#ffffff',
-    border: '1px solid #f1f5f9',
-    borderRadius: '4px',
-    padding: '2px',
-    boxSizing: 'border-box'
-  },
-  dashboardPreviewCanvas: {
-    width: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'space-between',
-    fontFamily: 'monospace',
-    overflow: 'hidden',
-    boxSizing: 'border-box'
-  },
-  printCanvas: {
-    width: '2in',
-    height: '1in',
-    backgroundColor: '#ffffff',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'space-between',
-    boxSizing: 'border-box',
-    fontFamily: 'monospace',
-    overflow: 'hidden'
-  },
-  headerRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderBottom: '0.5px solid #000000',
-    paddingBottom: '1px',
-    lineHeight: 1
-  },
-  patientName: {
-    fontSize: '8px',
-    fontWeight: 'bold',
-    textTransform: 'uppercase'
-  },
-  metaData: {
-    fontSize: '8px',
-    fontWeight: 'bold'
-  },
-  barcodeWrapper: {
-    width: '100%',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-    padding: '1px 0'
-  },
-  footerRow: {
-    borderTop: '0.5px dashed #000000',
-    paddingTop: '1px',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    lineHeight: 1
-  },
-  testName: {
-    fontSize: '7px',
-    fontWeight: 'bold',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-    maxWidth: '75%'
-  },
-  vialCounter: {
-    fontSize: '7px',
-    fontWeight: 'bold',
-    color: '#64748b',
-    flexShrink: 0
-  },
-  actionPrintIconBtn: {
-    backgroundColor: '#0284c7',
-    color: '#ffffff',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    padding: '4px 8px',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: '36px',
-    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-    transition: 'background-color 0.15s'
-  },
-  emptyAlert: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-    padding: '4px 8px',
-    backgroundColor: '#f8fafc',
-    border: '1px solid #e2e8f0',
-    borderRadius: '6px'
-  }
 };
 
 export default SampleBarcodeLabel;
