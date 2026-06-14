@@ -11,7 +11,8 @@ import {
   RotateCcw,
   UserCheck,
   CheckCircle2,
-  Clock
+  Clock,
+  ArrowUpRight
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
@@ -91,7 +92,7 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
     }
   }, [labId]);
 
- async function loadDashboardData() {
+  async function loadDashboardData() {
     setLoading(true);
     setError("");
     try {
@@ -117,7 +118,7 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
         };
       });
 
-      // 2. BULLETPROOF FLAT FETCH FOR COMMISSIONS (Avoids 400 relationship errors)
+      // 2. Optimized Flat Fetch for commissions using settled_at safely
       const { data: commData, error: commError } = await supabase
         .from("doctor_commissions")
         .select("id, appointment_id, doctor_id, amount, commission_pct, status, settled_at, created_at")
@@ -129,17 +130,14 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
       let formattedCommissions: CommissionRecord[] = [];
 
       if (commData && commData.length > 0) {
-        // Extract distinct IDs to fetch reference relations safely
         const appointmentIds = Array.from(new Set(commData.map(c => c.appointment_id).filter(Boolean)));
         const doctorIds = Array.from(new Set(commData.map(c => c.doctor_id).filter(Boolean)));
 
-        // Fetch matching Appointments mapped by ID
         const { data: appts } = await supabase
           .from("appointments")
           .select("id, booking_id")
           .in("id", appointmentIds);
 
-        // Fetch matching Doctors mapped by ID
         const { data: docs } = await supabase
           .from("doctors")
           .select("id, name")
@@ -297,19 +295,39 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
     });
   }, [commissions, commissionFilter, startDate, endDate, searchQuery]);
 
+  // Comprehensive Channel Breakdown Matrix calculations
   const financialTotals = useMemo(() => {
-    let revenueTotal = 0;
-    let cashFlow = 0;
-    let upiFlow = 0;
-    let cardFlow = 0;
+    let grossRevenue = 0;
+    let totalRefunds = 0;
+    
+    let cashGross = 0;
+    let cashRefunded = 0;
+    
+    let upiGross = 0;
+    let upiRefunded = 0;
+    
+    let cardGross = 0;
+    let cardRefunded = 0;
 
     payments.forEach((p) => {
-      const activeRefund = p.is_refunded ? (p.refunded_amount || 0) : 0;
-      const netAmount = Number(p.amount_paid || 0) - activeRefund;
-      revenueTotal += netAmount;
-      if (p.payment_method === "cash") cashFlow += netAmount;
-      if (p.payment_method === "upi") upiFlow += netAmount;
-      if (p.payment_method === "card_external") cardFlow += netAmount;
+      const pAmount = Number(p.amount_paid || 0);
+      const refAmount = p.is_refunded ? Number(p.refunded_amount || 0) : 0;
+      
+      grossRevenue += pAmount;
+      totalRefunds += refAmount;
+
+      if (p.payment_method === "cash") {
+        cashGross += pAmount;
+        cashRefunded += refAmount;
+      }
+      if (p.payment_method === "upi") {
+        upiGross += pAmount;
+        upiRefunded += refAmount;
+      }
+      if (p.payment_method === "card_external") {
+        cardGross += pAmount;
+        cardRefunded += refAmount;
+      }
     });
 
     let totalCommissionOwed = 0;
@@ -323,7 +341,13 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
     });
 
     return { 
-      revenueTotal, cashFlow, upiFlow, cardFlow, 
+      netRevenue: grossRevenue - totalRefunds,
+      grossRevenue,
+      totalRefunds,
+      cashNet: cashGross - cashRefunded,
+      upiNet: upiGross - upiRefunded,
+      cardNet: cardGross - cardRefunded,
+      cashGross, upiGross, cardGross,
       totalCommissionOwed, settledCommissions, unpaidCommissions 
     };
   }, [payments, commissions]);
@@ -341,56 +365,129 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
 
   return (
     <div style={styles.dashboardShell}>
+      {/* Upper Navigation Section */}
       <div style={styles.headerRow}>
         <div>
           <h1 style={styles.title}>Revenue & Accounts Analytics</h1>
           <p style={styles.subtitle}>Overview of transactions, dynamic volumes, and breakdown variables</p>
         </div>
         <button onClick={loadDashboardData} style={styles.refreshBtn}>
-          <RefreshCw size={16} /> Sync Data
+          <RefreshCw size={14} /> Sync Data
         </button>
       </div>
 
       {error && <div style={styles.errorAlert}><span>⚠</span> {error}</div>}
 
+      {/* Premium Multi-Channel Interactive KPI Container Rows */}
       <div style={styles.metricsGrid}>
+        {/* Card 1: Net Cumulative Revenue */}
         <div style={{ ...styles.metricCard, borderTop: "4px solid #4F46E5" }}>
           <div style={styles.metricHeader}>
             <span style={styles.metricLabel}>Net Register Revenue</span>
-            <div style={{ ...styles.iconWrapper, background: "#EEF2FF", color: "#4F46E5" }}><TrendingUp size={20} /></div>
+            <div style={{ ...styles.iconWrapper, background: "#EEF2FF", color: "#4F46E5" }}><TrendingUp size={18} /></div>
           </div>
-          <div style={styles.metricValue}>{fmt(financialTotals.revenueTotal)}</div>
-          <div style={styles.metricSubtext}>Aggregate net processed ledger flow</div>
+          <div style={styles.metricValue}>{fmt(financialTotals.netRevenue)}</div>
+          <div style={styles.channelBreakdownList}>
+            <div style={styles.breakdownRow}>
+              <span style={styles.breakdownLabel}>Gross Inflow</span>
+              <span style={styles.breakdownValPositive}>{fmt(financialTotals.grossRevenue)}</span>
+            </div>
+            <div style={styles.breakdownRow}>
+              <span style={styles.breakdownLabel}>Total Refunds</span>
+              <span style={styles.breakdownValNegative}>-{fmt(financialTotals.totalRefunds)}</span>
+            </div>
+          </div>
         </div>
 
-        <div style={{ ...styles.metricCard, borderTop: "4px solid #F59E0B" }}>
+        {/* Card 2: UPI Ledger Node Streams */}
+        <div style={{ ...styles.metricCard, borderTop: "4px solid #8B5CF6" }}>
           <div style={styles.metricHeader}>
-            <span style={styles.metricLabel}>Total Comm Liabilities</span>
-            <div style={{ ...styles.iconWrapper, background: "#FFFBEB", color: "#F59E0B" }}><UserCheck size={20} /></div>
+            <span style={styles.metricLabel}>UPI Node Volume</span>
+            <div style={{ ...styles.iconWrapper, background: "#F5F3FF", color: "#8B5CF6" }}><Smartphone size={18} /></div>
           </div>
-          <div style={styles.metricValue}>{fmt(financialTotals.totalCommissionOwed)}</div>
-          <div style={styles.metricSubtext}>Total pipeline accrued commissions</div>
+          <div style={styles.metricValue}>{fmt(financialTotals.upiNet)}</div>
+          <div style={styles.channelBreakdownList}>
+            <div style={styles.breakdownRow}>
+              <span style={styles.breakdownLabel}>Share Weight</span>
+              <span style={styles.breakdownBadge}>
+                {financialTotals.grossRevenue > 0 
+                  ? ((financialTotals.upiGross / financialTotals.grossRevenue) * 100).toFixed(1) + "%" 
+                  : "0.0%"}
+              </span>
+            </div>
+            <div style={styles.breakdownRow}>
+              <span style={styles.breakdownLabel}>Gross Channel In</span>
+              <span style={styles.breakdownTextSubtle}>{fmt(financialTotals.upiGross)}</span>
+            </div>
+          </div>
         </div>
 
-        <div style={{ ...styles.metricCard, borderTop: "4px solid #EF4444" }}>
-          <div style={styles.metricHeader}>
-            <span style={styles.metricLabel}>Unpaid Payouts</span>
-            <div style={{ ...styles.iconWrapper, background: "#FEF2F2", color: "#EF4444" }}><Clock size={20} /></div>
-          </div>
-          <div style={styles.metricValue}>{fmt(financialTotals.unpaidCommissions)}</div>
-          <div style={styles.metricSubtext}>Awaiting balance distribution</div>
-        </div>
-
+        {/* Card 3: Cash Desk Bookings */}
         <div style={{ ...styles.metricCard, borderTop: "4px solid #10B981" }}>
           <div style={styles.metricHeader}>
-            <span style={styles.metricLabel}>Settled Payouts</span>
-            <div style={{ ...styles.iconWrapper, background: "#F0FDF4", color: "#10B981" }}><CheckCircle2 size={20} /></div>
+            <span style={styles.metricLabel}>Cash Counter Flow</span>
+            <div style={{ ...styles.iconWrapper, background: "#F0FDF4", color: "#10B981" }}><DollarSign size={18} /></div>
           </div>
-          <div style={styles.metricValue}>{fmt(financialTotals.settledCommissions)}</div>
-          <div style={styles.metricSubtext}>Disbursed allocation metrics</div>
+          <div style={styles.metricValue}>{fmt(financialTotals.cashNet)}</div>
+          <div style={styles.channelBreakdownList}>
+            <div style={styles.breakdownRow}>
+              <span style={styles.breakdownLabel}>Share Weight</span>
+              <span style={styles.breakdownBadge}>
+                {financialTotals.grossRevenue > 0 
+                  ? ((financialTotals.cashGross / financialTotals.grossRevenue) * 100).toFixed(1) + "%" 
+                  : "0.0%"}
+              </span>
+            </div>
+            <div style={styles.breakdownRow}>
+              <span style={styles.breakdownLabel}>Gross Channel In</span>
+              <span style={styles.breakdownTextSubtle}>{fmt(financialTotals.cashGross)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 4: External Cards POS Terminal */}
+        <div style={{ ...styles.metricCard, borderTop: "4px solid #3B82F6" }}>
+          <div style={styles.metricHeader}>
+            <span style={styles.metricLabel}>Card POS Terminal</span>
+            <div style={{ ...styles.iconWrapper, background: "#EFF6FF", color: "#3B82F6" }}><CreditCard size={18} /></div>
+          </div>
+          <div style={styles.metricValue}>{fmt(financialTotals.cardNet)}</div>
+          <div style={styles.channelBreakdownList}>
+            <div style={styles.breakdownRow}>
+              <span style={styles.breakdownLabel}>Share Weight</span>
+              <span style={styles.breakdownBadge}>
+                {financialTotals.grossRevenue > 0 
+                  ? ((financialTotals.cardGross / financialTotals.grossRevenue) * 100).toFixed(1) + "%" 
+                  : "0.0%"}
+              </span>
+            </div>
+            <div style={styles.breakdownRow}>
+              <span style={styles.breakdownLabel}>Gross Channel In</span>
+              <span style={styles.breakdownTextSubtle}>{fmt(financialTotals.cardGross)}</span>
+            </div>
+          </div>
         </div>
       </div>
 
+      {/* Secondary Meta Row: Commission Tracking Subsets */}
+      <div style={styles.metaSummaryRow}>
+        <div style={styles.metaItem}>
+          <UserCheck size={14} style={{ color: "#F59E0B" }} />
+          <span>Accrued Referral Liability: <strong>{fmt(financialTotals.totalCommissionOwed)}</strong></span>
+        </div>
+        <div style={styles.metaItemDivider} />
+        <div style={styles.metaItem}>
+          <Clock size={14} style={{ color: "#EF4444" }} />
+          <span>Awaiting Settlement: <strong style={{ color: "#DC2626" }}>{fmt(financialTotals.unpaidCommissions)}</strong></span>
+        </div>
+        <div style={styles.metaItemDivider} />
+        <div style={styles.metaItem}>
+          <CheckCircle2 size={14} style={{ color: "#10B981" }} />
+          <span>Disbursed Distributions: <strong style={{ color: "#16A34A" }}>{fmt(financialTotals.settledCommissions)}</strong></span>
+        </div>
+      </div>
+
+      {/* Navigation View Switcher */}
       <div style={styles.tabsContainer}>
         <button 
           onClick={() => setActiveView("payments")} 
@@ -406,6 +503,7 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
         </button>
       </div>
 
+      {/* Query Control Filter Workspace */}
       <div style={styles.filterBar}>
         <div style={styles.searchContainer}>
           <Search size={18} style={styles.searchIcon} />
@@ -462,6 +560,7 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
         </div>
       </div>
 
+      {/* Main Content Workspace Layout Matrix */}
       <div style={styles.tableCard}>
         {activeView === "payments" ? (
           <>
@@ -588,6 +687,7 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
         )}
       </div>
 
+      {/* Refund Interface Modal Context Window */}
       {isModalOpen && selectedPayment && (
         <div style={styles.modalOverlay}>
           <div style={styles.modalContent}>
@@ -639,21 +739,37 @@ const BASE_FONT = "Inter, 'Segoe UI', system-ui, -apple-system, sans-serif";
 const styles: Record<string, React.CSSProperties> = {
   dashboardShell: { fontFamily: BASE_FONT, background: "#F8FAFC", minHeight: "100vh", padding: "32px max(24px, 4vw)", boxSizing: "border-box", color: "#0F172A" },
   loaderContainer: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "60vh", gap: 12 },
-  spinningIcon: { color: "#4F46E5" },
+  spinningIcon: { color: "#4F46E5", animation: "spin 1s linear infinite" },
   headerRow: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32, flexWrap: "wrap", gap: 16 },
-  title: { fontSize: 28, fontWeight: 800, letterSpacing: "-0.025em", margin: "0 0 4px 0", color: "#0F172A" },
+  title: { fontSize: 26, fontWeight: 800, letterSpacing: "-0.025em", margin: "0 0 4px 0", color: "#0F172A" },
   subtitle: { fontSize: 14, color: "#64748B", margin: 0 },
-  refreshBtn: { display: "inline-flex", alignItems: "center", gap: 8, background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 10, padding: "10px 16px", fontSize: 13, fontWeight: 600, color: "#334155", cursor: "pointer", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" },
+  refreshBtn: { display: "inline-flex", alignItems: "center", gap: 8, background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 10, padding: "10px 16px", fontSize: 13, fontWeight: 600, color: "#334155", cursor: "pointer", boxShadow: "0 1px 2px rgba(0,0,0,0.05)", transition: "all 0.2s ease" },
   errorAlert: { background: "#FEF2F2", border: "1px solid #FECACA", color: "#B91C1C", borderRadius: 12, padding: "14px 18px", marginBottom: 24, fontSize: 14, fontWeight: 500 },
-  metricsGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 20, marginBottom: 32 },
-  metricCard: { background: "#FFFFFF", borderRadius: 16, padding: 24, boxShadow: "0 1px 3px rgba(15,23,42,0.03)", display: "flex", flexDirection: "column", position: "relative" },
-  metricHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
-  metricLabel: { fontSize: 13, fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em" },
-  iconWrapper: { width: 38, height: 38, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" },
-  metricValue: { fontSize: 26, fontWeight: 800, color: "#0F172A", letterSpacing: "-0.02em", marginBottom: 4 },
-  metricSubtext: { fontSize: 12, color: "#94A3B8" },
+  
+  // Refactored Premium KPI Cards Layout Matrix
+  metricsGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 20, marginBottom: 24 },
+  metricCard: { background: "#FFFFFF", borderRadius: 16, padding: "20px 24px", boxShadow: "0 1px 3px rgba(15,23,42,0.02), 0 4px 12px rgba(15,23,42,0.015)", display: "flex", flexDirection: "column", border: "1px solid #E2E8F0" },
+  metricHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
+  metricLabel: { fontSize: 12, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em" },
+  iconWrapper: { width: 34, height: 34, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" },
+  metricValue: { fontSize: 26, fontWeight: 800, color: "#0F172A", letterSpacing: "-0.03em", marginBottom: 12, fontVariantNumeric: "tabular-nums" },
+  
+  // Premium channel breakdown list internal structures
+  channelBreakdownList: { borderTop: "1px dashed #E2E8F0", paddingTop: 10, display: "flex", flexDirection: "column", gap: 6 },
+  breakdownRow: { display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12 },
+  breakdownLabel: { color: "#94A3B8", fontWeight: 500 },
+  breakdownValPositive: { color: "#10B981", fontWeight: 600, fontVariantNumeric: "tabular-nums" },
+  breakdownValNegative: { color: "#EF4444", fontWeight: 600, fontVariantNumeric: "tabular-nums" },
+  breakdownTextSubtle: { color: "#475569", fontWeight: 600, fontVariantNumeric: "tabular-nums" },
+  breakdownBadge: { background: "#F1F5F9", color: "#475569", padding: "2px 6px", borderRadius: 6, fontWeight: 700, fontSize: 11, fontVariantNumeric: "tabular-nums" },
+  
+  // Clean Horizontal Ribbon for Referral Summaries
+  metaSummaryRow: { display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", background: "#FFFFFF", padding: "12px 20px", borderRadius: 12, border: "1px solid #E2E8F0", marginBottom: 32, fontSize: 13, color: "#475569" },
+  metaItem: { display: "flex", alignItems: "center", gap: 8 },
+  metaItemDivider: { width: 1, height: 16, background: "#E2E8F0" },
+
   tabsContainer: { display: "flex", gap: 8, borderBottom: "2px solid #E2E8F0", marginBottom: 20, paddingBottom: 2 },
-  tabButton: { border: "none", background: "transparent", padding: "10px 20px", fontSize: 14, fontWeight: 600, color: "#64748B", cursor: "pointer", borderBottom: "2px solid transparent", marginBottom: "-4px" },
+  tabButton: { border: "none", background: "transparent", padding: "10px 20px", fontSize: 14, fontWeight: 600, color: "#64748B", cursor: "pointer", borderBottom: "2px solid transparent", marginBottom: "-4px", transition: "all 0.15s ease" },
   activeTabButton: { color: "#4F46E5", borderBottom: "2px solid #4F46E5" },
   filterBar: { background: "#FFFFFF", borderRadius: 16, padding: 16, border: "1px solid #E2E8F0", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 24 },
   searchContainer: { display: "flex", alignItems: "center", background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: "0 14px", flex: "1 1 300px" },
