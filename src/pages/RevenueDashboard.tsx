@@ -157,7 +157,7 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
             doctor_name: doctorMap[item.doctor_id] || "Unknown Doctor",
             total_test_value: calculatedTotalTestValue,
             commission_amount: item.amount || 0,
-            status: item.status || "unpaid",
+            status: item.status ? item.status.toLowerCase() : "unpaid",
             settled_at: item.settled_at,
             created_at: item.created_at
           };
@@ -175,28 +175,31 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
   }
 
   async function toggleCommissionStatus(comm: CommissionRecord) {
-    const nextStatus = comm.status === "unpaid" ? "settled" : "unpaid";
+    // 1. Map to uppercase strings to satisfy the PostgreSQL Check Constraint
+    const databaseStatusPayload = comm.status === "unpaid" ? "SETTLED" : "UNPAID";
+    const nextFrontendStatus = comm.status === "unpaid" ? "settled" : "unpaid";
+    
     try {
       const { error: updateErr } = await supabase
         .from("doctor_commissions")
         .update({ 
-          status: nextStatus,
-          settled_at: nextStatus === "settled" ? new Date().toISOString() : null
+          status: databaseStatusPayload, // Will write "SETTLED" or "UNPAID"
+          settled_at: nextFrontendStatus === "settled" ? new Date().toISOString() : null
         })
         .eq("id", comm.id);
 
       if (updateErr) throw updateErr;
 
+      // 2. Update UI state using the format your dashboard expects
       setCommissions(prev => prev.map(c => c.id === comm.id ? { 
         ...c, 
-        status: nextStatus,
-        settled_at: nextStatus === "settled" ? new Date().toISOString() : undefined
+        status: nextFrontendStatus,
+        settled_at: nextFrontendStatus === "settled" ? new Date().toISOString() : undefined
       } : c));
     } catch (err: any) {
       alert("Could not update commission settlement tracking state: " + err.message);
     }
   }
-
   async function handleProcessRefund() {
     if (!selectedPayment) return;
     const finalRefundAmount = refundType === "full" ? selectedPayment.amount_paid : Number(customAmount);
