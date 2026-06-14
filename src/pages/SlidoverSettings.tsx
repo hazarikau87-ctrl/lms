@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 // Added Lock icon alongside existing lucide-react icons
-import { Settings, Sliders, Shield, Bell, HelpCircle, LayoutDashboard, TrendingUp, UserRound, Lock } from 'lucide-react';
+import { Settings, Sliders, Shield, Bell, HelpCircle, LayoutDashboard, TrendingUp, UserRound, } from 'lucide-react';
 
 interface SlidoverSettingsProps {
   currentLab?: string;
@@ -107,7 +107,7 @@ export const SlidoverSettings: React.FC<SlidoverSettingsProps> = ({
               
               {/* Inline Lock Indicator when Sidebar is expanded */}
               {isFreeUser && isHovered && (
-                <Lock className="w-3.5 h-3.5 text-slate-400 flex-shrink-0 ml-2 animate-pulse" />
+               // <Lock className="w-3.5 h-3.5 text-slate-400 flex-shrink-0 ml-2 animate-pulse" />
               )}
             </button>
 
