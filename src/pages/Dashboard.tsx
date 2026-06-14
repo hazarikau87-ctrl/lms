@@ -14,6 +14,7 @@ import { BookingRegistrationForm } from './BookingRegistrationForm';
 import { SampleBarcodeLabel } from './SampleBarcodeLabel';
 import RevenueDashboard from './RevenueDashboard';
 import DoctorsPage from './DoctorsPage';
+import { FeatureGuard } from './FeatureGuard';
 
 const RECORDS_PER_PAGE = 10;
 
@@ -826,14 +827,16 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 text-xs text-slate-600">
               
               {/* 1. Barcode Tracking & Generation */}
-              <div className="bg-white p-4 rounded-xl border border-slate-200/70 shadow-2xs flex flex-col justify-between items-center min-h-[110px]">
-                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block w-full text-left mb-2.5">
-                  Vial Barcode Automation
-                </span>
-                <div className="w-full flex justify-center items-center flex-grow">
-                  <SampleBarcodeLabel appointment={item} />
-                </div>
-              </div>
+              <div className="bg-white p-4 rounded-xl border border-slate-200/70 shadow-2xs">
+  <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-2.5">
+    Specimen Tracking
+  </span>
+  
+  {/* Wrap it cleanly: if free, it shows the lock automatically; if premium, it prints */}
+  <FeatureGuard fallbackMode="lockout">
+    <SampleBarcodeLabel appointment={item} />
+  </FeatureGuard>
+</div>
 
               {/* 2. Prescription */}
               <div className="bg-white p-4 rounded-xl border border-slate-200/70 shadow-2xs">
