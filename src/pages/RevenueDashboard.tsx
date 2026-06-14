@@ -759,8 +759,32 @@ const styles: Record<string, React.CSSProperties> = {
   refreshBtn: { display: "inline-flex", alignItems: "center", gap: 8, background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 10, padding: "10px 16px", fontSize: 13, fontWeight: 600, color: "#334155", cursor: "pointer", boxShadow: "0 1px 2px rgba(0,0,0,0.05)", transition: "all 0.2s ease" },
   errorAlert: { background: "#FEF2F2", border: "1px solid #FECACA", color: "#B91C1C", borderRadius: 12, padding: "14px 18px", marginBottom: 24, fontSize: 14, fontWeight: 500 },
   
-  metricsGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginBottom: 24 },
-  metricCard: { background: "#FFFFFF", borderRadius: 16, padding: "20px 24px", boxShadow: "0 1px 3px rgba(15,23,42,0.02), 0 4px 12px rgba(15,23,42,0.015)", display: "flex", flexDirection: "column", border: "1px solid #E2E8F0", transition: "all 0.2s ease" },
+  metricsGrid: { 
+  display: "grid", 
+  // Dynamically uses 5 columns on desktop screens, shrinking fluidly down to min 150px before wrapping
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))", 
+  gap: "12px", 
+  marginBottom: "24px",
+  width: "100%"
+},
+  metricCard: { 
+  background: "#FFFFFF", 
+  borderRadius: "14px", 
+  padding: "16px 18px", // Reduced from 20px 24px for tighter horizontal compacting
+  boxShadow: "0 1px 3px rgba(15,23,42,0.02), 0 4px 12px rgba(15,23,42,0.015)", 
+  display: "flex", 
+  flexDirection: "column", 
+  border: "1px solid #E2E8F0", 
+  transition: "all 0.2s ease" 
+},
+metricValue: { 
+  fontSize: "20px", // Reduced from 24px to ensure values like "₹1,00,000.00" don't break lines
+  fontWeight: 800, 
+  color: "#0F172A", 
+  letterSpacing: "-0.03em", 
+  marginBottom: 12, 
+  fontVariantNumeric: "tabular-nums" 
+},
   metricHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
   metricLabel: { fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em" },
   iconWrapper: { width: 34, height: 34, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" },
