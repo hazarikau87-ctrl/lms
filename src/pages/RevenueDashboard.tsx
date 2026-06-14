@@ -91,7 +91,7 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
     }
   }, [labId]);
 
-  async function loadDashboardData() {
+ async function loadDashboardData() {
     setLoading(true);
     setError("");
     try {
@@ -117,48 +117,54 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
         };
       });
 
-      // 2. Fetch doctor commissions data safely handling flat objects or nested relationship arrays
+      // 2. BULLETPROOF FLAT FETCH FOR COMMISSIONS (Avoids 400 relationship errors)
       const { data: commData, error: commError } = await supabase
         .from("doctor_commissions")
-        .select(`
-          id,
-          appointment_id,
-          amount,
-          commission_pct,
-          status,
-          settled_at,
-          created_at,
-          appointments (
-            booking_id
-          ),
-          doctors (
-            name
-          )
-        `)
+        .select("id, appointment_id, doctor_id, amount, commission_pct, status, settled_at, created_at")
         .eq("lab_id", labId)
         .order("created_at", { ascending: false });
 
       if (commError) throw commError;
 
-      const formattedCommissions: CommissionRecord[] = (commData || []).map((item: any) => {
-        const appointmentObj = Array.isArray(item.appointments) ? item.appointments[0] : item.appointments;
-        const doctorObj = Array.isArray(item.doctors) ? item.doctors[0] : item.doctors;
-        
-        const pct = item.commission_pct || 1;
-        const calculatedTotalTestValue = ((item.amount || 0) / pct) * 100;
+      let formattedCommissions: CommissionRecord[] = [];
 
-        return {
-          id: item.id,
-          appointment_id: item.appointment_id,
-          booking_id: appointmentObj?.booking_id || `N/A (Appt #${item.appointment_id})`,
-          doctor_name: doctorObj?.name || "Unknown Doctor",
-          total_test_value: calculatedTotalTestValue,
-          commission_amount: item.amount || 0,
-          status: item.status || "unpaid",
-          settled_at: item.settled_at,
-          created_at: item.created_at
-        };
-      });
+      if (commData && commData.length > 0) {
+        // Extract distinct IDs to fetch reference relations safely
+        const appointmentIds = Array.from(new Set(commData.map(c => c.appointment_id).filter(Boolean)));
+        const doctorIds = Array.from(new Set(commData.map(c => c.doctor_id).filter(Boolean)));
+
+        // Fetch matching Appointments mapped by ID
+        const { data: appts } = await supabase
+          .from("appointments")
+          .select("id, booking_id")
+          .in("id", appointmentIds);
+
+        // Fetch matching Doctors mapped by ID
+        const { data: docs } = await supabase
+          .from("doctors")
+          .select("id, name")
+          .in("id", doctorIds);
+
+        const appointmentMap = Object.fromEntries((appts || []).map(a => [a.id, a.booking_id]));
+        const doctorMap = Object.fromEntries((docs || []).map(d => [d.id, d.name]));
+
+        formattedCommissions = commData.map((item: any) => {
+          const pct = item.commission_pct || 1;
+          const calculatedTotalTestValue = ((item.amount || 0) / pct) * 100;
+
+          return {
+            id: item.id,
+            appointment_id: item.appointment_id,
+            booking_id: appointmentMap[item.appointment_id] || `N/A (Appt #${item.appointment_id})`,
+            doctor_name: doctorMap[item.doctor_id] || "Unknown Doctor",
+            total_test_value: calculatedTotalTestValue,
+            commission_amount: item.amount || 0,
+            status: item.status || "unpaid",
+            settled_at: item.settled_at,
+            created_at: item.created_at
+          };
+        });
+      }
 
       setPayments(formattedPayments);
       setCommissions(formattedCommissions);
