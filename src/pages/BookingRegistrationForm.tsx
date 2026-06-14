@@ -142,6 +142,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
 }) => {
   const [labInfo, setLabInfo] = useState<LabData | null>(null);
   const [dynamicTests, setDynamicTests] = useState<string[]>([]);
+  const [labDoctors, setLabDoctors] = useState<any[]>([]); 
   const [testSearch, setTestSearch] = useState('');
 
   const [formData, setFormData] = useState({
@@ -151,6 +152,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
     email: '',
     age: '',
     gender: '' as 'Male' | 'Female' | 'Other' | '',
+    doctor_id: '', 
     appointment_date: '',
     time: '',
     status: 'Pending' as 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled',
@@ -204,6 +206,25 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
         }
       } catch {
         setLabInfo({ id: currentLabId, lab_name: 'Diagnostic Lab' });
+      }
+    })();
+  }, [currentLabId, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !currentLabId) return;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('doctors')
+          .select('id, name, specialty, commission_pct')
+          .eq('lab_id', currentLabId)
+          .eq('is_active', true)
+          .order('name', { ascending: true });
+        
+        if (error) throw error;
+        setLabDoctors(data || []);
+      } catch (err) {
+        console.error("Error fetching lab context doctors info:", err);
       }
     })();
   }, [currentLabId, isOpen]);
@@ -325,6 +346,39 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
 
       if (dbError) throw dbError;
 
+      // ⭐ IMMEDIATE COMMISSION ENTRY LOGIC:
+      // Since it doesn't live in appointments, we link it up right away using the selected tests price matrix
+      if (formData.doctor_id) {
+        const chosenDoctor = labDoctors.find((d) => d.id === formData.doctor_id);
+        const commissionPercentage = chosenDoctor?.commission_pct || 0;
+
+        if (commissionPercentage > 0 && Array.isArray(labInfo?.available_tests)) {
+          // Calculate overall monetary amount from your active pricing objects
+          let totalTestAmount = 0;
+          selectedTests.forEach((selectedName) => {
+            const testMeta = labInfo.available_tests?.find(
+              (t) => getTestStringValue(t) === selectedName
+            );
+            const price = Number(testMeta?.price || testMeta?.rate || testMeta?.cost || 0);
+            totalTestAmount += price;
+          });
+
+          const totalCommission = (totalTestAmount * commissionPercentage) / 100;
+
+          // Insert directly to commissions ledger
+          await supabase.from('doctor_commissions').insert([
+            {
+              lab_id: currentLabId,
+              doctor_id: formData.doctor_id,
+              appointment_id: data.id,
+              amount: totalCommission,
+              commission_pct: commissionPercentage,
+              status: 'pending',
+            },
+          ]);
+        }
+      }
+
       setSavedBookingId(generatedBookingId);
       setSavedAppointmentId(data.id as number);
       setSubmitSuccess(true);
@@ -350,7 +404,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
 
   const handleReset = () => {
     setFormData({
-      name: '', mobile: '', whatsapp: '', email: '', age: '', gender: '',
+      name: '', mobile: '', whatsapp: '', email: '', age: '', gender: '', doctor_id: '',
       appointment_date: '', time: '', status: 'Pending', remarks: '',
       booking_type: 'walk-in', address_line: '', pincode: '', landmark: '',
     });
@@ -446,7 +500,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
         </div>
       )}
 
-      {/* RENDER FORM SO IT STAYS ALIVE */}
+      {/* RENDER FORM */}
       <form onSubmit={handleSubmit} autoComplete="on">
         <div className="px-6 py-5 space-y-5">
 
@@ -470,9 +524,9 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                     <InputIcon><Phone className="w-4 h-4" /></InputIcon>
                     <input id="mobile" name="mobile" type="tel" autoComplete="tel" placeholder="10-digit number"
                       {...f('mobile')} className={`${errors.mobile && touchedFields.has('mobile') ? inputError : input} pl-10`} />
-                  </InputWrapper>
-                  <FieldError msg={touchedFields.has('mobile') ? errors.mobile : ''} />
-                </div>
+                </InputWrapper>
+                <FieldError msg={touchedFields.has('mobile') ? errors.mobile : ''} />
+              </div>
                 <div>
                   <label htmlFor="whatsapp" className={label}>WhatsApp</label>
                   <InputWrapper>
@@ -518,6 +572,27 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                   </select>
                   <FieldError msg={touchedFields.has('gender') ? errors.gender : ''} />
                 </div>
+              </div>
+
+              {/* REFERRING DOCTOR SELECTION */}
+              <div>
+                <label htmlFor="doctor_id" className={label}>Referring Doctor</label>
+                <select
+                  id="doctor_id"
+                  name="doctor_id"
+                  value={formData.doctor_id}
+                  disabled={isSubmitting || submitSuccess}
+                  onChange={(e) => setFormData((p) => ({ ...p, doctor_id: e.target.value }))}
+                  className={input}
+                  style={{ appearance: 'auto' }}
+                >
+                  <option value="">Direct Booking (No Doctor)</option>
+                  {labDoctors.map((doc) => (
+                    <option key={doc.id} value={doc.id}>
+                      {doc.name} {doc.specialty ? `(${doc.specialty})` : ''}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           )}
@@ -572,7 +647,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                 <FieldError msg={errors.tests} />
               </div>
 
-              {/* PRESCRIPTION UPLOAD (MOVED TO STEP 2) */}
+              {/* PRESCRIPTION UPLOAD */}
               <div>
                 <SectionLabel>Prescription</SectionLabel>
                 {!prescriptionFileName ? (
@@ -684,7 +759,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
           )}
         </div>
 
-        {/* FOOTER CONTROLS ADJUST DEPENDING ON SUBMISSION STATE */}
+        {/* FOOTER CONTROLS */}
         {!submitSuccess ? (
           <div className="sticky bottom-0 flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-white">
             <button type="button" disabled={activeStep === 1 || isSubmitting} onClick={() => setActiveStep((p) => p - 1)}
@@ -719,7 +794,7 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
         ) : null}
       </form>
 
-      {/* OVERLAYING THE BILLING MODULE WITHOUT REMOVING THE FORM DATA */}
+      {/* OVERLAYING THE BILLING MODULE */}
       {submitSuccess && savedAppointmentId !== null && (
         <div className="border-t-2 border-slate-100 bg-slate-50/50">
           {!showBilling && !billingComplete && (
@@ -784,7 +859,13 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
                 selectedTests={selectedTests}
                 availableTestsMeta={labInfo?.available_tests || []}
                 themeColor={themeColor}
-                onPaymentSuccess={handleBillingComplete}
+                onPaymentSuccess={(paymentData) => {
+                  if (paymentData && paymentData.balanceRemaining <= 0) {
+                    handleBillingComplete();
+                  } else {
+                    console.log(`Partial pay logged. Remaining balance: ₹${paymentData.balanceRemaining}`);
+                  }
+                }}
               />
             </div>
           )}

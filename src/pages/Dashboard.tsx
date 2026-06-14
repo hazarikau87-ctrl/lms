@@ -13,6 +13,7 @@ import { SlidoverSettings } from './SlidoverSettings';
 import { BookingRegistrationForm } from './BookingRegistrationForm';
 import { SampleBarcodeLabel } from './SampleBarcodeLabel';
 import RevenueDashboard from './RevenueDashboard';
+import DoctorsPage from './DoctorsPage';
 
 const RECORDS_PER_PAGE = 10;
 
@@ -38,7 +39,8 @@ interface AppointmentRowProps {
 
 export default function Dashboard() {
   const { user, signOut } = useAuth();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'revenue' | 'settings'>('dashboard');
+  // Expanded string union type to accommodate the new doctors portal view
+  const [currentView, setCurrentView] = useState<'dashboard' | 'revenue' | 'settings' | 'doctors'>('dashboard');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [lab, setLab] = useState<Lab | null>(null);
   const [loading, setLoading] = useState(true);
@@ -359,16 +361,19 @@ export default function Dashboard() {
           </div>
 
           {currentView === 'settings' ? (
-  <div className="animate-[fadeIn_0.2s_ease]"><Settings /></div>
-) : currentView === 'revenue' ? (
-  <div className="animate-[fadeIn_0.2s_ease]">
-    {/* Explicitly passing down the active lab string from your local state */}
-    <RevenueDashboard labId={lab?.id ? String(lab.id) : ""} />
-  </div>
-) : (
-  <>
-    {/* Clickable Stats */}
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="animate-[fadeIn_0.2s_ease]"><Settings /></div>
+          ) : currentView === 'revenue' ? (
+            <div className="animate-[fadeIn_0.2s_ease]">
+              <RevenueDashboard labId={lab?.id ? String(lab.id) : ""} />
+            </div>
+          ) : currentView === 'doctors' ? (
+            <div className="animate-[fadeIn_0.2s_ease]">
+              <DoctorsPage />
+            </div>
+          ) : (
+            <>
+              {/* Clickable Stats */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                 <StatCard 
                   icon={<CalendarCheck className="w-4 h-4 text-blue-600" />} 
                   iconBg="bg-blue-50" 
@@ -712,7 +717,6 @@ function AppointmentRow({ item, selected, onToggle, onUpdateStatus, onUpdateRema
     return item.test.split(',').map((t: string) => t.trim()).filter(Boolean).length;
   }, [item.test]);
 
-  // Safely extract the public URL layout context for image files
   const prescriptionTargetUrl = useMemo(() => {
     if (!item.prescription_url) return null;
     if (item.prescription_url.startsWith('http://') || item.prescription_url.startsWith('https://')) {

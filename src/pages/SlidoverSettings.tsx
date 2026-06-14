@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { Settings, Sliders, Shield, Bell, HelpCircle, LayoutDashboard, TrendingUp } from 'lucide-react';
+// Added UserRound icon for the Doctors directory button
+import { Settings, Sliders, Shield, Bell, HelpCircle, LayoutDashboard, TrendingUp, UserRound } from 'lucide-react';
 
 interface SlidoverSettingsProps {
   currentLab?: string;
-  currentView: 'dashboard' | 'revenue' | 'settings';
-  setCurrentView: (view: 'dashboard' | 'revenue' | 'settings') => void;
+  // 1. Expanded string union type to match the main Dashboard state
+  currentView: 'dashboard' | 'revenue' | 'settings' | 'doctors';
+  setCurrentView: (view: 'dashboard' | 'revenue' | 'settings' | 'doctors') => void;
 }
 
 export const SlidoverSettings: React.FC<SlidoverSettingsProps> = ({ 
@@ -71,6 +73,21 @@ export const SlidoverSettings: React.FC<SlidoverSettingsProps> = ({
               <TrendingUp className={`w-4 h-4 flex-shrink-0 ${currentView === 'revenue' ? 'text-blue-600' : 'text-slate-400 group-hover:text-blue-600'}`} />
               <span className={`whitespace-nowrap transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
                 Revenue Analytics
+              </span>
+            </button>
+
+            {/* 2. Added Doctors Page Directory Link */}
+            <button 
+              onClick={() => setCurrentView('doctors')}
+              className={`w-full flex items-center gap-4 px-2.5 py-2.5 text-xs font-semibold rounded-xl transition-all group ${
+                currentView === 'doctors' 
+                  ? 'bg-blue-50 text-blue-700' 
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+            >
+              <UserRound className={`w-4 h-4 flex-shrink-0 ${currentView === 'doctors' ? 'text-blue-600' : 'text-slate-400 group-hover:text-blue-600'}`} />
+              <span className={`whitespace-nowrap transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
+                Doctors Directory
               </span>
             </button>
 

@@ -9,7 +9,11 @@ interface BillingModuleProps {
   labId: string;
   selectedTests: string[];
   availableTestsMeta: any[] | null;
-  onPaymentSuccess?: (payment: Record<string, unknown>) => void;
+  /**
+   * Callback fired immediately when a payment is processed successfully.
+   * Returns the transaction data along with the updated remaining balance to determine split-pay UI states.
+   */
+  onPaymentSuccess?: (payment: Record<string, unknown> & { balanceRemaining: number }) => void;
   themeColor?: string;
 }
 
@@ -106,7 +110,7 @@ export default function BillingModule({
 
   const amountNumber = Number(amount || 0);
 
-  // ✅ NEW: Fetch UPI QR from Edge Function (never exposes raw upi_id)
+  // Fetch UPI QR from Edge Function (never exposes raw upi_id)
   async function generateUpiQr() {
     if (method !== "upi" || amountNumber <= 0) return;
 
@@ -144,7 +148,7 @@ export default function BillingModule({
     }
   }, [method, amountNumber]);
 
-  // ✅ NEW: Verify payment server-side before recording
+  // Verify payment server-side before recording
   async function collectPayment() {
     setError("");
 
@@ -156,6 +160,9 @@ export default function BillingModule({
     setSaving(true);
 
     try {
+      // Calculated upcoming balance post-deduction locally for programmatic evaluation
+      const nextBalanceRemaining = Math.max(balance - amountNumber, 0);
+
       // Call Edge Function to verify and insert payment
       const response = await supabase.functions.invoke("verify-payment", {
         body: {
@@ -164,6 +171,7 @@ export default function BillingModule({
           amount: amountNumber,
           paymentMethod: method,
           transactionRef: transactionRef || null,
+          notes: notes || null, // Included notes tracking explicitly for accounting transparency
         },
       });
 
@@ -171,7 +179,7 @@ export default function BillingModule({
         throw new Error(response.error.message);
       }
 
-      // Success
+      // Clear local entry state values to make room for subsequent split amounts
       setAmount("");
       setTransactionRef("");
       setNotes("");
@@ -179,7 +187,12 @@ export default function BillingModule({
       setUpiQrData(null);
 
       await load();
-      onPaymentSuccess?.(response.data);
+
+      // Dispatch event to parent module containing explicit context on split payment remainders
+      onPaymentSuccess?.({
+        ...(response.data || {}),
+        balanceRemaining: nextBalanceRemaining,
+      });
     } catch (err: any) {
       setError(err.message);
     }
@@ -294,7 +307,6 @@ export default function BillingModule({
             })}
           </div>
 
-          {/* ✅ NEW: UPI QR from Edge Function */}
           {method === "upi" && amountNumber > 0 && (
             <div style={styles.upiCard}>
               {loadingUpi ? (
@@ -349,7 +361,11 @@ export default function BillingModule({
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Any remarks for this transaction"
+            placeholder={
+              amountNumber > 0 && amountNumber < balance
+                ? `e.g., Split payment: part ${payments.length + 1} paid via ${METHOD_LABELS[method].label}`
+                : "Any remarks for this transaction"
+            }
             rows={2}
             style={{ ...styles.input, resize: "vertical" }}
           />
@@ -385,6 +401,8 @@ export default function BillingModule({
                 />
                 Saving…
               </span>
+            ) : balance > amountNumber && amountNumber > 0 ? (
+              `Record Partial Payment (${fmt(amountNumber)})`
             ) : (
               "Record Payment"
             )}
@@ -471,7 +489,7 @@ function SummaryCard({
   );
 }
 
-// ─── Styles (keep from previous version)
+// ─── Styles
 const BASE_FONT: React.CSSProperties = {
   fontFamily:
     "Inter, 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
