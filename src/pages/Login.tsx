@@ -16,15 +16,36 @@ export default function Login() {
     setError('');
 
     try {
-      const { error, data } = await supabase.auth.signInWithPassword({ 
+      // 1. Authenticate the user credentials
+      const { error: authError, data } = await supabase.auth.signInWithPassword({ 
         email, 
         password 
       });
 
-      if (error) {
-        setError(error.message);
+      if (authError) {
+        setError(authError.message);
         setLoading(false);
-      } else if (data.user) {
+        return;
+      }
+
+      if (data.user) {
+        // 2. Fetch the user's mapped subscription tier from your new table
+        const { data: subData, error: subError } = await supabase
+          .from('user_subscriptions')
+          .select('tier')
+          .eq('id', data.user.id)
+          .single();
+
+        if (subError) {
+          console.error('Error fetching subscription tier:', subError.message);
+          // Fallback to 'free' tier if table retrieval fails to prevent breaking login flow
+          localStorage.setItem('user_tier', 'free');
+        } else if (subData) {
+          // 3. Persist the tier information locally for frontend UI restrictions
+          localStorage.setItem('user_tier', subData.tier);
+        }
+
+        // 4. Proceed to application space
         navigate('/'); 
       }
     } catch (err) {
