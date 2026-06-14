@@ -12,7 +12,7 @@ import {
   UserCheck,
   CheckCircle2,
   Clock,
-  ArrowUpRight
+  Undo2
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
@@ -96,7 +96,6 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
     setLoading(true);
     setError("");
     try {
-      // 1. Fetch standard payments data
       const { data: payData, error: payError } = await supabase
         .from("payments")
         .select(`
@@ -118,7 +117,6 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
         };
       });
 
-      // 2. Optimized Flat Fetch for commissions using settled_at safely
       const { data: commData, error: commError } = await supabase
         .from("doctor_commissions")
         .select("id, appointment_id, doctor_id, amount, commission_pct, status, settled_at, created_at")
@@ -175,7 +173,6 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
   }
 
   async function toggleCommissionStatus(comm: CommissionRecord) {
-    // 1. Map to uppercase strings to satisfy the PostgreSQL Check Constraint
     const databaseStatusPayload = comm.status === "unpaid" ? "SETTLED" : "UNPAID";
     const nextFrontendStatus = comm.status === "unpaid" ? "settled" : "unpaid";
     
@@ -183,14 +180,13 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
       const { error: updateErr } = await supabase
         .from("doctor_commissions")
         .update({ 
-          status: databaseStatusPayload, // Will write "SETTLED" or "UNPAID"
+          status: databaseStatusPayload,
           settled_at: nextFrontendStatus === "settled" ? new Date().toISOString() : null
         })
         .eq("id", comm.id);
 
       if (updateErr) throw updateErr;
 
-      // 2. Update UI state using the format your dashboard expects
       setCommissions(prev => prev.map(c => c.id === comm.id ? { 
         ...c, 
         status: nextFrontendStatus,
@@ -200,6 +196,7 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
       alert("Could not update commission settlement tracking state: " + err.message);
     }
   }
+
   async function handleProcessRefund() {
     if (!selectedPayment) return;
     const finalRefundAmount = refundType === "full" ? selectedPayment.amount_paid : Number(customAmount);
@@ -298,19 +295,13 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
     });
   }, [commissions, commissionFilter, startDate, endDate, searchQuery]);
 
-  // Comprehensive Channel Breakdown Matrix calculations
   const financialTotals = useMemo(() => {
     let grossRevenue = 0;
     let totalRefunds = 0;
     
     let cashGross = 0;
-    let cashRefunded = 0;
-    
     let upiGross = 0;
-    let upiRefunded = 0;
-    
     let cardGross = 0;
-    let cardRefunded = 0;
 
     payments.forEach((p) => {
       const pAmount = Number(p.amount_paid || 0);
@@ -321,17 +312,18 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
 
       if (p.payment_method === "cash") {
         cashGross += pAmount;
-        cashRefunded += refAmount;
       }
       if (p.payment_method === "upi") {
         upiGross += pAmount;
-        upiRefunded += refAmount;
       }
       if (p.payment_method === "card_external") {
         cardGross += pAmount;
-        cardRefunded += refAmount;
       }
     });
+
+    // Refunds are explicitly deducted only from cash allocations
+    const cashNet = cashGross - totalRefunds;
+    const isCashNegative = cashNet < 0;
 
     let totalCommissionOwed = 0;
     let settledCommissions = 0;
@@ -347,9 +339,10 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
       netRevenue: grossRevenue - totalRefunds,
       grossRevenue,
       totalRefunds,
-      cashNet: cashGross - cashRefunded,
-      upiNet: upiGross - upiRefunded,
-      cardNet: cardGross - cardRefunded,
+      cashNet,
+      isCashNegative,
+      upiNet: upiGross, // Dynamic design constraint: no refund deductions applied here
+      cardNet: cardGross, // Dynamic design constraint: no refund deductions applied here
       cashGross, upiGross, cardGross,
       totalCommissionOwed, settledCommissions, unpaidCommissions 
     };
@@ -372,10 +365,10 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
       <div style={styles.headerRow}>
         <div>
           <h1 style={styles.title}>Revenue & Accounts Analytics</h1>
-          <p style={styles.subtitle}>Overview of transactions, dynamic volumes, and breakdown variables</p>
+          <p style={styles.subtitle}>Real-time overview of transaction flows, gross volumes, and channel channels</p>
         </div>
         <button onClick={loadDashboardData} style={styles.refreshBtn}>
-          <RefreshCw size={14} /> Sync Data
+          <RefreshCw size={14} /> Sync Ledgers
         </button>
       </div>
 
@@ -395,14 +388,10 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
               <span style={styles.breakdownLabel}>Gross Inflow</span>
               <span style={styles.breakdownValPositive}>{fmt(financialTotals.grossRevenue)}</span>
             </div>
-            <div style={styles.breakdownRow}>
-              <span style={styles.breakdownLabel}>Total Refunds</span>
-              <span style={styles.breakdownValNegative}>-{fmt(financialTotals.totalRefunds)}</span>
-            </div>
           </div>
         </div>
 
-        {/* Card 2: UPI Ledger Node Streams */}
+        {/* Card 2: UPI Ledger Streams */}
         <div style={{ ...styles.metricCard, borderTop: "4px solid #8B5CF6" }}>
           <div style={styles.metricHeader}>
             <span style={styles.metricLabel}>UPI Node Volume</span>
@@ -418,37 +407,10 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
                   : "0.0%"}
               </span>
             </div>
-            <div style={styles.breakdownRow}>
-              <span style={styles.breakdownLabel}>Gross Channel In</span>
-              <span style={styles.breakdownTextSubtle}>{fmt(financialTotals.upiGross)}</span>
-            </div>
           </div>
         </div>
 
-        {/* Card 3: Cash Desk Bookings */}
-        <div style={{ ...styles.metricCard, borderTop: "4px solid #10B981" }}>
-          <div style={styles.metricHeader}>
-            <span style={styles.metricLabel}>Cash Counter Flow</span>
-            <div style={{ ...styles.iconWrapper, background: "#F0FDF4", color: "#10B981" }}><DollarSign size={18} /></div>
-          </div>
-          <div style={styles.metricValue}>{fmt(financialTotals.cashNet)}</div>
-          <div style={styles.channelBreakdownList}>
-            <div style={styles.breakdownRow}>
-              <span style={styles.breakdownLabel}>Share Weight</span>
-              <span style={styles.breakdownBadge}>
-                {financialTotals.grossRevenue > 0 
-                  ? ((financialTotals.cashGross / financialTotals.grossRevenue) * 100).toFixed(1) + "%" 
-                  : "0.0%"}
-              </span>
-            </div>
-            <div style={styles.breakdownRow}>
-              <span style={styles.breakdownLabel}>Gross Channel In</span>
-              <span style={styles.breakdownTextSubtle}>{fmt(financialTotals.cashGross)}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 4: External Cards POS Terminal */}
+        {/* Card 3: External Cards POS Terminal */}
         <div style={{ ...styles.metricCard, borderTop: "4px solid #3B82F6" }}>
           <div style={styles.metricHeader}>
             <span style={styles.metricLabel}>Card POS Terminal</span>
@@ -464,9 +426,57 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
                   : "0.0%"}
               </span>
             </div>
+          </div>
+        </div>
+
+        {/* Card 4: Cash Desk Bookings (Handles Negative Deficits Gracefully) */}
+        <div style={{ 
+          ...styles.metricCard, 
+          borderTop: financialTotals.isCashNegative ? "4px solid #EF4444" : "4px solid #10B981",
+          backgroundColor: financialTotals.isCashNegative ? "#FEF2F2" : "#FFFFFF"
+        }}>
+          <div style={styles.metricHeader}>
+            <span style={{ 
+              ...styles.metricLabel, 
+              color: financialTotals.isCashNegative ? "#991B1B" : "#64748B" 
+            }}>
+              {financialTotals.isCashNegative ? "Cash Counter Deficit" : "Cash Counter Flow"}
+            </span>
+            <div style={{ 
+              ...styles.iconWrapper, 
+              background: financialTotals.isCashNegative ? "#FEE2E2" : "#F0FDF4", 
+              color: financialTotals.isCashNegative ? "#EF4444" : "#10B981" 
+            }}>
+              <DollarSign size={18} />
+            </div>
+          </div>
+          <div style={{ 
+            ...styles.metricValue, 
+            color: financialTotals.isCashNegative ? "#DC2626" : "#0F172A" 
+          }}>
+            {financialTotals.isCashNegative ? "-" : ""}{fmt(Math.abs(financialTotals.cashNet))}
+          </div>
+          <div style={styles.channelBreakdownList}>
             <div style={styles.breakdownRow}>
-              <span style={styles.breakdownLabel}>Gross Channel In</span>
-              <span style={styles.breakdownTextSubtle}>{fmt(financialTotals.cardGross)}</span>
+              <span style={styles.breakdownLabel}>Gross Collected</span>
+              <span style={styles.breakdownTextSubtle}>{fmt(financialTotals.cashGross)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 5: Dedicated Refund Management Ledger */}
+        <div style={{ ...styles.metricCard, borderTop: "4px solid #64748B", backgroundColor: "#F8FAFC" }}>
+          <div style={styles.metricHeader}>
+            <span style={styles.metricLabel}>Total Refunds Issued</span>
+            <div style={{ ...styles.iconWrapper, background: "#E2E8F0", color: "#475569" }}><Undo2 size={18} /></div>
+          </div>
+          <div style={{ ...styles.metricValue, color: "#475569" }}>{fmt(financialTotals.totalRefunds)}</div>
+          <div style={styles.channelBreakdownList}>
+            <div style={styles.breakdownRow}>
+              <span style={styles.breakdownLabel}>Deduction Policy</span>
+              <span style={{ ...styles.breakdownBadge, color: "#991B1B", backgroundColor: "#FEE2E2", fontWeight: 600 }}>
+                100% Cash Adjusted
+              </span>
             </div>
           </div>
         </div>
@@ -694,11 +704,11 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
       {isModalOpen && selectedPayment && (
         <div style={styles.modalOverlay}>
           <div style={styles.modalContent}>
-            <h3 style={styles.modalTitle}>Initiate Action Ledger Refund</h3>
+            <h3 style={styles.modalTitle}>Initiate Refund Record</h3>
             <p style={styles.modalDescription}>Processing workflow for Booking Reference ID: <strong style={{ color: "#0F172A" }}>{selectedPayment.booking_id}</strong></p>
 
             <div style={{ marginBottom: 18 }}>
-              <label style={styles.modalLabel}>Refund Dimensions</label>
+              <label style={styles.modalLabel}>Refund Scope</label>
               <div style={{ display: "flex", gap: 12, marginTop: 6 }}>
                 <label style={styles.radioLabel}>
                   <input type="radio" name="refundType" checked={refundType === "full"} onChange={() => setRefundType("full")} />
@@ -719,17 +729,17 @@ export default function RevenueDashboard({ labId }: { labId: string }) {
             )}
 
             <div style={{ marginBottom: 24 }}>
-              <label style={styles.modalLabel}>Refund Method Channel Path</label>
+              <label style={styles.modalLabel}>Outbound Settlement Channel</label>
               <select value={refundThrough} onChange={(e) => setRefundThrough(e.target.value as any)} style={styles.modalSelectInput}>
-                <option value="upi">UPI Operational Node</option>
-                <option value="cash">Cash Ledger Settlement</option>
-                <option value="bank_transfer">Direct Corporate Bank Transfer</option>
+                <option value="cash">Cash Counter Disbursal (Deducts from Cash Pot)</option>
+                <option value="upi">UPI Web Node (Deducts from Cash Pot)</option>
+                <option value="bank_transfer">Direct Corporate Bank Transfer (Deducts from Cash Pot)</option>
               </select>
             </div>
 
             <div style={styles.modalActionsRow}>
               <button onClick={closeRefundModal} style={styles.modalCancelBtn}>Abort Window</button>
-              <button onClick={handleProcessRefund} style={styles.modalConfirmBtn}>Confirm Process flow</button>
+              <button onClick={handleProcessRefund} style={styles.modalConfirmBtn}>Confirm & Disburse</button>
             </div>
           </div>
         </div>
@@ -749,15 +759,13 @@ const styles: Record<string, React.CSSProperties> = {
   refreshBtn: { display: "inline-flex", alignItems: "center", gap: 8, background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 10, padding: "10px 16px", fontSize: 13, fontWeight: 600, color: "#334155", cursor: "pointer", boxShadow: "0 1px 2px rgba(0,0,0,0.05)", transition: "all 0.2s ease" },
   errorAlert: { background: "#FEF2F2", border: "1px solid #FECACA", color: "#B91C1C", borderRadius: 12, padding: "14px 18px", marginBottom: 24, fontSize: 14, fontWeight: 500 },
   
-  // Refactored Premium KPI Cards Layout Matrix
-  metricsGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 20, marginBottom: 24 },
-  metricCard: { background: "#FFFFFF", borderRadius: 16, padding: "20px 24px", boxShadow: "0 1px 3px rgba(15,23,42,0.02), 0 4px 12px rgba(15,23,42,0.015)", display: "flex", flexDirection: "column", border: "1px solid #E2E8F0" },
+  metricsGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginBottom: 24 },
+  metricCard: { background: "#FFFFFF", borderRadius: 16, padding: "20px 24px", boxShadow: "0 1px 3px rgba(15,23,42,0.02), 0 4px 12px rgba(15,23,42,0.015)", display: "flex", flexDirection: "column", border: "1px solid #E2E8F0", transition: "all 0.2s ease" },
   metricHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
-  metricLabel: { fontSize: 12, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em" },
+  metricLabel: { fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em" },
   iconWrapper: { width: 34, height: 34, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" },
-  metricValue: { fontSize: 26, fontWeight: 800, color: "#0F172A", letterSpacing: "-0.03em", marginBottom: 12, fontVariantNumeric: "tabular-nums" },
+  metricValue: { fontSize: 24, fontWeight: 800, color: "#0F172A", letterSpacing: "-0.03em", marginBottom: 12, fontVariantNumeric: "tabular-nums" },
   
-  // Premium channel breakdown list internal structures
   channelBreakdownList: { borderTop: "1px dashed #E2E8F0", paddingTop: 10, display: "flex", flexDirection: "column", gap: 6 },
   breakdownRow: { display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12 },
   breakdownLabel: { color: "#94A3B8", fontWeight: 500 },
@@ -766,7 +774,6 @@ const styles: Record<string, React.CSSProperties> = {
   breakdownTextSubtle: { color: "#475569", fontWeight: 600, fontVariantNumeric: "tabular-nums" },
   breakdownBadge: { background: "#F1F5F9", color: "#475569", padding: "2px 6px", borderRadius: 6, fontWeight: 700, fontSize: 11, fontVariantNumeric: "tabular-nums" },
   
-  // Clean Horizontal Ribbon for Referral Summaries
   metaSummaryRow: { display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", background: "#FFFFFF", padding: "12px 20px", borderRadius: 12, border: "1px solid #E2E8F0", marginBottom: 32, fontSize: 13, color: "#475569" },
   metaItem: { display: "flex", alignItems: "center", gap: 8 },
   metaItemDivider: { width: 1, height: 16, background: "#E2E8F0" },
