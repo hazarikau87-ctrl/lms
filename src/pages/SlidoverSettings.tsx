@@ -106,8 +106,8 @@ export const SlidoverSettings: React.FC<SlidoverSettingsProps> = ({
               </div>
               
               {/* Inline Lock Indicator when Sidebar is expanded */}
-              {isFreeUser && isHovered && (
-               // <Lock className="w-3.5 h-3.5 text-slate-400 flex-shrink-0 ml-2 animate-pulse" />
+              //{isFreeUser && isHovered && (
+                //<Lock className="w-3.5 h-3.5 text-slate-400 flex-shrink-0 ml-2 animate-pulse" />
               )}
             </button>
 
