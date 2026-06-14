@@ -10,8 +10,11 @@ import {
   Wallet, 
   CheckSquare, 
   UserCheck, 
-  AlertCircle 
+  AlertCircle,
+  Users,
+  Landmark
 } from 'lucide-react';
+import DoctorLedger from './DoctorLedger'; // Imported DoctorLedger Component
 
 interface Doctor {
   id: string;
@@ -35,6 +38,9 @@ export default function DoctorsPage() {
   const [processingSettleAll, setProcessingSettleAll] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   
+  // Tab View Controls State ('profiles' or 'ledger')
+  const [activeTab, setActiveTab] = useState<'profiles' | 'ledger'>('profiles');
+
   // Financial Tracking State
   const [financials, setFinancials] = useState<CommissionTotals>({ pending: 0, disbursed: 0 });
 
@@ -342,91 +348,122 @@ export default function DoctorsPage() {
         </div>
       </div>
 
-      {/* Main Content Workspace Layout Matrix */}
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-20 space-y-2">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-slate-400"></div>
-          <div className="text-slate-400 text-sm">Synchronizing doctor registry records...</div>
-        </div>
-      ) : (
-        <div className="bg-white shadow-sm rounded-2xl overflow-hidden border border-slate-200/80">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-100 text-left text-sm">
-              <thead className="bg-slate-50 text-xs text-slate-500 uppercase tracking-wider font-bold">
-                <tr>
-                  <th className="px-6 py-4">Clinician Details</th>
-                  <th className="px-6 py-4">Phone Contact</th>
-                  <th className="px-6 py-4">Core Specialty</th>
-                  <th className="px-6 py-4">Commission Structure</th>
-                  <th className="px-6 py-4">Status Indicator</th>
-                  <th className="px-6 py-4 text-right">Actions Matrix</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 bg-white text-slate-600 font-medium">
-                {doctors.length === 0 ? (
+      {/* Workspace Ribbon Navigation Switcher */}
+      <div className="flex border-b border-slate-200 space-x-6">
+        <button
+          onClick={() => setActiveTab('profiles')}
+          className={`pb-3 text-sm font-bold border-b-2 px-1 flex items-center gap-2 transition-all ${
+            activeTab === 'profiles'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          <span>Doctor Directory</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('ledger')}
+          className={`pb-3 text-sm font-bold border-b-2 px-1 flex items-center gap-2 transition-all ${
+            activeTab === 'ledger'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          <Landmark className="w-4 h-4" />
+          <span>DRM Relationship Ledger</span>
+        </button>
+      </div>
+
+      {/* Main Content Dynamic Swap Workspace */}
+      {activeTab === 'profiles' ? (
+        loading ? (
+          <div className="flex flex-col items-center justify-center py-20 space-y-2">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-slate-400"></div>
+            <div className="text-slate-400 text-sm">Synchronizing doctor registry records...</div>
+          </div>
+        ) : (
+          <div className="bg-white shadow-sm rounded-2xl overflow-hidden border border-slate-200/80">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-100 text-left text-sm">
+                <thead className="bg-slate-50 text-xs text-slate-500 uppercase tracking-wider font-bold">
                   <tr>
-                    <td colSpan={6} className="px-6 py-16 text-center text-slate-400 bg-slate-50/20">
-                      <div className="max-w-xs mx-auto space-y-1">
-                        <p className="text-base font-bold text-slate-700">No Doctors Found</p>
-                        <p className="text-xs text-slate-400">There are no records found linked to this active workspace channel.</p>
-                      </div>
-                    </td>
+                    <th className="px-6 py-4">Clinician Details</th>
+                    <th className="px-6 py-4">Phone Contact</th>
+                    <th className="px-6 py-4">Core Specialty</th>
+                    <th className="px-6 py-4">Commission Structure</th>
+                    <th className="px-6 py-4">Status Indicator</th>
+                    <th className="px-6 py-4 text-right">Actions Matrix</th>
                   </tr>
-                ) : (
-                  doctors.map((doctor) => (
-                    <tr key={doctor.id} className="hover:bg-slate-50/60 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="font-semibold text-slate-900 text-sm">{doctor.name}</div>
-                        <div className="text-[11px] text-slate-400 font-mono mt-0.5">ID: {doctor.id.slice(0, 8)}...</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {doctor.phone ? (
-                          <span className="inline-flex items-center gap-1.5 text-slate-600">
-                            <Phone className="w-3.5 h-3.5 text-slate-400" /> {doctor.phone}
-                          </span>
-                        ) : (
-                          <span className="text-slate-300 font-normal">—</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs">
-                          <Award className="w-3 h-3 text-slate-500" /> {doctor.specialty || 'General Practitioner'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center font-bold text-slate-800 font-mono">
-                          {doctor.commission_pct}<Percent className="w-3 h-3 text-slate-400 ml-0.5" />
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold tracking-wide ${
-                          doctor.is_active 
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/50' 
-                            : 'bg-slate-100 text-slate-500'
-                        }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${doctor.is_active ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
-                          {doctor.is_active ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right whitespace-nowrap">
-                        <button
-                          onClick={() => toggleDoctorStatus(doctor.id, doctor.is_active)}
-                          className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all active:scale-95 ${
-                            doctor.is_active 
-                              ? 'bg-white border-rose-200 text-rose-600 hover:bg-rose-50' 
-                              : 'bg-white border-slate-200 text-indigo-600 hover:bg-indigo-50'
-                          }`}
-                        >
-                          {doctor.is_active ? 'Deactivate' : 'Activate'}
-                        </button>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white text-slate-600 font-medium">
+                  {doctors.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-16 text-center text-slate-400 bg-slate-50/20">
+                        <div className="max-w-xs mx-auto space-y-1">
+                          <p className="text-base font-bold text-slate-700">No Doctors Found</p>
+                          <p className="text-xs text-slate-400">There are no records found linked to this active workspace channel.</p>
+                        </div>
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    doctors.map((doctor) => (
+                      <tr key={doctor.id} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="font-semibold text-slate-900 text-sm">{doctor.name}</div>
+                          <div className="text-[11px] text-slate-400 font-mono mt-0.5">ID: {doctor.id.slice(0, 8)}...</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {doctor.phone ? (
+                            <span className="inline-flex items-center gap-1.5 text-slate-600">
+                              <Phone className="w-3.5 h-3.5 text-slate-400" /> {doctor.phone}
+                            </span>
+                          ) : (
+                            <span className="text-slate-300 font-normal">—</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs">
+                            <Award className="w-3 h-3 text-slate-500" /> {doctor.specialty || 'General Practitioner'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center font-bold text-slate-800 font-mono">
+                            {doctor.commission_pct}<Percent className="w-3 h-3 text-slate-400 ml-0.5" />
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold tracking-wide ${
+                            doctor.is_active 
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/50' 
+                              : 'bg-slate-100 text-slate-500'
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${doctor.is_active ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
+                            {doctor.is_active ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-right whitespace-nowrap">
+                          <button
+                            onClick={() => toggleDoctorStatus(doctor.id, doctor.is_active)}
+                            className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all active:scale-95 ${
+                              doctor.is_active 
+                                ? 'bg-white border-rose-200 text-rose-600 hover:bg-rose-50' 
+                                : 'bg-white border-slate-200 text-indigo-600 hover:bg-indigo-50'
+                            }`}
+                          >
+                            {doctor.is_active ? 'Deactivate' : 'Activate'}
+                        </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        )
+      ) : (
+        /* Render imported tracking ledger layer if active tab shifts */
+        <DoctorLedger labId={labId} />
       )}
 
       {/* Premium Input Form Workspace Modal Context Window */}
