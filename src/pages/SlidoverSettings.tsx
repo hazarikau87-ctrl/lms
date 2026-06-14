@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-// Added UserRound icon for the Doctors directory button
-import { Settings, Sliders, Shield, Bell, HelpCircle, LayoutDashboard, TrendingUp, UserRound } from 'lucide-react';
+// Added Lock icon alongside existing lucide-react icons
+import { Settings, Sliders, Shield, Bell, HelpCircle, LayoutDashboard, TrendingUp, UserRound, Lock } from 'lucide-react';
 
 interface SlidoverSettingsProps {
   currentLab?: string;
-  // 1. Expanded string union type to match the main Dashboard state
   currentView: 'dashboard' | 'revenue' | 'settings' | 'doctors';
   setCurrentView: (view: 'dashboard' | 'revenue' | 'settings' | 'doctors') => void;
 }
@@ -15,6 +14,18 @@ export const SlidoverSettings: React.FC<SlidoverSettingsProps> = ({
   setCurrentView
 }) => {
   const [isHovered, setIsHovered] = useState(false);
+
+  // Grab the persisted user tier from localStorage (Default to 'free' if missing)
+  const userTier = localStorage.getItem('user_tier') || 'free';
+  const isFreeUser = userTier === 'free';
+
+  const handleDoctorsClick = () => {
+    if (isFreeUser) {
+      alert("The Doctors Directory is a premium feature. Please upgrade your plan to unlock it.");
+      return;
+    }
+    setCurrentView('doctors');
+  };
 
   return (
     <aside 
@@ -61,7 +72,7 @@ export const SlidoverSettings: React.FC<SlidoverSettingsProps> = ({
               </span>
             </button>
 
-            {/* Added Revenue Panel Toggle */}
+            {/* Revenue Panel Toggle */}
             <button 
               onClick={() => setCurrentView('revenue')}
               className={`w-full flex items-center gap-4 px-2.5 py-2.5 text-xs font-semibold rounded-xl transition-all group ${
@@ -76,19 +87,28 @@ export const SlidoverSettings: React.FC<SlidoverSettingsProps> = ({
               </span>
             </button>
 
-            {/* 2. Added Doctors Page Directory Link */}
+            {/* Doctors Page Directory Link — Conditional for Free Plan */}
             <button 
-              onClick={() => setCurrentView('doctors')}
-              className={`w-full flex items-center gap-4 px-2.5 py-2.5 text-xs font-semibold rounded-xl transition-all group ${
-                currentView === 'doctors' 
-                  ? 'bg-blue-50 text-blue-700' 
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              onClick={handleDoctorsClick}
+              className={`w-full flex items-center justify-between px-2.5 py-2.5 text-xs font-semibold rounded-xl transition-all group ${
+                isFreeUser
+                  ? 'text-slate-400 bg-slate-50/50 cursor-not-allowed'
+                  : currentView === 'doctors' 
+                    ? 'bg-blue-50 text-blue-700' 
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
               }`}
             >
-              <UserRound className={`w-4 h-4 flex-shrink-0 ${currentView === 'doctors' ? 'text-blue-600' : 'text-slate-400 group-hover:text-blue-600'}`} />
-              <span className={`whitespace-nowrap transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
-                Doctors Directory
-              </span>
+              <div className="flex items-center gap-4 min-w-0">
+                <UserRound className={`w-4 h-4 flex-shrink-0 ${isFreeUser ? 'text-slate-300' : currentView === 'doctors' ? 'text-blue-600' : 'text-slate-400 group-hover:text-blue-600'}`} />
+                <span className={`whitespace-nowrap transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
+                  Doctors Directory
+                </span>
+              </div>
+              
+              {/* Inline Lock Indicator when Sidebar is expanded */}
+              {isFreeUser && isHovered && (
+                <Lock className="w-3.5 h-3.5 text-slate-400 flex-shrink-0 ml-2 animate-pulse" />
+              )}
             </button>
 
             <button 
