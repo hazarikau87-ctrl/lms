@@ -1,6 +1,48 @@
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 
-const PLANS = [
+// --- Types & Interfaces ---
+interface Plan {
+  id: string;
+  price: number;
+  label: string;
+  tagline: string;
+  popular?: boolean;
+  features: string[];
+  accent: string;
+  accentLight: string;
+  accentBorder: string;
+}
+
+interface Step {
+  id: number;
+  label: string;
+}
+
+interface FormState {
+  lab_name: string;
+  phone: string;
+  whatsapp: string;
+  email: string;
+  city: string;
+  state: string;
+  pincode: string;
+  address: string;
+  open_time: string;
+  close_time: string;
+  admin_name: string;
+  admin_email: string;
+  admin_password: string;
+  admin_confirm_password: string;
+  admin_phone: string;
+  agreed: boolean;
+}
+
+interface FormErrors {
+  [key: string]: string;
+}
+
+// --- Constants ---
+const PLANS: Plan[] = [
   {
     id: "499",
     price: 499,
@@ -55,24 +97,25 @@ const PLANS = [
   },
 ];
 
-const STEPS = [
+const STEPS: Step[] = [
   { id: 1, label: "Lab Info" },
   { id: 2, label: "Admin" },
   { id: 3, label: "Plan" },
   { id: 4, label: "Confirm" },
 ];
 
-const TIME_SLOTS = [
+const TIME_SLOTS: string[] = [
   "06:00","07:00","08:00","09:00","10:00","11:00",
   "12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00",
 ];
 
-const input =
+const inputClassBase =
   "w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all";
 
-const label = "block text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-1.5";
+const labelClass = "block text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-1.5";
 
-function FieldError({ msg }) {
+// --- Helper Components ---
+function FieldError({ msg }: { msg?: string }) {
   if (!msg) return null;
   return (
     <p className="flex items-center gap-1 text-xs text-red-500 mt-1.5 font-medium">
@@ -82,7 +125,7 @@ function FieldError({ msg }) {
   );
 }
 
-function StepDot({ step, current, done }) {
+function StepDot({ step, current, done }: { step: Step; current: boolean; done: boolean }) {
   return (
     <div className="flex flex-col items-center gap-1">
       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all ${
@@ -99,14 +142,15 @@ function StepDot({ step, current, done }) {
   );
 }
 
+// --- Main Component ---
 export default function LabOnboardingForm() {
-  const [activeStep, setActiveStep] = useState(1);
-  const [selectedPlan, setSelectedPlan] = useState("799");
-  const [submitted, setSubmitted] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [errors, setErrors] = useState({});
+  const [activeStep, setActiveStep] = useState<number>(1);
+  const [selectedPlan, setSelectedPlan] = useState<string>("799");
+  const [submitted, setSubmitted] = useState<boolean>(false);
+  const [submitting, setSubmitting] = useState<boolean>(false);
+  const [errors, setErrors] = useState<FormErrors>({});
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<FormState>({
     lab_name: "",
     phone: "",
     whatsapp: "",
@@ -125,14 +169,17 @@ export default function LabOnboardingForm() {
     agreed: false,
   });
 
-  const f = (key) => ({
-    value: form[key],
-    onChange: (e) => setForm((p) => ({ ...p, [key]: e.target.type === "checkbox" ? e.target.checked : e.target.value })),
-    className: errors[key] ? input.replace("border-slate-200", "border-red-400").replace("focus:border-indigo-400", "focus:border-red-400") : input,
+  const f = (key: keyof FormState) => ({
+    value: form[key] as string | boolean | undefined,
+    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      const val = e.target.type === "checkbox" ? (e.target as HTMLInputElement).checked : e.target.value;
+      setForm((p) => ({ ...p, [key]: val }));
+    },
+    className: errors[key] ? inputClassBase.replace("border-slate-200", "border-red-400").replace("focus:border-indigo-400", "focus:border-red-400") : inputClassBase,
   });
 
   function validateStep1() {
-    const e = {};
+    const e: FormErrors = {};
     if (!form.lab_name.trim()) e.lab_name = "Lab name is required";
     if (!form.phone.match(/^[0-9]{10}$/)) e.phone = "Enter a valid 10-digit number";
     if (!form.email.includes("@")) e.email = "Enter a valid email";
@@ -143,7 +190,7 @@ export default function LabOnboardingForm() {
   }
 
   function validateStep2() {
-    const e = {};
+    const e: FormErrors = {};
     if (!form.admin_name.trim()) e.admin_name = "Name is required";
     if (!form.admin_email.includes("@")) e.admin_email = "Enter a valid email";
     if (form.admin_password.length < 8) e.admin_password = "Password must be 8+ characters";
@@ -166,7 +213,7 @@ export default function LabOnboardingForm() {
     setSubmitted(true);
   }
 
-  const plan = PLANS.find((p) => p.id === selectedPlan);
+  const plan = PLANS.find((p) => p.id === selectedPlan) || PLANS[1];
 
   if (submitted) {
     return (
@@ -245,60 +292,60 @@ export default function LabOnboardingForm() {
               </div>
               <div className="px-7 py-6 space-y-5">
                 <div>
-                  <label className={label}>Lab name <span className="text-red-400 normal-case tracking-normal">*</span></label>
+                  <label className={labelClass}>Lab name <span className="text-red-400 normal-case tracking-normal">*</span></label>
                   <input type="text" placeholder="e.g. Apollo Diagnostics, Sunrise Lab" {...f("lab_name")} />
                   <FieldError msg={errors.lab_name} />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className={label}>Contact number <span className="text-red-400 normal-case tracking-normal">*</span></label>
+                    <label className={labelClass}>Contact number <span className="text-red-400 normal-case tracking-normal">*</span></label>
                     <input type="tel" placeholder="10-digit mobile" {...f("phone")} />
                     <FieldError msg={errors.phone} />
                   </div>
                   <div>
-                    <label className={label}>WhatsApp number</label>
+                    <label className={labelClass}>WhatsApp number</label>
                     <input type="tel" placeholder="For alerts & updates" {...f("whatsapp")} />
                   </div>
                 </div>
 
                 <div>
-                  <label className={label}>Lab email <span className="text-red-400 normal-case tracking-normal">*</span></label>
+                  <label className={labelClass}>Lab email <span className="text-red-400 normal-case tracking-normal">*</span></label>
                   <input type="email" placeholder="lab@example.com" {...f("email")} />
                   <FieldError msg={errors.email} />
                 </div>
 
                 <div>
-                  <label className={label}>Street address</label>
-                  <textarea rows={2} placeholder="Building, street name, locality…" {...f("address")} className={input + " resize-none"} style={{ resize: "none" }} />
+                  <label className={labelClass}>Street address</label>
+                  <textarea rows={2} placeholder="Building, street name, locality…" {...f("address")} className={inputClassBase + " resize-none"} style={{ resize: "none" }} />
                 </div>
 
                 <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <label className={label}>City <span className="text-red-400 normal-case tracking-normal">*</span></label>
+                    <label className={labelClass}>City <span className="text-red-400 normal-case tracking-normal">*</span></label>
                     <input type="text" placeholder="City" {...f("city")} />
                     <FieldError msg={errors.city} />
                   </div>
                   <div>
-                    <label className={label}>State <span className="text-red-400 normal-case tracking-normal">*</span></label>
+                    <label className={labelClass}>State <span className="text-red-400 normal-case tracking-normal">*</span></label>
                     <input type="text" placeholder="State" {...f("state")} />
                     <FieldError msg={errors.state} />
                   </div>
                   <div>
-                    <label className={label}>Pincode <span className="text-red-400 normal-case tracking-normal">*</span></label>
+                    <label className={labelClass}>Pincode <span className="text-red-400 normal-case tracking-normal">*</span></label>
                     <input type="text" placeholder="6-digit PIN" maxLength={6} {...f("pincode")} />
                     <FieldError msg={errors.pincode} />
                   </div>
                 </div>
 
                 <div>
-                  <label className={label}>Operating hours</label>
+                  <label className={labelClass}>Operating hours</label>
                   <div className="flex items-center gap-3">
-                    <select value={form.open_time} onChange={(e) => setForm((p) => ({ ...p, open_time: e.target.value }))} className={input} style={{ appearance: "auto" }}>
+                    <select value={form.open_time} onChange={(e) => setForm((p) => ({ ...p, open_time: e.target.value }))} className={inputClassBase} style={{ appearance: "auto" }}>
                       {TIME_SLOTS.map((t) => <option key={t} value={t}>{t}</option>)}
                     </select>
                     <span className="text-slate-400 text-sm font-semibold flex-shrink-0">to</span>
-                    <select value={form.close_time} onChange={(e) => setForm((p) => ({ ...p, close_time: e.target.value }))} className={input} style={{ appearance: "auto" }}>
+                    <select value={form.close_time} onChange={(e) => setForm((p) => ({ ...p, close_time: e.target.value }))} className={inputClassBase} style={{ appearance: "auto" }}>
                       {TIME_SLOTS.map((t) => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </div>
@@ -316,31 +363,31 @@ export default function LabOnboardingForm() {
               </div>
               <div className="px-7 py-6 space-y-5">
                 <div>
-                  <label className={label}>Full name <span className="text-red-400 normal-case tracking-normal">*</span></label>
+                  <label className={labelClass}>Full name <span className="text-red-400 normal-case tracking-normal">*</span></label>
                   <input type="text" placeholder="Dr. Priya Sharma" {...f("admin_name")} />
                   <FieldError msg={errors.admin_name} />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className={label}>Admin email <span className="text-red-400 normal-case tracking-normal">*</span></label>
+                    <label className={labelClass}>Admin email <span className="text-red-400 normal-case tracking-normal">*</span></label>
                     <input type="email" placeholder="admin@yourlab.com" {...f("admin_email")} />
                     <FieldError msg={errors.admin_email} />
                   </div>
                   <div>
-                    <label className={label}>Admin phone</label>
+                    <label className={labelClass}>Admin phone</label>
                     <input type="tel" placeholder="Mobile number" {...f("admin_phone")} />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className={label}>Password <span className="text-red-400 normal-case tracking-normal">*</span></label>
+                    <label className={labelClass}>Password <span className="text-red-400 normal-case tracking-normal">*</span></label>
                     <input type="password" placeholder="Min 8 characters" {...f("admin_password")} />
                     <FieldError msg={errors.admin_password} />
                   </div>
                   <div>
-                    <label className={label}>Confirm password <span className="text-red-400 normal-case tracking-normal">*</span></label>
+                    <label className={labelClass}>Confirm password <span className="text-red-400 normal-case tracking-normal">*</span></label>
                     <input type="password" placeholder="Re-enter password" {...f("admin_confirm_password")} />
                     <FieldError msg={errors.admin_confirm_password} />
                   </div>
@@ -394,48 +441,48 @@ export default function LabOnboardingForm() {
                 </div>
               </div>
               <div className="px-7 py-6 space-y-3">
-                {PLANS.map((plan) => (
+                {PLANS.map((p) => (
                   <button
-                    key={plan.id}
+                    key={p.id}
                     type="button"
-                    onClick={() => setSelectedPlan(plan.id)}
+                    onClick={() => setSelectedPlan(p.id)}
                     className={`w-full text-left rounded-2xl border-2 p-5 transition-all relative ${
-                      selectedPlan === plan.id ? "border-current shadow-sm" : "border-slate-200 hover:border-slate-300"
+                      selectedPlan === p.id ? "border-current shadow-sm" : "border-slate-200 hover:border-slate-300"
                     }`}
-                    style={selectedPlan === plan.id ? { borderColor: plan.accent, backgroundColor: plan.accentLight } : {}}
+                    style={selectedPlan === p.id ? { borderColor: p.accent, backgroundColor: p.accentLight } : {}}
                   >
-                    {plan.popular && (
+                    {p.popular && (
                       <div className="absolute -top-3 left-5">
-                        <span className="px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-widest text-white" style={{ backgroundColor: plan.accent }}>
+                        <span className="px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-widest text-white" style={{ backgroundColor: p.accent }}>
                           Most popular
                         </span>
                       </div>
                     )}
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-start gap-3 flex-1">
-                        <div className={`w-5 h-5 rounded-full border-2 mt-0.5 flex-shrink-0 flex items-center justify-center transition-all`}
-                          style={selectedPlan === plan.id ? { borderColor: plan.accent, backgroundColor: plan.accent } : { borderColor: "#CBD5E1" }}>
-                          {selectedPlan === plan.id && (
+                        <div className="w-5 h-5 rounded-full border-2 mt-0.5 flex-shrink-0 flex items-center justify-center transition-all"
+                          style={selectedPlan === p.id ? { borderColor: p.accent, backgroundColor: p.accent } : { borderColor: "#CBD5E1" }}>
+                          {selectedPlan === p.id && (
                             <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
                           )}
                         </div>
                         <div>
                           <div className="flex items-center gap-2 mb-0.5">
-                            <span className="text-sm font-extrabold text-slate-900">{plan.label}</span>
-                            <span className="text-xs text-slate-500">{plan.tagline}</span>
+                            <span className="text-sm font-extrabold text-slate-900">{p.label}</span>
+                            <span className="text-xs text-slate-500">{p.tagline}</span>
                           </div>
                           <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2">
-                            {plan.features.map((f, i) => (
+                            {p.features.map((feat, i) => (
                               <div key={i} className="flex items-center gap-1.5">
-                                <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} style={{ color: plan.accent }}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
-                                <span className="text-[11px] font-medium text-slate-600">{f}</span>
+                                <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} style={{ color: p.accent }}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                <span className="text-[11px] font-medium text-slate-600">{feat}</span>
                               </div>
                             ))}
                           </div>
                         </div>
                       </div>
                       <div className="text-right flex-shrink-0">
-                        <div className="text-xl font-extrabold text-slate-900">₹{plan.price}</div>
+                        <div className="text-xl font-extrabold text-slate-900">₹{p.price}</div>
                         <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">/ month</div>
                         <div className="mt-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full inline-block">30 days free</div>
                       </div>
