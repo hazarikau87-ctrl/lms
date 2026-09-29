@@ -345,6 +345,24 @@ export const BookingRegistrationForm: React.FC<BookingRegistrationFormProps> = (
         .single();
 
       if (dbError) throw dbError;
+      
+    //send Whatsapp notification
+      try {
+  const { data: whatsappResult, error: whatsappError } =
+    await supabase.functions.invoke('send-whatsapp-notification', {
+      body: {
+        appointmentId: data.id,
+      },
+    });
+
+  if (whatsappError) {
+    console.error('WhatsApp notification error:', whatsappError);
+  } else {
+    console.log('WhatsApp notification result:', whatsappResult);
+  }
+} catch (whatsappErr) {
+  console.error('WhatsApp notification failed:', whatsappErr);
+}
 
       // ⭐ IMMEDIATE COMMISSION ENTRY LOGIC:
       // Since it doesn't live in appointments, we link it up right away using the selected tests price matrix
